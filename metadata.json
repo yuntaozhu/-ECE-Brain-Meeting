@@ -1,0 +1,11 @@
+{
+  "name": "大地 ECE-Brain 数字主理人",
+  "description": "一个由 KaibanJS 驱动的智能研讨空间，拥有AI主席和AI秘书的多智能体协同语音会议系统。",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
