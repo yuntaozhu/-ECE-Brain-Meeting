@@ -6,19 +6,21 @@ import {
   TencentAccessTokenResponse 
 } from '../types';
 import { calculateValidMeetingTimeRange } from './meetingTimeHelper';
+import { getTencentApiConfig, generateTencentAuthHeaders, secureTencentFetch } from './tencentApi';
 
 /**
  * Configuration for Tencent Meeting API Credentials.
  * Loaded safely from environment variables with defaults for Dadi ECE-Brain ("DadiAIMeeting").
  */
 function getTencentConfig() {
+  const cfg = getTencentApiConfig();
   return {
-    corpId: process.env.TENCENT_MEETING_CORP_ID || '557124324',
-    appId: process.env.TENCENT_MEETING_APP_ID || '32840153264',
-    secretId: process.env.TENCENT_MEETING_SECRET_ID || '3bmfDha2HIKuGLgtBXaJwzFfarW04XAU',
-    secretKey: process.env.TENCENT_MEETING_SECRET_KEY || 'mk1n3rh4sfdXrLMTpS3T3oUR5Ek6LacXZTw6CuhafnWQhXyl',
+    corpId: cfg.corpId,
+    appId: cfg.appId,
+    secretId: cfg.secretId,
+    secretKey: cfg.secretKey,
     hostUserId: process.env.TENCENT_MEETING_HOST_USER_ID || 'daid_it',
-    apiBase: process.env.TENCENT_MEETING_API_BASE || 'https://api.meeting.qq.com',
+    apiBase: cfg.apiBase,
   };
 }
 
@@ -33,32 +35,11 @@ export function getTencentAuthHeaders(
   uri: string,
   bodyStr: string = ''
 ): Record<string, string> {
-  const config = getTencentConfig();
-  const timestamp = Math.floor(Date.now() / 1000).toString();
-  const nonce = Math.floor(Math.random() * 1000000).toString();
-
-  // Signature string format required by Tencent Meeting REST API
-  const headerString = `${method.toUpperCase()}\n${config.secretId}\n${timestamp}\n${nonce}\n${uri}\n${bodyStr}`;
-
-  // HMAC-SHA256 encryption
-  const signature = crypto
-    .createHmac('sha256', config.secretKey)
-    .update(headerString)
-    .digest('base64');
-
-  return {
-    'X-TC-Key': config.secretId,
-    'X-TC-Timestamp': timestamp,
-    'X-TC-Nonce': nonce,
-    'X-TC-Signature': signature,
-    'X-TC-Registered-Corp-Id': config.corpId,
-    'AppId': config.appId,
-    'Content-Type': 'application/json',
-  };
+  return generateTencentAuthHeaders(method, uri, bodyStr);
 }
 
 /**
- * 1. Fetch OAuth2 Access Token from Tencent Meeting REST API with expiration caching and fallback handling.
+ * 1. Fetch OAuth2 Access Token from Tencent Meeting REST API with expiration caching and fallback handling using secureTencentFetch.
  */
 export async function getAccessToken(): Promise<TencentAccessTokenResponse> {
   const config = getTencentConfig();
@@ -82,30 +63,15 @@ export async function getAccessToken(): Promise<TencentAccessTokenResponse> {
   }
 
   const uri = '/v1/oauth2/token';
-  const url = `${config.apiBase}${uri}`;
-  const requestBody = JSON.stringify({
+  const requestBody = {
     grant_type: 'client_credentials',
     secret_id: config.secretId,
     secret_key: config.secretKey,
-  });
+  };
 
   try {
-    const headers = getTencentAuthHeaders('POST', uri, requestBody);
-    console.log('[Tencent Meeting Service] Requesting new Access Token...');
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: requestBody,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.warn(`[Tencent Meeting Service] AccessToken endpoint returned status ${response.status}: ${errorText}`);
-      throw new Error(`Tencent API HTTP ${response.status}: ${errorText}`);
-    }
-
-    const data = await response.json();
+    console.log('[Tencent Meeting Service] Requesting new Access Token via secureTencentFetch...');
+    const data = await secureTencentFetch('POST', uri, requestBody);
 
     if (data.error_info || data.code) {
       const errMsg = data.error_info?.message || data.msg || 'Failed to acquire AccessToken';
@@ -129,7 +95,6 @@ export async function getAccessToken(): Promise<TencentAccessTokenResponse> {
   } catch (err: any) {
     console.warn(`[Tencent Meeting Service] Error fetching AccessToken (${err.message}). Activating secure resilient token fallback...`);
     
-    // Resilient fallback token generation for offline/sandbox mode
     const fallbackToken = `tm_access_${config.corpId}_${Date.now()}`;
     cachedToken = {
       accessToken: fallbackToken,
@@ -195,20 +160,11 @@ export async function createMeeting(params: CreateMeetingParams): Promise<Tencen
 
   if (config.secretId && config.secretId !== 'your_secret_id' && config.secretId !== 'test_secret_id') {
     try {
-      const headers = getTencentAuthHeaders('POST', uri, bodyStr);
-      console.log(`[Tencent Meeting Service] Calling official Tencent Meeting API: POST ${url}`);
-      
-      const response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: bodyStr,
-      });
-
-      const data = await response.json();
+      console.log(`[Tencent Meeting Service] Calling official Tencent Meeting API via secureTencentFetch: POST ${uri}`);
+      const data = await secureTencentFetch('POST', uri, payload);
 
       const errCode = data.error_info?.error_code || data.code;
-      if (errCode === 190303 || errCode === 200190303 || response.ok) {
-        // Official credentials configured (CorpId: 557124324, AppId: 32840153264)
+      if (errCode === 190303 || errCode === 200190303 || !errCode) {
         const info = data.meeting_info_list?.[0] || data;
         const code = String(info.meeting_code || info.meeting_id || '811199910');
         console.log(`[Tencent Meeting Service] ✅ Tencent Meeting official credentials successfully authorized! Code: ${code}`);
@@ -228,7 +184,7 @@ export async function createMeeting(params: CreateMeetingParams): Promise<Tencen
         };
       }
     } catch (err: any) {
-      console.log(`[Tencent Meeting Service] Official API call using configured CorpID (${config.corpId}) & AppID (${config.appId}) successfully synchronized.`);
+      console.log(`[Tencent Meeting Service] Official API call error (${err.message}). Falling back to synchronized sandbox session.`);
     }
   }
 
@@ -272,21 +228,13 @@ export async function getMeetingDetails(meetingId: string, userId?: string): Pro
 
   const uri = `/v1/meetings/${meetingId}`;
   const queryStr = `?userid=${encodeURIComponent(hostUser)}&instanceid=1`;
-  const url = `${config.apiBase}${uri}${queryStr}`;
 
   try {
-    console.log(`[Tencent Meeting Service] Querying meeting details for meeting ID: ${meetingId}`);
-    const headers = getTencentAuthHeaders('GET', uri + queryStr, '');
+    console.log(`[Tencent Meeting Service] Querying meeting details for meeting ID: ${meetingId} via secureTencentFetch`);
+    const data = await secureTencentFetch('GET', `${uri}${queryStr}`);
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers,
-    });
-
-    const data = await response.json();
-
-    if (!response.ok || (data.code !== 0 && data.code !== undefined)) {
-      const errMsg = data.msg || data.error_info?.message || `HTTP ${response.status}`;
+    if (data.code && data.code !== 0) {
+      const errMsg = data.msg || data.error_info?.message || `Error code ${data.code}`;
       console.warn(`[Tencent Meeting Service] GetMeetingDetails returned error: ${errMsg}`);
       throw new Error(`GetMeetingDetails failed: ${errMsg}`);
     }
@@ -340,20 +288,12 @@ export async function getMeetingParticipants(meetingId: string, userId?: string)
 
   const uri = `/v1/meetings/${meetingId}/participants`;
   const queryStr = `?userid=${encodeURIComponent(hostUser)}&instanceid=1`;
-  const url = `${config.apiBase}${uri}${queryStr}`;
 
   try {
-    const headers = getTencentAuthHeaders('GET', uri + queryStr, '');
+    const data = await secureTencentFetch('GET', `${uri}${queryStr}`);
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers,
-    });
-
-    const data = await response.json();
-
-    if (!response.ok || (data.code !== 0 && data.code !== undefined)) {
-      throw new Error(data.msg || `HTTP ${response.status}`);
+    if (data.code && data.code !== 0) {
+      throw new Error(data.msg || `Error code ${data.code}`);
     }
 
     const rawList = data.participants || data.user_list || [];
