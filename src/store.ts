@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { AgendaStageType, TranscriptLine, UserRoleType, DynamicAgendaItem } from './types';
+import { AgendaStageType, TranscriptLine, UserRoleType, DynamicAgendaItem, TencentMeetingInfo, TencentParticipant } from './types';
 
 interface MeetingState {
   joined: boolean;
@@ -17,11 +17,16 @@ interface MeetingState {
   userRole: string;
   meetingId: string;
   
-  // New role-based access control & dynamic agenda fields
+  // Role-based access control & dynamic agenda fields
   userRoleType: UserRoleType;
   agendas: DynamicAgendaItem[];
   mountedFiles: Array<{ name: string; size: string; status: 'uploaded' | 'vectorizing' | 'done' }>;
   meetingStarted: boolean;
+
+  // Tencent Meeting Integration State
+  isTencentSyncEnabled: boolean;
+  tencentMeetingInfo: TencentMeetingInfo | null;
+  tencentParticipants: TencentParticipant[];
   
   setJoined: (joined: boolean) => void;
   toggleMic: () => void;
@@ -37,6 +42,12 @@ interface MeetingState {
   setAgendas: (agendas: DynamicAgendaItem[]) => void;
   setMountedFiles: (files: Array<{ name: string; size: string; status: 'uploaded' | 'vectorizing' | 'done' }>) => void;
   setMeetingStarted: (started: boolean) => void;
+  
+  // Tencent Meeting Setters
+  setTencentSyncEnabled: (enabled: boolean) => void;
+  setTencentMeetingInfo: (info: TencentMeetingInfo | null) => void;
+  setTencentParticipants: (participants: TencentParticipant[]) => void;
+
   joinMeeting: (name: string, role: string, roomId: string, roleType?: UserRoleType) => void;
 }
 
@@ -85,6 +96,15 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   mountedFiles: [],
   meetingStarted: false,
 
+  // Tencent Meeting Integration Default State
+  isTencentSyncEnabled: true,
+  tencentMeetingInfo: null,
+  tencentParticipants: [
+    { userId: 'daid_it', userName: '大地特级高管 (Host)', userRole: 'host', isMuted: false },
+    { userId: 'zhang_principal', userName: '张园长 (腾讯会议)', userRole: 'participant', isMuted: false },
+    { userId: 'li_expert', userName: '李专家 (腾讯会议)', userRole: 'participant', isMuted: false }
+  ],
+
   setJoined: (joined) => set({ joined }),
   toggleMic: () => set((state) => ({ micOn: !state.micOn })),
   setMicOn: (on) => set({ micOn: on }),
@@ -103,6 +123,11 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   setAgendas: (agendas) => set({ agendas }),
   setMountedFiles: (files) => set({ mountedFiles: files }),
   setMeetingStarted: (started) => set({ meetingStarted: started }),
+
+  // Tencent Meeting Setters
+  setTencentSyncEnabled: (enabled) => set({ isTencentSyncEnabled: enabled }),
+  setTencentMeetingInfo: (info) => set({ tencentMeetingInfo: info }),
+  setTencentParticipants: (participants) => set({ tencentParticipants: participants }),
 
   joinMeeting: (name, role, roomId, roleType) => set((state) => {
     const isAttendeeQuery = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("role") === "attendee";

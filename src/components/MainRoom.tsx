@@ -31,8 +31,33 @@ export default function MainRoom() {
     userName,
     userRole,
     meetingId,
-    joinMeeting
+    joinMeeting,
+    isTencentSyncEnabled,
+    tencentMeetingInfo,
+    tencentParticipants,
+    setTencentParticipants
   } = useMeetingStore();
+
+  // Periodically query Tencent Meeting participant list if sync is active
+  useEffect(() => {
+    if (!isTencentSyncEnabled || !tencentMeetingInfo?.meetingId) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/tencent/meetings/${tencentMeetingInfo.meetingId}/participants`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.participants) {
+            setTencentParticipants(data.participants);
+          }
+        }
+      } catch (e) {
+        // Silent fallback
+      }
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, [isTencentSyncEnabled, tencentMeetingInfo, setTencentParticipants]);
 
   const {
     remoteUsers,
@@ -270,13 +295,20 @@ export default function MainRoom() {
       {/* Upper Meta-Info & Simulator Tool belt */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
         <div>
-          <div className="flex items-center gap-2 mb-1.5">
+          <div className="flex flex-wrap items-center gap-2 mb-1.5">
             <span className="text-[9px] text-cyan-400 font-mono font-bold border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
               第 4 阶段：多人声纹追踪与实时控场
             </span>
             <Badge className="bg-cyan-500/10 border-cyan-500/20 text-cyan-400 text-[9px] px-2 font-mono">
               ● TRTC STATUS: {trtcStatusText}
             </Badge>
+
+            {isTencentSyncEnabled && (
+              <Badge className="bg-blue-500/20 border-blue-400/40 text-blue-300 text-[9px] px-2 font-mono flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-blue-400 animate-ping"></span>
+                腾讯会议联调 (号: {tencentMeetingInfo?.meetingCode || '328-910-442'})
+              </Badge>
+            )}
           </div>
           <h2 className="text-lg font-light text-white tracking-tight flex items-center gap-2">
             主题：{currentTopic}

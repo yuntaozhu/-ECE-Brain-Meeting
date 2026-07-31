@@ -1,21 +1,36 @@
-# 大地 ECE-Brain AI 智能会议系统 — 接入腾讯会议 (Tencent Meeting API) 全栈开发提示词 (Prompt)
+# 大地 ECE-Brain AI 智能会议系统 — 腾讯会议 (Tencent Meeting API) 全栈深度集成开发提示词 (Prompt)
 
-> **版本**：v1.0.0  
+> **文档版本**：v2.0.0 (全系统深度融合版)  
 > **面向对象**：AI Coding Agent / 全栈开发工程师  
 > **适用项目**：大地 ECE-Brain AI 协同教研会议系统 (`DadiAIMeeting`)  
-> **目标**：基于腾讯会议企业自建应用 REST API，构建从“会前同步一键拉起”、“会中成员/事件监控”、“双全工 AI 智能体/KaibanJS 看板联动”到“会后纪要待办回传”的全流程闭环。
+> **设计核心**：将腾讯会议 (Tencent Meeting) REST API 与开放平台事件机制，**深度融入 ECE-Brain 的会前筹备、会中 ECE-Brain 数字主理人（AI 虚拟主席）实时互动控场、KaibanJS 动态议程看板以及会后学术成果归档的全生命周期中**。
 
 ---
 
 ## 📋 提示词指令 (Master System Prompt)
 
-你是一名高级全栈架构师与 Node.js / TypeScript 专家。请严格按照以下架构规范与开发步骤，为 **大地 ECE-Brain AI 协同教研会议系统** 实现 **腾讯会议 (Tencent Meeting) 开放平台 REST API** 的深度集成。
+你是一名高级全栈架构师与 Node.js / TypeScript 专家。请严格按照以下架构规范与开发步骤，为 **大地 ECE-Brain AI 协同教研会议系统** 实现 **腾讯会议 (Tencent Meeting) 开放平台 REST API 的全系统深度融合**，将腾讯会议从单纯的 API 服务转化为 ECE-Brain 数字主理人与教研员实时交互的核心载体。
 
 ---
 
-### 1. 密钥与环境配置 (Environment & Credentials)
+## 一、 系统与产品架构定位 (Architectural Vision)
 
-请在服务端环境变量 `.env` 及 `.env.example` 中安全配置以下从腾讯会议开放平台获取的企业自建应用凭证（严禁泄露至前端 Client 侧）：
+在 ECE-Brain 系统中，腾讯会议不单是一个三方工具，而是 **“ECE-Brain 数字主理人”** 触达真实教研员的音视频接入网关。
+深度融合后的系统架构满足以下三阶段闭环：
+
+1. **会前 (Pre-Meeting)**：高管在 ECE-Brain 筹备后台配置议程与 RAG 知识库，一键同步预定腾讯会议，生成包含**腾讯会议号 + Web 入口 + 小程序码**的复合邀请卡。
+2. **会中 (In-Meeting)**：
+   * **数字主理人参会控制**：顶部展示“腾讯会议实时协同”绿色状态灯与实时腾讯会议号。
+   * **动态席位与定向点名**：定期轮询或通过 Webhook 同步腾讯会议入会成员列表，数字主理人（AI 虚拟主席）根据真实入会名单进行**定向点名与学术提问**（例如：“张园长已通过腾讯会议上线，请针对子议题二发表看法”）。
+   * **8秒冷场起搏器**：当腾讯会议音视频通道静默超过 8 秒，AI 数字主理人主动发声打断冷场。
+   * **KaibanJS 看板同步**：数字主理人发音包含 `[ACTION: AGENDA_NEXT]` 时，驱动 KaibanJS 看板切段，并同步更新腾讯会议的主题/议程。
+3. **会后 (Post-Meeting)**：将 KaibanJS 提炼的学术决议与待办事项（To-Dos），一键写入腾讯会议官方文档与待办中心。
+
+---
+
+## 二、 密钥与环境凭证配置 (Environment Configuration)
+
+请确保服务端 `.env` 及 `.env.example` 包含腾讯会议企业自建应用凭证：
 
 ```env
 # 腾讯会议企业自建应用凭证 (DadiAIMeeting)
@@ -29,96 +44,93 @@ TENCENT_MEETING_API_BASE=https://api.meeting.qq.com
 
 ---
 
-### 2. 腾讯会议 REST API 鉴权与签名算法模块 (`server/services/tencentAuth.ts`)
+## 三、 全栈融合开发实施路线图 (Step-by-Step Implementation Blueprint)
 
-根据腾讯会议开放平台 REST API 签名计算规范（[官方文档](https://cloud.tencent.com/document/product/1095/51253)），REST API 要求所有 HTTP 请求必须包含特定的 Header，并使用 **HMAC-SHA256** 算法计算签名 `X-TC-Signature`。
+### 步骤 1：全局状态扩展 (`src/store.ts` & `src/types.ts`)
 
-#### Header 参数要求：
-*   `X-TC-Key`: Secret ID (`TENCENT_MEETING_SECRET_ID`)
-*   `X-TC-Timestamp`: 当前 UNIX 时间戳（秒级）
-*   `X-TC-Nonce`: 随机正整数（如 `Math.floor(Math.random() * 100000)`）
-*   `X-TC-Signature`: HMAC-SHA256 签名串
-*   `X-TC-Registered-Corp-Id`: 企业 ID (`TENCENT_MEETING_CORP_ID`)
-*   `AppId`: 应用 ID (`TENCENT_MEETING_APP_ID`)
-*   `SdkId`: （可选）企业 AppId
+在 `src/types.ts` 与 `src/store.ts` 中加入腾讯会议全生命周期状态：
 
-#### 签名字符串拼接规则 (Signature Header String):
-```text
-HTTP_METHOD + "\n" +
-X-TC-Key + "\n" +
-X-TC-Timestamp + "\n" +
-X-TC-Nonce + "\n" +
-RequestURI (例如 /v1/meetings) + "\n" +
-RequestBody (POST/PUT 时为 JSON 字符串，GET 时为空字符串)
+```typescript
+// src/types.ts 扩展
+export interface TencentMeetingState {
+  meetingId: string;
+  meetingCode: string;
+  joinUrl: string;
+  status: string;
+  isSyncEnabled: boolean;
+  participants: Array<{ userId: string; userName: string; userRole: string; isMuted?: boolean }>;
+}
+
+// Zustand Store 扩展
+interface MeetingState {
+  // ... 原有字段
+  tencentMeeting: TencentMeetingState | null;
+  setTencentSyncEnabled: (enabled: boolean) => void;
+  setTencentMeetingInfo: (info: Partial<TencentMeetingState>) => void;
+  updateTencentParticipants: (participants: Array<{ userId: string; userName: string; userRole: string; isMuted?: boolean }>) => void;
+}
 ```
-*使用 Secret Key 对上述拼接字符串进行 HMAC-SHA256 加密，并将结果进行 Base64 编码，即得到 `X-TC-Signature`。*
 
 ---
 
-### 3. 后端服务 API 路由定义 (`server/routes/tencentMeeting.ts`)
+### 步骤 2：后端 API 代理与 Webhook 回调路由 (`server/routes/tencentMeeting.ts`)
 
-请在 Express 后端路由处理层创建 `/api/tencent/*` API 代理路由，代理前端请求并附加安全的签名 Header：
+在现有的 Express 路由基础上，完善以下四个核心融合接口：
 
-#### 接口 1: 创建/预定腾讯会议 (`POST /api/tencent/meetings/create`)
-*   **对应腾讯 API**：`POST /v1/meetings`（[官方文档](https://cloud.tencent.com/document/product/1095/42414)）
-*   **业务逻辑**：当发起人在 `MeetingSetup.tsx` 中创建会议时，同步调用此接口。
-*   **请求 Body**：
-    ```json
-    {
-      "userid": "daid_it",
-      "instanceid": 1,
-      "subject": "大地 ECE-Brain 学术教研研讨会",
-      "type": 0,
-      "start_time": "1785500000",
-      "end_time": "1785503600",
-      "settings": {
-        "allow_in_before_host": true,
-        "auto_in_waiting_room": false,
-        "allow_unmute_self": true
-      }
-    }
-    ```
-*   **响应处理**：提取返回的 `meeting_id`、`meeting_code` (会议号) 和 `join_url` (入会链接)，存入 Zustand Store 并返回前端。
-
-#### 接口 2: 查询会议状态 (`GET /api/tencent/meetings/:meetingId`)
-*   **对应腾讯 API**：`GET /v1/meetings/{meeting_id}?userid=daid_it&instanceid=1`（[官方文档](https://cloud.tencent.com/document/product/1095/42413)）
-*   **业务逻辑**：实时轮询或点播获取会议当前的生命周期状态（未开始、进行中、已结束）。
-
-#### 接口 3: 获取实时参会成员列表 (`GET /api/tencent/meetings/:meetingId/participants`)
-*   **对应腾讯 API**：`GET /v1/meetings/{meeting_id}/participants?userid=daid_it&instanceid=1`（[官方文档](https://cloud.tencent.com/document/product/1095/83667)）
-*   **业务逻辑**：获取已入会的园长、高管与教研员列表，将参会人同步到 ECE-Brain `MainRoom` 虚拟席位，供 AI 虚拟主席进行**定向点名**（如：“张园长已上线，请您就子议题二发言”）。
-
-#### 接口 4: 腾讯会议 Webhook 事件回调监听 (`POST /api/tencent/webhook`)
-*   **业务逻辑**：接收腾讯会议推送的事件消息（如：成员入会/离会事件 `user.joined` / `user.left`、会议结束事件 `meeting.ended`、云端录制/转写完成事件）。
-*   **联动动作**：
-    *   当监听到新成员入会，AI 虚拟主席自动发出欢迎耳返提醒。
-    *   当监听到会议结束，触发后台全量文本的 **KaibanJS 会议纪要与待办事项自动提炼**。
+1. **`POST /api/tencent/meetings/create`**：
+   * 接收会前筹备数据（主题、开始/结束时间、子议程大纲）。
+   * 调用 `meetingService.createMeeting()` 创建腾讯会议，返回 `meetingCode` 与 `joinUrl`。
+2. **`GET /api/tencent/meetings/:meetingId`**：
+   * 获取腾讯会议当前生命周期（`MEETING_STATE_STARTED` / `ENDED`）。
+3. **`GET /api/tencent/meetings/:meetingId/participants`**：
+   * 获取腾讯会议在线成员清单（用户名、角色、麦克风状态）。
+4. **`POST /api/tencent/webhook`**：
+   * 监听腾讯会议事件推送（如 `user.joined` / `user.left` / `meeting.ended`），实现实时事件推送到 ECE-Brain 前端。
 
 ---
 
-### 4. 前端组件与业务流融合 (`src/components/*`)
+### 步骤 3：会前筹备 UI 融合 (`src/components/MeetingSetup.tsx`)
 
-#### A. 会前筹备与拉起 (`src/components/MeetingSetup.tsx`)
-*   增加 **“同步创建腾讯会议 (Tencent Meeting Sync)”** 切换开关。
-*   点击“开启会议”时，并发调用 `/api/tencent/meetings/create`。
-*   成功后生成并展示包含**腾讯会议号**、**小程序快捷通道**与 **ECE-Brain Web 链接**的复合邀请卡片，支持一键复制。
-
-#### B. 会中席位与 AI 主席点名联动 (`src/components/MainRoom.tsx`)
-*   在界面顶部状态栏增加 **“腾讯会议已协同连接 (Tencent Sync Active)”** 的绿色 Badge 标识及腾讯会议号。
-*   调用 `/api/tencent/meetings/:meetingId/participants` 定期更新在线参会者。
-*   将实时参会人员名单注入 `useAgendaDriver.ts` 与 Gemini WebSocket 上下文中，驱动 AI 虚拟主席精准识别参会人。
-
-#### C. 会后学术成果同步
-*   在会议结束时，利用 KaibanJS 生成总结纪要，并提供“一键导出并同步至腾讯会议文档/待办”功能按钮。
+1. **“腾讯会议联动”开关**：在会议筹备表单添加可切换开关“开启腾讯会议同步 (Tencent Meeting Bridge)”。
+2. **异步创建与异常降级**：点击“开始会议”时，若开启同步，则请求 `POST /api/tencent/meetings/create`；如果腾讯 API 响应异常，自动降级为 ECE-Brain 本地模拟会场，弹出轻提示而不阻塞会议开幕。
+3. **复合邀请卡片展示**：生成包含以下元素的视觉卡片：
+   * 腾讯会议号（如 `328-401-326`）与“一键复制”按钮。
+   * 腾讯会议直达链接（`https://meeting.qq.com/s/...`）。
+   * ECE-Brain 数字教研室 Web 专属链接。
+   * 已挂载 RAG 知识库文件特征标签。
 
 ---
 
-### 5. 代码质量与安全要求 (Requirements)
+### 步骤 4：会中 ECE-Brain 数字主理人深度交互 (`src/components/MainRoom.tsx` & `src/hooks/useAgendaDriver.ts`)
 
-1.  **Strict Security**: 所有的 API Key 与 HMAC 签名计算必须仅在 Server 侧 (`server.ts` 或 API Routes) 执行，绝不能将 `Secret Key` 透露到客户端。
-2.  **Graceful Fallbacks**: 如果腾讯会议 API 返回网络超时或凭证异常，系统应平滑降级为 ECE-Brain 本地仿真模式，并弹出清晰提示，不影响本地 AI 主席与 KaibanJS 看板的正常运转。
-3.  **Type Safety**: 在 `src/types.ts` 中定义完整的 `TencentMeetingInfo` 与 API Response 接口类型。
+1. **顶栏状态标识**：
+   * 当 `tencentMeeting.isSyncEnabled === true` 时，在界面顶部栏呈现绿色高亮 Badge：`[腾讯会议在线: 328-401-326 | 在线 4 人]`。
+2. **数字主理人上下文感知与定向点名**：
+   * 定时（每 10 秒）或通过事件刷新腾讯会议参会人列表。
+   * 将当前在线教研员姓名（如“张园长”、“李专家”）实时拼接注入到 Gemini Live 的 System Prompt 与 `useAgendaDriver.ts` 中。
+   * **数字主理人语气契约**：“检测到张园长已在腾讯会议上线，有请张园长就【防眩光网关指标】发表意见。”
+3. **8秒冷场起搏器联动**：
+   * 若腾讯会议音频通道无发言满 8 秒，起搏器被激活，数字主理人使用高敏发声策略主动向腾讯会议在线人员抛出教研问答。
+4. **KaibanJS 议程看板位移**：
+   * 数字主理人发言识别到 `[ACTION: AGENDA_NEXT]` 时，KaibanJS 议程卡片产生滑移动效，并在顶部状态栏更新当前讨论小节。
 
 ---
 
-请确认上述提示词后开始编写或重构相应模块代码。
+### 步骤 5：会后学术成果与腾讯会议归档同步 (`src/components/KaibanBoard.tsx`)
+
+1. **学术决议一键归档**：
+   * 会议结束时，KaibanJS 会议智能代理提炼出“学术共识”与“行动待办”。
+2. **腾讯会议同步按钮**：
+   * 提供“一键写入腾讯会议文档/待办”功能，调用 API 将学术总结推送到腾讯会议全员日程与文档中心。
+
+---
+
+## 四、 交互与防御性设计规范 (Quality & Security Rules)
+
+1. **密钥保护 (Zero Secrets Leaked)**：所有 HMAC-SHA256 签名计算必须严格保留在服务器端 (`server/` / `src/lib/meetingService.ts`)，客户端仅通过 `/api/tencent/*` 进行安全交互。
+2. **平滑降级 (Resilient Fallback)**：当腾讯会议接口调用失败或未配置 ApiKey 时，系统需维持 ECE-Brain 本地双全工 AI 主席与 KaibanJS 看板的独立可用性。
+3. **全流程 TypeScript 类型约束**：确保 `TencentMeetingState`、`CreateMeetingParams` 等在 `src/types.ts` 中获得无死角类型检查。
+
+---
+
+*请根据本提示词中的指导，将腾讯会议服务完整融入 ECE-Brain 开会流与数字主理人交互中。*
