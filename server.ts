@@ -3,6 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { WebSocketServer } from "ws";
 import { runMeetingAnalysisServer } from "./src/lib/kaibanMeetingEngine.server";
+import tencentMeetingRouter from "./server/routes/tencentMeeting";
 
 async function startServer() {
   const app = express();
@@ -14,6 +15,9 @@ async function startServer() {
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
   });
+
+  // Tencent Meeting API Routes
+  app.use("/api/tencent", tencentMeetingRouter);
 
   // KaibanJS Orchestration endpoint
   app.post("/api/meeting/evaluate", async (req, res) => {
