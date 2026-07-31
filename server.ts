@@ -306,8 +306,7 @@ if (!process.env.VERCEL) {
 
 export default app;
 
-if (typeof module !== 'undefined' && (module as any).exports) {
-  (module as any).exports = app;
-  (module as any).exports.default = app;
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = app;
 }
 

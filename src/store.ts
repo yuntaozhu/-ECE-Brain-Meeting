@@ -5,36 +5,48 @@ import { AgendaStageType, TranscriptLine, UserRoleType, DynamicAgendaItem, Tence
 // Initialize Socket.IO client for real-time bidirectional sync
 let socket: any = null;
 if (typeof window !== "undefined") {
-  socket = io();
-  socket.on("connect", () => {
-    console.log("[Socket.IO Client] Connected successfully for real-time meeting sync.");
-    const state = useMeetingStore.getState();
-    if (state.meetingId) {
-      socket.emit("join-room", state.meetingId);
-    }
-  });
-
-  socket.on("participants-updated", (data: { roomId: string; participants: TencentParticipant[] }) => {
-    if (data && data.participants && Array.isArray(data.participants)) {
-      useMeetingStore.setState({ tencentParticipants: data.participants });
-    }
-  });
-
-  socket.on("participant-joined", (data: { roomId: string; participant: TencentParticipant }) => {
-    if (data && data.participant) {
+  try {
+    socket = io({
+      reconnectionAttempts: 2,
+      timeout: 3000,
+      transports: ['polling', 'websocket']
+    });
+    socket.on("connect", () => {
+      console.log("[Socket.IO Client] Connected successfully for real-time meeting sync.");
       const state = useMeetingStore.getState();
-      const existing = state.tencentParticipants || [];
-      const idx = existing.findIndex(p => p.userName === data.participant.userName);
-      let updated: TencentParticipant[];
-      if (idx >= 0) {
-        updated = [...existing];
-        updated[idx] = { ...updated[idx], ...data.participant };
-      } else {
-        updated = [...existing, data.participant];
+      if (state.meetingId) {
+        socket.emit("join-room", state.meetingId);
       }
-      useMeetingStore.setState({ tencentParticipants: updated });
-    }
-  });
+    });
+
+    socket.on("connect_error", (err: any) => {
+      console.warn("[Socket.IO Client] Serverless deployment notice (Using resilient REST & polling fallback):", err?.message);
+    });
+
+    socket.on("participants-updated", (data: { roomId: string; participants: TencentParticipant[] }) => {
+      if (data && data.participants && Array.isArray(data.participants)) {
+        useMeetingStore.setState({ tencentParticipants: data.participants });
+      }
+    });
+
+    socket.on("participant-joined", (data: { roomId: string; participant: TencentParticipant }) => {
+      if (data && data.participant) {
+        const state = useMeetingStore.getState();
+        const existing = state.tencentParticipants || [];
+        const idx = existing.findIndex(p => p.userName === data.participant.userName);
+        let updated: TencentParticipant[];
+        if (idx >= 0) {
+          updated = [...existing];
+          updated[idx] = { ...updated[idx], ...data.participant };
+        } else {
+          updated = [...existing, data.participant];
+        }
+        useMeetingStore.setState({ tencentParticipants: updated });
+      }
+    });
+  } catch (socketInitErr) {
+    console.warn("[Socket.IO] Initialization notice:", socketInitErr);
+  }
 }
 
 interface MeetingState {
