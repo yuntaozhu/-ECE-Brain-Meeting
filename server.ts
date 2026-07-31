@@ -1,14 +1,49 @@
 import express from "express";
 import path from "path";
+import http from "http";
+import { Server as SocketIOServer } from "socket.io";
 import { createServer as createViteServer } from "vite";
 import { WebSocketServer } from "ws";
 import { runMeetingAnalysisServer } from "./src/lib/kaibanMeetingEngine.server";
 import tencentMeetingRouter from "./server/routes/tencentMeeting";
 
 const app = express();
+const server = http.createServer(app);
+const io = new SocketIOServer(server, {
+  cors: { origin: "*" }
+});
+
 const PORT = 3000;
 
 app.use(express.json());
+
+// Socket.IO real-time bidirectional sync
+io.on("connection", (socket) => {
+  console.log(`[Socket.IO] Client connected: ${socket.id}`);
+
+  socket.on("join-room", (roomId) => {
+    socket.join(roomId);
+    console.log(`[Socket.IO] Socket ${socket.id} joined meeting room: ${roomId}`);
+  });
+
+  socket.on("update-participants", (data) => {
+    const { roomId, participants } = data;
+    if (roomId && participants) {
+      io.to(roomId).emit("participants-updated", { roomId, participants });
+    }
+  });
+
+  socket.on("participant-joined", (data) => {
+    const { roomId, participant } = data;
+    if (roomId && participant) {
+      io.to(roomId).emit("participant-joined", { roomId, participant });
+    }
+  });
+
+  socket.on("disconnect", () => {
+    console.log(`[Socket.IO] Client disconnected: ${socket.id}`);
+  });
+});
 
 // Request logger for debugging on Vercel and local
 app.use((req, res, next) => {
@@ -136,7 +171,7 @@ async function setupDevServer() {
 
 if (!process.env.VERCEL) {
   setupDevServer().then(() => {
-    const server = app.listen(PORT, "0.0.0.0", () => {
+    server.listen(PORT, "0.0.0.0", () => {
       console.log(`Server running on http://localhost:${PORT}`);
     });
 

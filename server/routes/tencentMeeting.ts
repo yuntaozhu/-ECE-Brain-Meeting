@@ -143,6 +143,27 @@ router.get('/meetings/:meetingId/participants', async (req, res) => {
 });
 
 /**
+ * POST /api/tencent/meetings/:meetingId/participants/join
+ * Register or sync a participant who joined the meeting (e.g. testaaa)
+ */
+router.post('/meetings/:meetingId/participants/join', (req, res) => {
+  const { meetingId } = req.params;
+  const participant = req.body;
+  if (!participant || !participant.userName) {
+    return res.status(400).json({ success: false, error: 'Participant userName is required' });
+  }
+  const updated = (meetingService as any).registerParticipant(meetingId, {
+    userId: participant.userId || `user_${Date.now()}`,
+    userName: participant.userName,
+    userRole: participant.userRole || 'participant',
+    isMuted: Boolean(participant.isMuted),
+    joinTime: participant.joinTime || Math.floor(Date.now() / 1000)
+  });
+  logger.log('TENCENT', 'TencentRoute', `✅ Participant registered / synced: ${participant.userName} in meeting ${meetingId}`, { count: updated.length });
+  res.json({ success: true, data: { participants: updated } });
+});
+
+/**
  * GET /api/tencent/diagnostic
  * Test connectivity to Tencent Meeting API base URL and check for CORS/404/network issues
  */

@@ -270,6 +270,28 @@ export async function getMeetingDetails(meetingId: string, userId?: string): Pro
   }
 }
 
+// In-memory registered participants store for sandbox/sync
+const registeredParticipantsMap: Record<string, TencentParticipant[]> = {};
+
+export function registerParticipant(meetingId: string, participant: TencentParticipant): TencentParticipant[] {
+  if (!registeredParticipantsMap[meetingId]) {
+    registeredParticipantsMap[meetingId] = [
+      { userId: 'daid_it', userName: '大地督导 (Host)', userRole: 'host', isMuted: false, joinTime: Math.floor(Date.now() / 1000) - 300 },
+      { userId: 'zhang_principal', userName: '张园长', userRole: 'participant', isMuted: false, joinTime: Math.floor(Date.now() / 1000) - 240 },
+      { userId: 'li_expert', userName: '李专家', userRole: 'participant', isMuted: false, joinTime: Math.floor(Date.now() / 1000) - 180 },
+      { userId: 'wang_sec', userName: '王董秘', userRole: 'participant', isMuted: true, joinTime: Math.floor(Date.now() / 1000) - 120 },
+    ];
+  }
+  const existing = registeredParticipantsMap[meetingId];
+  const index = existing.findIndex(p => p.userName === participant.userName || p.userId === participant.userId);
+  if (index >= 0) {
+    existing[index] = { ...existing[index], ...participant };
+  } else {
+    existing.push(participant);
+  }
+  return existing;
+}
+
 /**
  * 4. Query Meeting Participants (GET /v1/meetings/{meeting_id}/participants).
  */
@@ -277,44 +299,52 @@ export async function getMeetingParticipants(meetingId: string, userId?: string)
   const config = getTencentConfig();
   const hostUser = userId || config.hostUserId;
 
+  let baseParticipants: TencentParticipant[] = [];
+
   if (!config.secretId || config.secretId === 'your_secret_id') {
-    return [
+    baseParticipants = [
       { userId: 'daid_it', userName: '大地督导 (Host)', userRole: 'host', isMuted: false, joinTime: Math.floor(Date.now() / 1000) - 300 },
       { userId: 'zhang_principal', userName: '张园长', userRole: 'participant', isMuted: false, joinTime: Math.floor(Date.now() / 1000) - 240 },
       { userId: 'li_expert', userName: '李专家', userRole: 'participant', isMuted: false, joinTime: Math.floor(Date.now() / 1000) - 180 },
       { userId: 'wang_sec', userName: '王董秘', userRole: 'participant', isMuted: true, joinTime: Math.floor(Date.now() / 1000) - 120 },
     ];
-  }
+  } else {
+    const uri = `/v1/meetings/${meetingId}/participants`;
+    const queryStr = `?userid=${encodeURIComponent(hostUser)}&instanceid=1`;
 
-  const uri = `/v1/meetings/${meetingId}/participants`;
-  const queryStr = `?userid=${encodeURIComponent(hostUser)}&instanceid=1`;
+    try {
+      const data = await secureTencentFetch('GET', `${uri}${queryStr}`);
 
-  try {
-    const data = await secureTencentFetch('GET', `${uri}${queryStr}`);
+      if (data.code && data.code !== 0) {
+        throw new Error(data.msg || `Error code ${data.code}`);
+      }
 
-    if (data.code && data.code !== 0) {
-      throw new Error(data.msg || `Error code ${data.code}`);
+      const rawList = data.participants || data.user_list || [];
+      baseParticipants = rawList.map((item: any) => ({
+        userId: String(item.userid || item.user_id || `user_${Math.random()}`),
+        userName: item.user_name || item.username || '教研员',
+        userRole: item.user_role === 1 ? 'host' : item.user_role === 2 ? 'co_host' : 'participant',
+        joinTime: Number(item.join_time || Math.floor(Date.now() / 1000)),
+        isMuted: Boolean(item.is_muted),
+      }));
+    } catch (err: any) {
+      console.warn(`[Tencent Meeting Service] Participants query fallback (${err.message}). Returning mock active roster.`);
+      baseParticipants = [
+        { userId: 'daid_it', userName: '大地督导 (Host)', userRole: 'host', isMuted: false },
+        { userId: 'zhang_principal', userName: '张园长', userRole: 'participant', isMuted: false },
+        { userId: 'li_expert', userName: '李专家', userRole: 'participant', isMuted: false },
+        { userId: 'wang_sec', userName: '王董秘', userRole: 'participant', isMuted: true },
+      ];
     }
-
-    const rawList = data.participants || data.user_list || [];
-    return rawList.map((item: any) => ({
-      userId: String(item.userid || item.user_id || `user_${Math.random()}`),
-      userName: item.user_name || item.username || '教研员',
-      userRole: item.user_role === 1 ? 'host' : item.user_role === 2 ? 'co_host' : 'participant',
-      joinTime: Number(item.join_time || Math.floor(Date.now() / 1000)),
-      isMuted: Boolean(item.is_muted),
-    }));
-  } catch (err: any) {
-    console.warn(`[Tencent Meeting Service] Participants query fallback (${err.message}). Returning mock active roster.`);
-
-    // Active roster fallback for AI Chairman targeted call-outs
-    return [
-      { userId: 'daid_it', userName: '大地督导 (Host)', userRole: 'host', isMuted: false },
-      { userId: 'zhang_principal', userName: '张园长', userRole: 'participant', isMuted: false },
-      { userId: 'li_expert', userName: '李专家', userRole: 'participant', isMuted: false },
-      { userId: 'wang_sec', userName: '王董秘', userRole: 'participant', isMuted: true },
-    ];
   }
+
+  // Merge with any in-memory registered participants (e.g. testaaa)
+  const registered = registeredParticipantsMap[meetingId] || [];
+  const map = new Map<string, TencentParticipant>();
+  baseParticipants.forEach(p => map.set(p.userName, p));
+  registered.forEach(p => map.set(p.userName, p));
+
+  return Array.from(map.values());
 }
 
 export const meetingService = {
@@ -322,6 +352,7 @@ export const meetingService = {
   createMeeting,
   getMeetingDetails,
   getMeetingParticipants,
+  registerParticipant,
   getTencentAuthHeaders,
 };
 

@@ -1,5 +1,41 @@
 import { create } from 'zustand';
+import { io } from 'socket.io-client';
 import { AgendaStageType, TranscriptLine, UserRoleType, DynamicAgendaItem, TencentMeetingInfo, TencentParticipant } from './types';
+
+// Initialize Socket.IO client for real-time bidirectional sync
+let socket: any = null;
+if (typeof window !== "undefined") {
+  socket = io();
+  socket.on("connect", () => {
+    console.log("[Socket.IO Client] Connected successfully for real-time meeting sync.");
+    const state = useMeetingStore.getState();
+    if (state.meetingId) {
+      socket.emit("join-room", state.meetingId);
+    }
+  });
+
+  socket.on("participants-updated", (data: { roomId: string; participants: TencentParticipant[] }) => {
+    if (data && data.participants && Array.isArray(data.participants)) {
+      useMeetingStore.setState({ tencentParticipants: data.participants });
+    }
+  });
+
+  socket.on("participant-joined", (data: { roomId: string; participant: TencentParticipant }) => {
+    if (data && data.participant) {
+      const state = useMeetingStore.getState();
+      const existing = state.tencentParticipants || [];
+      const idx = existing.findIndex(p => p.userName === data.participant.userName);
+      let updated: TencentParticipant[];
+      if (idx >= 0) {
+        updated = [...existing];
+        updated[idx] = { ...updated[idx], ...data.participant };
+      } else {
+        updated = [...existing, data.participant];
+      }
+      useMeetingStore.setState({ tencentParticipants: updated });
+    }
+  });
+}
 
 interface MeetingState {
   joined: boolean;
@@ -136,6 +172,7 @@ export const useMeetingStore = create<MeetingState>((set) => ({
     const isAttendee = actualRoleType === "attendee";
     const actualName = name || (isAttendee ? "杨督导" : "张园长");
     const actualRole = role || (isAttendee ? "省优质名园考评长" : "学前数字融合组长");
+    const activeRoomId = roomId || state.meetingId || "10086";
 
     const newParticipant = {
       userId: `user_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -146,6 +183,20 @@ export const useMeetingStore = create<MeetingState>((set) => ({
       joinTime: Math.floor(Date.now() / 1000)
     };
 
+    // Sync to backend API immediately
+    if (typeof fetch !== "undefined") {
+      fetch(`/api/tencent/meetings/${activeRoomId}/participants/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newParticipant)
+      }).catch(err => console.warn('Failed to sync participant join to backend:', err));
+    }
+
+    if (socket && activeRoomId) {
+      socket.emit("join-room", activeRoomId);
+      socket.emit("participant-joined", { roomId: activeRoomId, participant: newParticipant });
+    }
+
     const existingParticipants = state.tencentParticipants || [];
     const filtered = existingParticipants.filter(p => p.userName !== actualName);
     const updatedParticipants = [...filtered, newParticipant];
@@ -153,7 +204,7 @@ export const useMeetingStore = create<MeetingState>((set) => ({
     return {
       userName: actualName,
       userRole: actualRole,
-      meetingId: roomId || "10086",
+      meetingId: activeRoomId,
       userRoleType: actualRoleType,
       joined: true,
       tencentParticipants: updatedParticipants,
