@@ -6,76 +6,10 @@ import { runMeetingAnalysisServer } from "./src/lib/kaibanMeetingEngine.server";
 import tencentMeetingRouter from "./server/routes/tencentMeeting";
 
 async function startServer() {
-  const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
-
-  // Health check
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok" });
-  });
-
-  // Tencent Meeting API Routes
-  app.use("/api/tencent", tencentMeetingRouter);
-
-  // KaibanJS Orchestration endpoint
-  app.post("/api/meeting/evaluate", async (req, res) => {
-    const { transcript, currentTopic } = req.body;
-    
-    try {
-      if (!process.env.GEMINI_API_KEY) {
-         return res.status(500).json({ error: "No Gemini API Key" });
-      }
-      
-      const result = await runMeetingAnalysisServer(transcript, currentTopic);
-      res.json({ result });
-    } catch(err) {
-      console.error(err);
-      res.status(500).json({ error: String(err) });
-    }
-  });
-
-  // Text-To-Speech Endpoint with robust fallback handling
-  app.post("/api/tts", async (req, res) => {
-    try {
-      const { text, speaker = "BV700_streaming" } = req.body;
-      // Return fallback to let client use WebSpeech synthesized speech cleanly
-      return res.json({ audioData: null, fallback: true });
-    } catch(err: any) {
-      return res.json({ audioData: null, fallback: true });
-    }
-  });
-
-  // TRTC UserSig calculation endpoint for premium voice streaming authentication
-  app.post("/api/trtc/usersig", async (req, res) => {
-    try {
-      const { userId = "ece-brain-user-1", sdkAppId } = req.body;
-      
-      // Using verified secret keys provided directly for大地 ECE-Brain "数字主理人" AI 语音会议系统
-      const secretKey = process.env.TRTC_SECRET_KEY || "laTTal0Lj2OpGijqIlRBvejyJu7SsIpS";
-      const actualSdkAppId = Number(sdkAppId || process.env.TRTC_SDK_APP_ID || "1400112233"); // Customizable or fallback SDK App ID
-
-      const TLSSigAPIv2 = await import("tls-sig-api-v2");
-      const api = new TLSSigAPIv2.Api(actualSdkAppId, secretKey);
-      
-      // Generate standard user signature with 24 Hours expiry
-      const userSig = api.genUserSig(userId, 86400);
-
-      res.json({
-        userSig,
-        sdkAppId: actualSdkAppId,
-        userId,
-        time: Math.floor(Date.now() / 1000)
-      });
-    } catch (err) {
-      console.error("TRTC signature generation error:", err);
-      res.status(500).json({ error: "Failed to generate TRTC UserSig dynamically" });
-    }
-  });
-
   // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -205,4 +139,75 @@ async function startServer() {
   });
 }
 
-startServer();
+const app = express();
+
+app.use(express.json());
+
+// Health check
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok" });
+});
+
+// Tencent Meeting API Routes
+app.use("/api/tencent", tencentMeetingRouter);
+
+// KaibanJS Orchestration endpoint
+app.post("/api/meeting/evaluate", async (req, res) => {
+  const { transcript, currentTopic } = req.body;
+  
+  try {
+    if (!process.env.GEMINI_API_KEY) {
+       return res.status(500).json({ error: "No Gemini API Key" });
+    }
+    
+    const result = await runMeetingAnalysisServer(transcript, currentTopic);
+    res.json({ result });
+  } catch(err) {
+    console.error(err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// Text-To-Speech Endpoint with robust fallback handling
+app.post("/api/tts", async (req, res) => {
+  try {
+    const { text, speaker = "BV700_streaming" } = req.body;
+    // Return fallback to let client use WebSpeech synthesized speech cleanly
+    return res.json({ audioData: null, fallback: true });
+  } catch(err: any) {
+    return res.json({ audioData: null, fallback: true });
+  }
+});
+
+// TRTC UserSig calculation endpoint for premium voice streaming authentication
+app.post("/api/trtc/usersig", async (req, res) => {
+  try {
+    const { userId = "ece-brain-user-1", sdkAppId } = req.body;
+    
+    // Using verified secret keys provided directly for大地 ECE-Brain "数字主理人" AI 语音会议系统
+    const secretKey = process.env.TRTC_SECRET_KEY || "laTTal0Lj2OpGijqIlRBvejyJu7SsIpS";
+    const actualSdkAppId = Number(sdkAppId || process.env.TRTC_SDK_APP_ID || "1400112233"); // Customizable or fallback SDK App ID
+
+    const TLSSigAPIv2 = await import("tls-sig-api-v2");
+    const api = new TLSSigAPIv2.Api(actualSdkAppId, secretKey);
+    
+    // Generate standard user signature with 24 Hours expiry
+    const userSig = api.genUserSig(userId, 86400);
+
+    res.json({
+      userSig,
+      sdkAppId: actualSdkAppId,
+      userId,
+      time: Math.floor(Date.now() / 1000)
+    });
+  } catch (err) {
+    console.error("TRTC signature generation error:", err);
+    res.status(500).json({ error: "Failed to generate TRTC UserSig dynamically" });
+  }
+});
+
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export default app;
