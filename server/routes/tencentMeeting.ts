@@ -48,7 +48,7 @@ router.post('/meetings/create', async (req, res) => {
   const fullUrl = `${OFFICIAL_TENCENT_API_BASE}/v1/meetings`;
   try {
     const meetingParams = req.body;
-    logger.log('TENCENT', 'TencentRoute', `📥 Received POST /api/tencent/meetings/create -> Targeting full external URL: ${fullUrl}`, { headers: req.headers, body: meetingParams, targetUrl: fullUrl });
+    logger.log('TENCENT', 'TencentRoute', `📥 Received POST /api/tencent/meetings/create -> Targeting full external URL: ${fullUrl}`, { body: meetingParams, targetUrl: fullUrl });
     
     const meetingInfo = await meetingService.createMeeting(meetingParams);
     const duration = Date.now() - startTime;

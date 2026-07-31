@@ -17,18 +17,34 @@ class CentralizedLogger {
   }
 
   log(level: LogEntry['level'], category: string, message: string, data?: any) {
+    let serializedData: any = undefined;
+    if (data !== undefined) {
+      try {
+        const seen = new WeakSet();
+        serializedData = JSON.parse(JSON.stringify(data, (key, value) => {
+          if (value instanceof Error) {
+            return { message: value.message, stack: value.stack };
+          }
+          if (typeof value === 'object' && value !== null) {
+            if (seen.has(value)) {
+              return '[Circular]';
+            }
+            seen.add(value);
+          }
+          return value;
+        }));
+      } catch (e) {
+        serializedData = { serializationError: String(e) };
+      }
+    }
+
     const entry: LogEntry = {
       id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
       timestamp: new Date().toISOString(),
       level,
       category,
       message,
-      data: data ? JSON.parse(JSON.stringify(data, (key, value) => {
-        if (value instanceof Error) {
-          return { message: value.message, stack: value.stack };
-        }
-        return value;
-      })) : undefined
+      data: serializedData
     };
 
     this.logs.unshift(entry);
