@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useMeetingStore } from "../store";
+import { calculateValidMeetingTimeRange } from "../lib/meetingTimeHelper";
 import { tencentMeetingClient } from "../lib/tencentMeetingClient";
 import { 
   Plus, Trash2, Upload, FileText, Link, Copy, Check, Sparkles, 
@@ -204,11 +205,12 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
       } else {
         try {
           console.log("[MeetingSetup] Requesting Tencent Meeting REST API Creation via tencentMeetingClient...");
+          const timeRange = calculateValidMeetingTimeRange();
           const meetingInfo = await tencentMeetingClient.createMeeting({
             subject: topicInput.trim(),
             type: 0,
-            startTime: Math.floor(Date.now() / 1000),
-            endTime: Math.floor(Date.now() / 1000) + 3600,
+            startTime: timeRange.startTimeSec,
+            endTime: timeRange.endTimeSec,
             settings: {
               allow_in_before_host: true,
               auto_in_waiting_room: false,

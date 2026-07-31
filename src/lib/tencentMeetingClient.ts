@@ -18,13 +18,34 @@ export class TencentMeetingClient {
   }
 
   /**
+   * Robust response parser that checks Content-Type header before calling .json()
+   * and handles HTML gateway error pages or non-JSON payloads gracefully.
+   */
+  private async parseJsonResponse(response: Response): Promise<any> {
+    const contentType = response.headers.get('content-type') || '';
+    const text = await response.text();
+
+    if (!contentType.includes('application/json')) {
+      logger.log('ERROR', 'TencentClient', `❌ Non-JSON response received (Content-Type: ${contentType}, Status: ${response.status})`, { bodySnippet: text.substring(0, 500) });
+      throw new Error(`Expected JSON response but received Content-Type '${contentType}' (Status ${response.status}). Preview: ${text.substring(0, 200)}`);
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch (syntaxError: any) {
+      logger.log('ERROR', 'TencentClient', `❌ JSON parsing failed (Status: ${response.status}): ${syntaxError.message}`, { rawText: text.substring(0, 500) });
+      throw new Error(`Failed to parse JSON response: ${syntaxError.message}. Response preview: ${text.substring(0, 200)}`);
+    }
+  }
+
+  /**
    * Acquire Access Token via backend proxy.
    */
   async getAccessToken(): Promise<TencentAccessTokenResponse> {
     try {
       logger.log('TENCENT', 'TencentClient', `🚀 Fetching Access Token from ${this.apiBaseUrl}/token`);
       const response = await fetch(`${this.apiBaseUrl}/token`);
-      const json = await response.json();
+      const json = await this.parseJsonResponse(response);
       logger.log('TENCENT', 'TencentClient', `GetAccessToken response status: ${response.status}`, { status: response.status, ok: response.ok, body: json });
       if (!response.ok || !json.success) {
         throw new Error(json.error || `HTTP ${response.status}`);
@@ -52,7 +73,7 @@ export class TencentMeetingClient {
         body: JSON.stringify(params),
       });
 
-      const json = await response.json();
+      const json = await this.parseJsonResponse(response);
       logger.log('TENCENT', 'TencentClient', `CreateMeeting response status: ${response.status}`, { status: response.status, ok: response.ok, body: json });
 
       if (!response.ok || !json.success) {
@@ -87,7 +108,7 @@ export class TencentMeetingClient {
   async getMeetingDetails(meetingId: string, userId: string = 'daid_it'): Promise<TencentMeetingInfo> {
     try {
       const response = await fetch(`${this.apiBaseUrl}/meetings/${encodeURIComponent(meetingId)}?userId=${encodeURIComponent(userId)}`);
-      const json = await response.json();
+      const json = await this.parseJsonResponse(response);
       if (!response.ok || !json.success) {
         throw new Error(json.error || `HTTP ${response.status}`);
       }
@@ -111,7 +132,7 @@ export class TencentMeetingClient {
   async getParticipants(meetingId: string, userId: string = 'daid_it'): Promise<TencentParticipant[]> {
     try {
       const response = await fetch(`${this.apiBaseUrl}/meetings/${encodeURIComponent(meetingId)}/participants?userId=${encodeURIComponent(userId)}`);
-      const json = await response.json();
+      const json = await this.parseJsonResponse(response);
       if (!response.ok || !json.success) {
         throw new Error(json.error || `HTTP ${response.status}`);
       }

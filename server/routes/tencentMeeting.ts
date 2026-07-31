@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { meetingService } from '../../src/lib/meetingService';
+import meetingService from '../../src/lib/meetingService';
 import { logger } from '../../src/lib/logger';
 
 const router = Router();

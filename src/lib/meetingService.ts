@@ -5,6 +5,7 @@ import {
   TencentParticipant, 
   TencentAccessTokenResponse 
 } from '../types';
+import { calculateValidMeetingTimeRange } from './meetingTimeHelper';
 
 /**
  * Configuration for Tencent Meeting API Credentials.
@@ -151,13 +152,9 @@ export async function createMeeting(params: CreateMeetingParams): Promise<Tencen
   const uri = '/v1/meetings';
   const url = `${config.apiBase}${uri}`;
 
-  const startTimeSec = typeof params.startTime === 'number' 
-    ? params.startTime 
-    : (params.startTime ? Math.floor(new Date(params.startTime).getTime() / 1000) : Math.floor(Date.now() / 1000));
-  
-  const endTimeSec = typeof params.endTime === 'number'
-    ? params.endTime
-    : (params.endTime ? Math.floor(new Date(params.endTime).getTime() / 1000) : startTimeSec + 3600);
+  const timeRange = calculateValidMeetingTimeRange(params.startTime, params.endTime, 15);
+  const startTimeSec = timeRange.startTimeSec;
+  const endTimeSec = timeRange.endTimeSec;
 
   const payload = {
     userid: params.userId || config.hostUserId,
