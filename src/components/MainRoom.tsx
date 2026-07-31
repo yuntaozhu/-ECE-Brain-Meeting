@@ -14,6 +14,9 @@ import { useMeetingOrchestrator } from "../hooks/useMeetingOrchestrator";
 import { useAgendaDriver } from "../hooks/useAgendaDriver";
 import { useRole } from "../hooks/useRole";
 import AgendaKanbanBoard from "./AgendaKanbanBoard";
+import { SystemDebugConsole } from "./SystemDebugConsole";
+import { ApiHealthPanel } from "./ApiHealthPanel";
+import { Terminal } from "lucide-react";
 
 export default function MainRoom() {
   const { 
@@ -90,6 +93,8 @@ export default function MainRoom() {
   const { isCreator, isAttendee, canControl } = useRole();
 
   const [showMixExplanation, setShowMixExplanation] = useState(false);
+  const [showDebugConsole, setShowDebugConsole] = useState(false);
+  const [showApiHealth, setShowApiHealth] = useState(false);
   const [textInput, setTextInput] = useState("");
 
   // Lobby form inputs prefilled dynamically from invitation path parameters
@@ -320,6 +325,26 @@ export default function MainRoom() {
           <Button 
             variant="outline" 
             size="sm" 
+            onClick={() => setShowApiHealth(true)}
+            className="text-[10px] border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-300 rounded-lg h-8 font-mono"
+          >
+            <ShieldAlert className="h-3 w-3 mr-1 text-red-400" />
+            ⚠️ API 健康与故障面板
+          </Button>
+
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setShowDebugConsole(true)}
+            className="text-[10px] border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 rounded-lg h-8 font-mono animate-pulse"
+          >
+            <Terminal className="h-3 w-3 mr-1 text-amber-400" />
+            🛠️ AI调试日志控制台
+          </Button>
+
+          <Button 
+            variant="outline" 
+            size="sm" 
             onClick={() => setShowMixExplanation(!showMixExplanation)}
             className="text-[10px] border-cyan-500/30 bg-cyan-500/5 hover:bg-cyan-500/15 text-cyan-300 rounded-lg h-8"
           >
@@ -342,6 +367,9 @@ export default function MainRoom() {
           </Button>
         </div>
       </div>
+
+      <SystemDebugConsole isOpen={showDebugConsole} onClose={() => setShowDebugConsole(false)} />
+      <ApiHealthPanel isOpen={showApiHealth} onClose={() => setShowApiHealth(false)} />
 
       {/* Audio mixing details slide panel */}
       {showMixExplanation && (

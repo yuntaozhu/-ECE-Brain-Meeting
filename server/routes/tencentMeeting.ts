@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { meetingService } from '../../src/lib/meetingService';
+import { logger } from '../../src/lib/logger';
 
 const router = Router();
 
@@ -8,15 +9,21 @@ const router = Router();
  * Fetch or refresh Tencent Meeting REST API Access Token
  */
 router.get('/token', async (req, res) => {
+  const startTime = Date.now();
   try {
+    logger.log('TENCENT', 'TencentRoute', '📥 Received GET /api/tencent/token');
     const tokenData = await meetingService.getAccessToken();
+    const duration = Date.now() - startTime;
+    logger.log('TENCENT', 'TencentRoute', `✅ Token acquired successfully in ${duration}ms`, tokenData);
+
     res.json({
       success: true,
       data: tokenData,
       timestamp: Date.now()
     });
   } catch (err: any) {
-    console.error('[Tencent Meeting Route Error] GET /token:', err);
+    const duration = Date.now() - startTime;
+    logger.log('ERROR', 'TencentRoute', `❌ Failed GET /token after ${duration}ms: ${err.message}`, { error: err.message, stack: err.stack });
     res.status(500).json({
       success: false,
       error: err.message || 'Failed to acquire Tencent Meeting access token',
@@ -30,12 +37,15 @@ router.get('/token', async (req, res) => {
  * Create a scheduled or instant Tencent Meeting
  */
 router.post('/meetings/create', async (req, res) => {
+  const startTime = Date.now();
   try {
     const meetingParams = req.body;
-    console.log('[Tencent Meeting Route] Creating meeting with params:', meetingParams);
+    logger.log('TENCENT', 'TencentRoute', `📥 Received POST /api/tencent/meetings/create`, { headers: req.headers, body: meetingParams });
     
     const meetingInfo = await meetingService.createMeeting(meetingParams);
-    
+    const duration = Date.now() - startTime;
+    logger.log('TENCENT', 'TencentRoute', `✅ Meeting successfully created in ${duration}ms`, meetingInfo);
+
     res.json({
       success: true,
       data: meetingInfo,
@@ -43,10 +53,12 @@ router.post('/meetings/create', async (req, res) => {
       timestamp: Date.now()
     });
   } catch (err: any) {
-    console.error('[Tencent Meeting Route Error] POST /meetings/create:', err);
+    const duration = Date.now() - startTime;
+    logger.log('ERROR', 'TencentRoute', `❌ Failed POST /meetings/create after ${duration}ms: ${err.message}`, { error: err.message, stack: err.stack });
     res.status(500).json({
       success: false,
       error: err.message || 'Failed to create Tencent Meeting',
+      details: err.stack,
       timestamp: Date.now()
     });
   }
@@ -57,11 +69,15 @@ router.post('/meetings/create', async (req, res) => {
  * Query Tencent Meeting details and lifecycle status
  */
 router.get('/meetings/:meetingId', async (req, res) => {
+  const startTime = Date.now();
   try {
     const { meetingId } = req.params;
     const { userId } = req.query;
+    logger.log('TENCENT', 'TencentRoute', `📥 Received GET /api/tencent/meetings/${meetingId}`, { userId });
 
     const meetingDetails = await meetingService.getMeetingDetails(meetingId, userId as string);
+    const duration = Date.now() - startTime;
+    logger.log('TENCENT', 'TencentRoute', `✅ Meeting details fetched in ${duration}ms`, meetingDetails);
 
     res.json({
       success: true,
@@ -69,7 +85,8 @@ router.get('/meetings/:meetingId', async (req, res) => {
       timestamp: Date.now()
     });
   } catch (err: any) {
-    console.error(`[Tencent Meeting Route Error] GET /meetings/${req.params.meetingId}:`, err);
+    const duration = Date.now() - startTime;
+    logger.log('ERROR', 'TencentRoute', `❌ Failed GET /meetings/${req.params.meetingId} after ${duration}ms: ${err.message}`);
     res.status(500).json({
       success: false,
       error: err.message || 'Failed to fetch Tencent Meeting details',
@@ -83,11 +100,15 @@ router.get('/meetings/:meetingId', async (req, res) => {
  * Query real-time participants in the Tencent Meeting
  */
 router.get('/meetings/:meetingId/participants', async (req, res) => {
+  const startTime = Date.now();
   try {
     const { meetingId } = req.params;
     const { userId } = req.query;
+    logger.log('TENCENT', 'TencentRoute', `📥 Received GET /api/tencent/meetings/${meetingId}/participants`, { userId });
 
     const participants = await meetingService.getMeetingParticipants(meetingId, userId as string);
+    const duration = Date.now() - startTime;
+    logger.log('TENCENT', 'TencentRoute', `✅ Participants fetched in ${duration}ms (${participants.length} users)`, { count: participants.length });
 
     res.json({
       success: true,
@@ -95,7 +116,8 @@ router.get('/meetings/:meetingId/participants', async (req, res) => {
       timestamp: Date.now()
     });
   } catch (err: any) {
-    console.error(`[Tencent Meeting Route Error] GET /meetings/${req.params.meetingId}/participants:`, err);
+    const duration = Date.now() - startTime;
+    logger.log('ERROR', 'TencentRoute', `❌ Failed GET /meetings/${req.params.meetingId}/participants after ${duration}ms: ${err.message}`);
     res.status(500).json({
       success: false,
       error: err.message || 'Failed to fetch Tencent Meeting participants',

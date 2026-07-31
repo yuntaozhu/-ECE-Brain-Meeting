@@ -32,6 +32,7 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
   const [topicInput, setTopicInput] = useState("关于下一代幼儿教育数字化基础设施的规划");
   const [meetingRoomId, setMeetingRoomId] = useState("10086");
   const [tencentSyncToggle, setTencentSyncToggle] = useState(true);
+  const [customTencentMeetingId, setCustomTencentMeetingId] = useState("");
   const [isCreatingTencentMeeting, setIsCreatingTencentMeeting] = useState(false);
   const [tencentMeetingResult, setTencentMeetingResult] = useState<{ meetingCode: string; joinUrl: string; meetingId: string } | null>(null);
 
@@ -183,60 +184,83 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
     let tencentData = null;
 
     if (tencentSyncToggle) {
-      try {
-        console.log("[MeetingSetup] Requesting Tencent Meeting REST API Creation via tencentMeetingClient...");
-        const meetingInfo = await tencentMeetingClient.createMeeting({
-          subject: topicInput.trim(),
-          type: 0,
-          startTime: Math.floor(Date.now() / 1000),
-          endTime: Math.floor(Date.now() / 1000) + 3600,
-          settings: {
-            allow_in_before_host: true,
-            auto_in_waiting_room: false,
-            allow_unmute_self: true
-          }
-        });
-
+      if (customTencentMeetingId.trim()) {
+        const customCode = customTencentMeetingId.trim().replace(/\s+/g, '');
         tencentData = {
-          meetingCode: meetingInfo.meetingCode,
-          joinUrl: meetingInfo.joinUrl,
-          meetingId: meetingInfo.meetingId
-        };
-
-        setTencentMeetingResult(tencentData);
-        setTencentMeetingInfo({
-          meetingId: meetingInfo.meetingId,
-          meetingCode: meetingInfo.meetingCode,
-          subject: topicInput.trim(),
-          joinUrl: meetingInfo.joinUrl,
-          status: 'MEETING_STATE_STARTED',
-          currentParticipantsCount: 3
-        });
-      } catch (err) {
-        console.warn("[MeetingSetup] Tencent Meeting API fallback mode activated:", err);
-        const fallbackCode = String(Math.floor(328000000 + Math.random() * 100000000));
-        tencentData = {
-          meetingCode: fallbackCode,
-          joinUrl: `https://meeting.qq.com/s/${fallbackCode}`,
-          meetingId: `tm_fallback_${Date.now()}`
+          meetingCode: customCode,
+          joinUrl: `https://meeting.qq.com/s/${customCode}`,
+          meetingId: `tm_custom_${customCode}`
         };
         setTencentMeetingResult(tencentData);
+        setMeetingRoomId(customCode);
         setTencentMeetingInfo({
           meetingId: tencentData.meetingId,
-          meetingCode: tencentData.meetingCode,
+          meetingCode: customCode,
           subject: topicInput.trim(),
           joinUrl: tencentData.joinUrl,
           status: 'MEETING_STATE_STARTED',
           currentParticipantsCount: 3
         });
+      } else {
+        try {
+          console.log("[MeetingSetup] Requesting Tencent Meeting REST API Creation via tencentMeetingClient...");
+          const meetingInfo = await tencentMeetingClient.createMeeting({
+            subject: topicInput.trim(),
+            type: 0,
+            startTime: Math.floor(Date.now() / 1000),
+            endTime: Math.floor(Date.now() / 1000) + 3600,
+            settings: {
+              allow_in_before_host: true,
+              auto_in_waiting_room: false,
+              allow_unmute_self: true
+            }
+          });
+
+          tencentData = {
+            meetingCode: meetingInfo.meetingCode,
+            joinUrl: meetingInfo.joinUrl,
+            meetingId: meetingInfo.meetingId
+          };
+
+          setTencentMeetingResult(tencentData);
+          setMeetingRoomId(meetingInfo.meetingCode);
+          setTencentMeetingInfo({
+            meetingId: meetingInfo.meetingId,
+            meetingCode: meetingInfo.meetingCode,
+            subject: topicInput.trim(),
+            joinUrl: meetingInfo.joinUrl,
+            status: 'MEETING_STATE_STARTED',
+            currentParticipantsCount: 3
+          });
+        } catch (err) {
+          console.warn("[MeetingSetup] Tencent Meeting API fallback mode activated:", err);
+          const fallbackCode = String(Math.floor(328000000 + Math.random() * 100000000));
+          tencentData = {
+            meetingCode: fallbackCode,
+            joinUrl: `https://meeting.qq.com/s/${fallbackCode}`,
+            meetingId: `tm_fallback_${Date.now()}`
+          };
+          setTencentMeetingResult(tencentData);
+          setMeetingRoomId(fallbackCode);
+          setTencentMeetingInfo({
+            meetingId: tencentData.meetingId,
+            meetingCode: tencentData.meetingCode,
+            subject: topicInput.trim(),
+            joinUrl: tencentData.joinUrl,
+            status: 'MEETING_STATE_STARTED',
+            currentParticipantsCount: 3
+          });
+        }
       }
     }
+
+    const activeRoomId = tencentData ? tencentData.meetingCode : meetingRoomId;
 
     // Generate link for standard attendee with production domain
     const origin = typeof window !== "undefined" && window.location.hostname.includes("dadimeeting.minervaedu.app")
       ? window.location.origin 
       : "https://dadimeeting.minervaedu.app";
-    const invite = `${origin}?role=attendee&roomId=${meetingRoomId}`;
+    const invite = `${origin}?role=attendee&roomId=${activeRoomId}`;
     setInviteUrl(invite);
     
     setIsCreatingTencentMeeting(false);
@@ -342,6 +366,30 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
                     />
                   </button>
                 </div>
+
+                {tencentSyncToggle && (
+                  <div className="p-3.5 bg-black/50 border border-cyan-500/20 rounded-xl space-y-3">
+                    <label className="text-[10px] font-mono text-cyan-400 uppercase flex items-center justify-between">
+                      <span>腾讯会议号 (若需在腾讯会议App中免会议号无效，可在此填入您已创建的真实9位会议号)</span>
+                      <span className="text-slate-500 font-normal">留空则自动生成演示模拟号</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={customTencentMeetingId}
+                      onChange={(e) => setCustomTencentMeetingId(e.target.value)}
+                      className="w-full text-xs font-mono bg-white/5 border border-white/10 focus:border-cyan-500 rounded-lg px-3 py-2 text-cyan-300 outline-none transition-all placeholder:text-slate-600"
+                      placeholder="例如: 802374474 (可选，如留空将自动分配模拟号)"
+                    />
+                    <div className="text-[10px] text-amber-300/90 bg-amber-950/20 border border-amber-500/30 p-2.5 rounded-lg space-y-1">
+                      <span className="font-bold block text-amber-300">💡 为什么腾讯会议提示“会议已结束”或“会议号无效”？</span>
+                      <p className="text-slate-400 leading-relaxed">
+                        当未配置腾讯会议官方企业 API 秘钥时，系统会采用演示模拟号（如随机生成 9 位号）。由于该号码并非在腾讯会议官方服务器真实预约，直接在腾讯会议 App 中输入会提示「会议已结束」或「会议号无效」。
+                        <br/>
+                        <strong>正确做法：</strong>如需在腾讯会议 App 中真实连通，请先在腾讯会议 App 中自主创建一个新会议，将真实 9 位会议号填入上方输入框中；或者直接使用本系统内置功能强大的 <strong>【进入数字研讨大室 (Creator)】</strong> 体验完整的 AI 智能主席与多专家协同语音研讨！
+                      </p>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -584,6 +632,9 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
                           {tencentMeetingResult.joinUrl}
                         </a>
                       </div>
+                    </div>
+                    <div className="text-[10px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 p-2 rounded-lg leading-relaxed font-sans mt-2">
+                      💡 <strong>温馨提示：</strong> 当前处于沙箱模拟模式（未配置官方腾讯会议 SecretID）。系统生成的会议号专用于网页端 ECE-Brain 多智能体互动演练。若在腾讯会议官方 App 提示“会议号无效”，请在会前设置中输入您在腾讯会议 App 创建的真实会议号。
                     </div>
                   </div>
                 )}

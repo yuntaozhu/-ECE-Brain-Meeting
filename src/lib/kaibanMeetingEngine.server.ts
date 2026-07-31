@@ -2,28 +2,12 @@ import { KaibanAnalysisResult } from "../types";
 import { GoogleGenAI } from "@google/genai";
 
 export async function runMeetingAnalysisServer(recentTranscript: string, currentAgenda: string): Promise<KaibanAnalysisResult> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const doubaoApiKey = process.env.DOUBAO_API_KEY || "ark-20c57eca-6b75-4581-bb78-023f7776df4e-58bd0";
 
-  if (!apiKey) {
-    console.warn("No GEMINI_API_KEY environment variable found. Activating localized heuristic parser...");
-    return runLocalHeuristicFallback(recentTranscript, currentAgenda);
-  }
-
-  // Multi-Model Resilience Fallback Chain (Task: Fix 429 Rate limits / Quota constraints gracefully)
-  const candidateModels = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash"];
-  
-  for (const modelName of candidateModels) {
+  // 1. Try Doubao Ark API first as requested ("大模型上，先使用豆包的key")
+  if (doubaoApiKey) {
     try {
-      console.log(`[Meeting Engine] Promoting evaluation request using resilient model: ${modelName}`);
-      const ai = new GoogleGenAI({ 
-        apiKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build'
-          }
-        }
-      });
-      
+      console.log(`[Meeting Engine] Promoting evaluation request using Doubao Ark API (Model: doubao-seed-2-1-pro-260628)...`);
       const prompt = `
         You are resolving an interactive multiplayer classroom briefing session. 
         Analyze the current meeting logs and synthesize the joint work of your multi-agent team:
@@ -50,45 +34,49 @@ export async function runMeetingAnalysisServer(recentTranscript: string, current
         }
       `;
 
-      const response = await ai.models.generateContent({
-        model: modelName,
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          temperature: 0.2,
-        }
+      const response = await fetch("https://ark.cn-beijing.volces.com/api/v3/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${doubaoApiKey}`
+        },
+        body: JSON.stringify({
+          model: "doubao-seed-2-1-pro-260628",
+          messages: [
+            { role: "system", content: "You are a professional educational AI meeting coordinator." },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.2
+        })
       });
 
-      const text = response.text || "{}";
-      const cleanJson = text.replace(/```json/gi, "").replace(/```/gi, "").trim();
-      const parsed = JSON.parse(cleanJson);
-
-      console.log(`[Meeting Engine] Successfully retrieved LLM analysis from model ${modelName}`);
-      return {
-        shouldIntervene: Boolean(parsed.shouldIntervene),
-        interventionText: parsed.interventionText || "",
-        latestToDos: Array.isArray(parsed.latestToDos) ? parsed.latestToDos : [],
-        nextStageRecommendation: parsed.nextStageRecommendation || null
-      };
-
-    } catch (err: any) {
-      const isRateLimitOrDemand = 
-        err.message?.includes("429") || 
-        err.status === "RESOURCE_EXHAUSTED" || 
-        err.message?.includes("quota") ||
-        err.message?.includes("503") ||
-        err.status === "UNAVAILABLE";
-
-      if (isRateLimitOrDemand) {
-        console.warn(`[Meeting Engine Warning] Model ${modelName} rate limited / quota exhausted / experiencing high demand. Transitioning down chain gracefully...`);
+      if (response.ok) {
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content || "{}";
+        const cleanJson = content.replace(/```json/gi, "").replace(/```/gi, "").trim();
+        const parsed = JSON.parse(cleanJson);
+        console.log(`[Meeting Engine] Successfully retrieved LLM analysis from Doubao API`);
+        return {
+          shouldIntervene: Boolean(parsed.shouldIntervene),
+          interventionText: parsed.interventionText || "",
+          latestToDos: Array.isArray(parsed.latestToDos) ? parsed.latestToDos : [],
+          nextStageRecommendation: parsed.nextStageRecommendation || null
+        };
       } else {
-        console.warn(`[Meeting Engine Warning] Model ${modelName} encountered technical glitch: ${err.message || err}. Moving to next resilient candidate model.`);
+        const errText = await response.text();
+        if (errText.includes("ModelNotOpen") || response.status === 404) {
+          console.log(`[Meeting Engine] Doubao model not activated in Ark Console. Seamlessly falling back to Gemini/Heuristics...`);
+        } else {
+          console.warn(`[Meeting Engine] Doubao API request failed (${response.status}): ${errText}. Falling back to Gemini...`);
+        }
       }
+    } catch (doubaoErr: any) {
+      console.log(`[Meeting Engine] Doubao API skipped or unavailable. Falling back to Gemini/Heuristics...`);
     }
   }
 
-  // Absolute fallback if all models in the chain are rate-limited or offline
-  console.warn("[Meeting Engine Safe Fallback] All candidate Gemini models are exhausted or rate-limited. Activating local heuristic AI simulation.");
+  // Gemini key disabled per user request ("不使用 Gemini的key")
+  console.log("[Meeting Engine] 🧠 Gemini API calls disabled per user preference. Running local heuristic analysis.");
   return runLocalHeuristicFallback(recentTranscript, currentAgenda);
 }
 

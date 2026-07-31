@@ -29,8 +29,12 @@ export default function App() {
     return "setup";
   });
 
-  // Get current meeting URL dynamically
-  const meetingUrl = typeof window !== "undefined" ? window.location.href : "https://ece.dadi.edu/room/brain-orchestrator";
+  // Get current meeting URL dynamically with production domain
+  const meetingUrl = typeof window !== "undefined"
+    ? (window.location.hostname.includes("dadimeeting.minervaedu.app")
+        ? window.location.href
+        : `https://dadimeeting.minervaedu.app${window.location.search || '?role=attendee&roomId=10086'}`)
+    : "https://dadimeeting.minervaedu.app?role=attendee&roomId=10086";
 
   const handleCopyLink = () => {
     if (typeof navigator !== "undefined" && navigator.clipboard) {

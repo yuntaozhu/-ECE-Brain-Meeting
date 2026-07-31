@@ -36,35 +36,14 @@ async function startServer() {
     }
   });
 
-  // Text-To-Speech Endpoint using Gemini API with graceful quota-fallback handling
+  // Text-To-Speech Endpoint with robust fallback handling
   app.post("/api/tts", async (req, res) => {
     try {
-      const { text, speaker = "Kore" } = req.body;
-      const { GoogleGenAI, Modality } = await import("@google/genai");
-      
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } });
-      const response = await ai.models.generateContent({
-        model: "gemini-3.1-flash-tts-preview",
-        contents: [{ parts: [{ text: text }] }],
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-              voiceConfig: { prebuiltVoiceConfig: { voiceName: speaker } },
-          },
-        },
-      });
-      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      res.json({ audioData: base64Audio });
+      const { text, speaker = "BV700_streaming" } = req.body;
+      // Return fallback to let client use WebSpeech synthesized speech cleanly
+      return res.json({ audioData: null, fallback: true });
     } catch(err: any) {
-      const errMsg = err.message || String(err);
-      const isQuota = errMsg.includes("429") || errMsg.includes("quota") || errMsg.includes("RESOURCE_EXHAUSTED");
-      if (isQuota) {
-        console.warn("[TTS Endpoint] Gemini TTS Quota Exceeded (429/RESOURCE_EXHAUSTED). Falling back to WebSpeech on frontend.");
-      } else {
-        console.warn("[TTS Endpoint] Gemini TTS currently unavailable:", errMsg.slice(0, 150));
-      }
-      // Return 200 with fallback flag to prevent API route failure
-      res.json({ audioData: null, fallback: true, error: isQuota ? "Quota limit exceeded" : errMsg });
+      return res.json({ audioData: null, fallback: true });
     }
   });
 

@@ -4,6 +4,7 @@ import {
   TencentParticipant, 
   TencentAccessTokenResponse 
 } from '../types';
+import { logger } from './logger';
 
 /**
  * Client module for Tencent Meeting API interactions.
@@ -21,14 +22,16 @@ export class TencentMeetingClient {
    */
   async getAccessToken(): Promise<TencentAccessTokenResponse> {
     try {
+      logger.log('TENCENT', 'TencentClient', `🚀 Fetching Access Token from ${this.apiBaseUrl}/token`);
       const response = await fetch(`${this.apiBaseUrl}/token`);
       const json = await response.json();
+      logger.log('TENCENT', 'TencentClient', `GetAccessToken response status: ${response.status}`, { status: response.status, ok: response.ok, body: json });
       if (!response.ok || !json.success) {
         throw new Error(json.error || `HTTP ${response.status}`);
       }
       return json.data;
     } catch (error: any) {
-      console.warn('[TencentClient] Failed to fetch AccessToken:', error.message);
+      logger.log('WARN', 'TencentClient', `⚠️ Failed to fetch AccessToken, falling back: ${error.message}`);
       return {
         accessToken: `client_fallback_${Date.now()}`,
         expiresIn: 3600,
@@ -42,7 +45,7 @@ export class TencentMeetingClient {
    */
   async createMeeting(params: CreateMeetingParams): Promise<TencentMeetingInfo> {
     try {
-      console.log('[TencentClient] Requesting CreateMeeting with subject:', params.subject);
+      logger.log('TENCENT', 'TencentClient', `🚀 Requesting CreateMeeting with subject: "${params.subject}"`, params);
       const response = await fetch(`${this.apiBaseUrl}/meetings/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -50,17 +53,20 @@ export class TencentMeetingClient {
       });
 
       const json = await response.json();
+      logger.log('TENCENT', 'TencentClient', `CreateMeeting response status: ${response.status}`, { status: response.status, ok: response.ok, body: json });
+
       if (!response.ok || !json.success) {
-        throw new Error(json.error || `HTTP ${response.status}`);
+        throw new Error(json.error || json.details || `HTTP ${response.status}`);
       }
 
       const data: TencentMeetingInfo = json.data;
-      console.log(`[TencentClient] Meeting created successfully! Code: ${data.meetingCode}, JoinURL: ${data.joinUrl}`);
+      logger.log('TENCENT', 'TencentClient', `✅ Meeting created successfully! Code: ${data.meetingCode}, JoinURL: ${data.joinUrl}`, data);
       return data;
     } catch (error: any) {
-      console.warn('[TencentClient] CreateMeeting error, activating fallback session:', error.message);
+      logger.log('ERROR', 'TencentClient', `❌ CreateMeeting error encountered: ${error.message}`, { stack: error.stack });
       
       const fallbackCode = String(Math.floor(328000000 + Math.random() * 100000000));
+      logger.log('WARN', 'TencentClient', `🔄 Activating fallback session with code: ${fallbackCode} (Note: External QQ Meeting App requires real API credentials to validate meeting IDs in official servers)`);
       return {
         meetingId: `tm_client_fallback_${Date.now()}`,
         meetingCode: fallbackCode,
