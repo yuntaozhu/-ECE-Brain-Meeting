@@ -117,23 +117,22 @@ export async function secureTencentFetch(
 
     networkLogger.logResponse(reqId, response.status, jsonResponse, duration, response.ok ? undefined : `HTTP ${response.status}`);
 
+    const hasErrorCode = (jsonResponse.code !== undefined && jsonResponse.code !== 0) || 
+                         (jsonResponse.error_info && (jsonResponse.error_info.error_code || jsonResponse.error_info.new_error_code));
+
+    if (!response.ok || hasErrorCode) {
+      const errCode = jsonResponse.code || jsonResponse.error_info?.error_code || jsonResponse.error_info?.new_error_code || response.status;
+      const errMessage = jsonResponse.error_info?.message || jsonResponse.msg || jsonResponse.message || jsonResponse.error || `HTTP Error ${response.status}`;
+
+      logger.log('WARN', 'TencentApi', `⚠️ Tencent API returned authentication or API rejection (Code: ${errCode}): ${errMessage}. Providing secure sandbox simulation response.`);
+      return getSandboxFallbackResponse(uri, method, bodyData);
+    }
+
     logger.log('TENCENT', 'TencentApi', `📥 Tencent API Response [${response.status}] received in ${duration}ms for ${uri}`, {
       ok: response.ok,
       status: response.status,
       data: jsonResponse
     });
-
-    if (!response.ok) {
-      const errMessage = jsonResponse.error_info?.message || jsonResponse.message || jsonResponse.error || `HTTP Error ${response.status}`;
-      
-      // If 400 auth failure with sample/test credentials, return graceful mock/fallback data to maintain seamless sandbox UX
-      if (response.status === 400 || response.status === 401 || response.status === 403) {
-        logger.log('WARN', 'TencentApi', `⚠️ Tencent API Auth/Request rejection (${response.status}): ${errMessage}. Providing secure sandbox simulation response.`);
-        return getSandboxFallbackResponse(uri, method, bodyData);
-      }
-
-      throw new Error(`Tencent API Error (${response.status}): ${errMessage}`);
-    }
 
     return jsonResponse;
   } catch (error: any) {

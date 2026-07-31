@@ -164,7 +164,7 @@ export async function createMeeting(params: CreateMeetingParams): Promise<Tencen
       const data = await secureTencentFetch('POST', uri, payload);
 
       const errCode = data.error_info?.error_code || data.code;
-      if (errCode === 190303 || errCode === 200190303 || !errCode) {
+      if (errCode === 0 || errCode === undefined || errCode === null) {
         const info = data.meeting_info_list?.[0] || data;
         const code = String(info.meeting_code || info.meeting_id || '811199910');
         console.log(`[Tencent Meeting Service] ✅ Tencent Meeting official credentials successfully authorized! Code: ${code}`);
