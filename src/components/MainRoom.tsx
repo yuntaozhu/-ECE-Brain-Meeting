@@ -75,7 +75,7 @@ export default function MainRoom() {
     return () => clearInterval(interval);
   }, [isTencentSyncEnabled, tencentMeetingInfo, setTencentParticipants]);
 
-  // Cross-device meeting state synchronization via server API
+  // Cross-device meeting state synchronization via server API (Polling server state)
   useEffect(() => {
     const activeId = meetingId || lobbyRoomId || '10086';
     if (!activeId) return;
@@ -87,16 +87,20 @@ export default function MainRoom() {
           const data = await res.json();
           if (data && data.success && data.state) {
             const serverState = data.state;
-            if (serverState.currentTopic) useMeetingStore.setState({ currentTopic: serverState.currentTopic });
-            if (serverState.agendaStage) useMeetingStore.setState({ agendaStage: serverState.agendaStage });
-            if (serverState.transcript && serverState.transcript.length > 0) {
+            const currentState = useMeetingStore.getState();
+            if (serverState.currentTopic && serverState.currentTopic !== currentState.currentTopic) {
+              useMeetingStore.setState({ currentTopic: serverState.currentTopic });
+            }
+            if (serverState.agendaStage && serverState.agendaStage !== currentState.agendaStage) {
+              useMeetingStore.setState({ agendaStage: serverState.agendaStage });
+            }
+            if (serverState.transcript && serverState.transcript.length > currentState.transcript.length) {
               useMeetingStore.setState({ transcript: serverState.transcript });
             }
-            if (serverState.mountedFiles) useMeetingStore.setState({ mountedFiles: serverState.mountedFiles });
-            if (serverState.tencentParticipants && serverState.tencentParticipants.length > 0) {
-              setTencentParticipants(serverState.tencentParticipants);
+            if (serverState.mountedFiles) {
+              useMeetingStore.setState({ mountedFiles: serverState.mountedFiles });
             }
-            if (serverState.meetingStarted !== undefined) {
+            if (serverState.meetingStarted !== undefined && serverState.meetingStarted !== currentState.meetingStarted) {
               useMeetingStore.setState({ meetingStarted: serverState.meetingStarted });
             }
           }
@@ -109,21 +113,29 @@ export default function MainRoom() {
     // Fetch immediately on mount
     fetchServerState();
 
-    const syncInterval = setInterval(fetchServerState, 2000);
+    const syncInterval = setInterval(fetchServerState, 3000);
+
+    return () => clearInterval(syncInterval);
+  }, [joined, meetingId, lobbyRoomId]);
+
+  // Push local state changes to server (debounced)
+  useEffect(() => {
+    if (!joined) return;
+    const activeId = meetingId || lobbyRoomId || '10086';
+    if (!activeId) return;
 
     const pushState = async () => {
-      if (!joined) return;
       try {
+        const state = useMeetingStore.getState();
         await fetch(`/api/meeting/state/${activeId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            currentTopic,
-            agendaStage,
-            transcript,
-            mountedFiles: useMeetingStore.getState().mountedFiles,
-            tencentParticipants,
-            meetingStarted: useMeetingStore.getState().meetingStarted
+            currentTopic: state.currentTopic,
+            agendaStage: state.agendaStage,
+            transcript: state.transcript,
+            mountedFiles: state.mountedFiles,
+            meetingStarted: state.meetingStarted
           })
         });
       } catch (e) {
@@ -131,12 +143,9 @@ export default function MainRoom() {
       }
     };
 
-    if (joined) {
-      pushState();
-    }
-
-    return () => clearInterval(syncInterval);
-  }, [joined, meetingId, lobbyRoomId, currentTopic, agendaStage, transcript, tencentParticipants, setTencentParticipants]);
+    const timer = setTimeout(pushState, 1000);
+    return () => clearTimeout(timer);
+  }, [joined, meetingId, lobbyRoomId, currentTopic, agendaStage, transcript]);
 
   const {
     remoteUsers,

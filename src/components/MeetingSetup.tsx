@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useMeetingStore } from "../store";
 import { calculateValidMeetingTimeRange } from "../lib/meetingTimeHelper";
 import { tencentMeetingClient } from "../lib/tencentMeetingClient";
@@ -36,6 +36,55 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
   const [customTencentMeetingId, setCustomTencentMeetingId] = useState("");
   const [isCreatingTencentMeeting, setIsCreatingTencentMeeting] = useState(false);
   const [tencentMeetingResult, setTencentMeetingResult] = useState<{ meetingCode: string; joinUrl: string; meetingId: string } | null>(null);
+
+  // Tencent Meeting API Connectivity Diagnostic Check State
+  const [diagnosticResult, setDiagnosticResult] = useState<{
+    status: string;
+    apiBase: string;
+    endpoint: string;
+    latencyMs: number;
+    details: string;
+    httpStatus: number;
+    corpId?: string;
+    appId?: string;
+  } | null>(null);
+  const [isCheckingDiagnostic, setIsCheckingDiagnostic] = useState(true);
+
+  useEffect(() => {
+    async function runDiagnostic() {
+      try {
+        const res = await fetch('/api/tencent/diagnostic');
+        const json = await res.json();
+        if (json.success) {
+          setDiagnosticResult(json.data);
+        }
+      } catch (err: any) {
+        setDiagnosticResult({
+          status: 'UNREACHABLE',
+          apiBase: 'https://api.meeting.qq.com',
+          endpoint: 'https://api.meeting.qq.com/v1/oauth2/token',
+          latencyMs: 0,
+          details: `Client diagnostic fetch error: ${err.message}`,
+          httpStatus: 0
+        });
+      } finally {
+        setIsCheckingDiagnostic(false);
+      }
+    }
+    runDiagnostic();
+  }, []);
+
+  // Advanced Tencent Meeting API parameters (参考 创建会议.md)
+  const [meetingType, setMeetingType] = useState<number>(0); // 0: 预约会议, 1: 快速会议
+  const [meetingPassword, setMeetingPassword] = useState("");
+  const [hostUserId, setHostUserId] = useState("daid_it");
+  const [autoAsr, setAutoAsr] = useState(true);
+  const [autoRecordType, setAutoRecordType] = useState("cloud"); // none, local, cloud
+  const [autoInWaitingRoom, setAutoInWaitingRoom] = useState(false);
+  const [allowInBeforeHost, setAllowInBeforeHost] = useState(true);
+  const [enableLive, setEnableLive] = useState(false);
+  const [liveSubject, setLiveSubject] = useState("大地 ECE-Brain 学术研讨直播");
+  const [showAdvancedApi, setShowAdvancedApi] = useState(false);
 
   // Agendas list form state
   const [agendaItems, setAgendaItems] = useState<AgendaFormItem[]>([
@@ -208,13 +257,30 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
           const timeRange = calculateValidMeetingTimeRange();
           const meetingInfo = await tencentMeetingClient.createMeeting({
             subject: topicInput.trim(),
-            type: 0,
+            type: meetingType,
+            userId: hostUserId || 'daid_it',
+            instanceid: 1,
+            ...(meetingPassword ? { password: meetingPassword } : {}),
+            ...(enableLive ? {
+              enable_live: true,
+              live_config: {
+                live_subject: liveSubject,
+                live_summary: topicInput.trim(),
+                enable_live_password: false,
+                enable_live_im: true,
+                enable_live_replay: true
+              }
+            } : {}),
             startTime: timeRange.startTimeSec,
             endTime: timeRange.endTimeSec,
             settings: {
-              allow_in_before_host: true,
-              auto_in_waiting_room: false,
-              allow_unmute_self: true
+              allow_in_before_host: allowInBeforeHost,
+              auto_in_waiting_room: autoInWaitingRoom,
+              allow_unmute_self: true,
+              auto_asr: autoAsr,
+              auto_record_type: autoRecordType,
+              mute_enable_type_join: 2,
+              audio_watermark: true
             }
           });
 
@@ -370,25 +436,205 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
                 </div>
 
                 {tencentSyncToggle && (
-                  <div className="p-3.5 bg-black/50 border border-cyan-500/20 rounded-xl space-y-3">
-                    <label className="text-[10px] font-mono text-cyan-400 uppercase flex items-center justify-between">
-                      <span>腾讯会议号 (若需在腾讯会议App中免会议号无效，可在此填入您已创建的真实9位会议号)</span>
-                      <span className="text-slate-500 font-normal">留空则自动生成演示模拟号</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={customTencentMeetingId}
-                      onChange={(e) => setCustomTencentMeetingId(e.target.value)}
-                      className="w-full text-xs font-mono bg-white/5 border border-white/10 focus:border-cyan-500 rounded-lg px-3 py-2 text-cyan-300 outline-none transition-all placeholder:text-slate-600"
-                      placeholder="例如: 802374474 (可选，如留空将自动分配模拟号)"
-                    />
-                    <div className="text-[10px] text-amber-300/90 bg-amber-950/20 border border-amber-500/30 p-2.5 rounded-lg space-y-1">
-                      <span className="font-bold block text-amber-300">💡 为什么腾讯会议提示“会议已结束”或“会议号无效”？</span>
-                      <p className="text-slate-400 leading-relaxed">
-                        当未配置腾讯会议官方企业 API 秘钥时，系统会采用演示模拟号（如随机生成 9 位号）。由于该号码并非在腾讯会议官方服务器真实预约，直接在腾讯会议 App 中输入会提示「会议已结束」或「会议号无效」。
-                        <br/>
-                        <strong>正确做法：</strong>如需在腾讯会议 App 中真实连通，请先在腾讯会议 App 中自主创建一个新会议，将真实 9 位会议号填入上方输入框中；或者直接使用本系统内置功能强大的 <strong>【进入数字研讨大室 (Creator)】</strong> 体验完整的 AI 智能主席与多专家协同语音研讨！
-                      </p>
+                  <div className="space-y-3">
+                    {/* API Connectivity & CORS/404 Diagnostic Check Card */}
+                    <div className="p-3 bg-black/60 border border-cyan-500/30 rounded-xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
+                          <Shield className="w-3.5 h-3.5 text-cyan-400" />
+                          腾讯会议 API 连通性与 CORS/404 诊断
+                        </span>
+                        {isCheckingDiagnostic ? (
+                          <span className="text-[10px] text-amber-400 font-mono animate-pulse">检测中...</span>
+                        ) : diagnosticResult?.status === 'SUCCESS' || diagnosticResult?.status === 'REACHABLE_AUTH_REQUIRED' ? (
+                          <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-mono flex items-center gap-1">
+                            <Check className="w-3 h-3 text-emerald-400" />
+                            连通正常 ({diagnosticResult.latencyMs}ms)
+                          </span>
+                        ) : (
+                          <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-mono flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 text-amber-400" />
+                            状态: {diagnosticResult?.status || 'UNREACHABLE'} ({diagnosticResult?.httpStatus || 0})
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-300 font-mono bg-white/5 p-2.5 rounded-lg border border-white/10 space-y-1.5">
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-400">API 基础地址:</span>
+                          <span className="text-cyan-300 truncate max-w-[240px]">{diagnosticResult?.apiBase || 'https://api.meeting.qq.com'}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-400">探测终端:</span>
+                          <span className="text-slate-200 truncate max-w-[240px]">{diagnosticResult?.endpoint || '/v1/oauth2/token'}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-400">HTTP 响应码:</span>
+                          <span className="text-white font-bold">{diagnosticResult?.httpStatus ?? '检查中...'}</span>
+                        </div>
+                        <div className="flex justify-between items-start gap-2 pt-1 border-t border-white/10">
+                          <span className="text-slate-400 shrink-0">诊断详情:</span>
+                          <span className="text-emerald-300 text-right leading-tight">{diagnosticResult?.details || '正在校验服务器端 CORS 与路由通畅度...'}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-3.5 bg-black/50 border border-cyan-500/20 rounded-xl space-y-3">
+                      <label className="text-[10px] font-mono text-cyan-400 uppercase flex items-center justify-between">
+                        <span>腾讯会议号 (若需在腾讯会议App中免会议号无效，可在此填入您已创建的真实9位会议号)</span>
+                        <span className="text-slate-500 font-normal">留空则自动生成演示模拟号</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={customTencentMeetingId}
+                        onChange={(e) => setCustomTencentMeetingId(e.target.value)}
+                        className="w-full text-xs font-mono bg-white/5 border border-white/10 focus:border-cyan-500 rounded-lg px-3 py-2 text-cyan-300 outline-none transition-all placeholder:text-slate-600"
+                        placeholder="例如: 802374474 (可选，如留空将自动分配模拟号)"
+                      />
+                      <div className="text-[10px] text-amber-300/90 bg-amber-950/20 border border-amber-500/30 p-2.5 rounded-lg space-y-1">
+                        <span className="font-bold block text-amber-300">💡 为什么腾讯会议提示“会议已结束”或“会议号无效”？</span>
+                        <p className="text-slate-400 leading-relaxed">
+                          当未配置腾讯会议官方企业 API 秘钥时，系统会采用演示模拟号（如随机生成 9 位号）。由于该号码并非在腾讯会议官方服务器真实预约，直接在腾讯会议 App 中输入会提示「会议已结束」或「会议号无效」。
+                          <br/>
+                          <strong>正确做法：</strong>如需在腾讯会议 App 中真实连通，请先在腾讯会议 App 中自主创建一个新会议，将真实 9 位会议号填入上方输入框中；或者直接使用本系统内置功能强大的 <strong>【进入数字研讨大室 (Creator)】</strong> 体验完整的 AI 智能主席与多专家协同语音研讨！
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Advanced API Config Accordion (参考 创建会议.md) */}
+                    <div className="border border-white/10 rounded-xl bg-white/5 overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setShowAdvancedApi(!showAdvancedApi)}
+                        className="w-full px-4 py-3 bg-white/5 hover:bg-white/10 flex items-center justify-between text-xs font-mono text-cyan-300 transition-all cursor-pointer"
+                      >
+                        <span className="flex items-center gap-2 font-bold">
+                          <Settings className="w-3.5 h-3.5" />
+                          高级 API 参数配置（参考腾讯会议 CreateMeeting 接口规范）
+                        </span>
+                        <span>{showAdvancedApi ? '▲ 收起' : '▼ 展开高级参数'}</span>
+                      </button>
+
+                      {showAdvancedApi && (
+                        <div className="p-4 space-y-4 border-t border-white/10 text-xs">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-mono text-slate-400 uppercase">调用方用户标识 (userid)</label>
+                              <input
+                                type="text"
+                                value={hostUserId}
+                                onChange={(e) => setHostUserId(e.target.value)}
+                                className="w-full text-xs font-mono bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-500"
+                                placeholder="例如: daid_it"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-mono text-slate-400 uppercase">会议类型 (type)</label>
+                              <select
+                                value={meetingType}
+                                onChange={(e) => setMeetingType(Number(e.target.value))}
+                                className="w-full text-xs font-mono bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-500"
+                              >
+                                <option value={0}>0: 预约会议 (Scheduled)</option>
+                                <option value={1}>1: 快速会议 (Instant)</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-mono text-slate-400 uppercase">会议密码 (password)</label>
+                              <input
+                                type="text"
+                                maxLength={6}
+                                value={meetingPassword}
+                                onChange={(e) => setMeetingPassword(e.target.value)}
+                                className="w-full text-xs font-mono bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-500"
+                                placeholder="4-6位数字 (可选)"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-mono text-slate-400 uppercase">自动云录制 (auto_record_type)</label>
+                              <select
+                                value={autoRecordType}
+                                onChange={(e) => setAutoRecordType(e.target.value)}
+                                className="w-full text-xs font-mono bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-500"
+                              >
+                                <option value="none">none (禁用)</option>
+                                <option value="cloud">cloud (云录制)</option>
+                                <option value="local">local (本地录制)</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-mono text-slate-400 uppercase">入会策略：等候室</label>
+                              <select
+                                value={autoInWaitingRoom ? "true" : "false"}
+                                onChange={(e) => setAutoInWaitingRoom(e.target.value === "true")}
+                                className="w-full text-xs font-mono bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-500"
+                              >
+                                <option value="false">关闭 (允许直接入会)</option>
+                                <option value="true">开启 (启用等候室)</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-mono text-slate-400 uppercase">AI 智能文字转写 (auto_asr)</label>
+                              <select
+                                value={autoAsr ? "true" : "false"}
+                                onChange={(e) => setAutoAsr(e.target.value === "true")}
+                                className="w-full text-xs font-mono bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-500"
+                              >
+                                <option value="true">开启 (会中自动文字转写)</option>
+                                <option value="false">关闭</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="p-3 bg-black/40 border border-white/10 rounded-lg space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-slate-200">开启会议直播配置 (enable_live)</span>
+                              <input
+                                type="checkbox"
+                                checked={enableLive}
+                                onChange={(e) => setEnableLive(e.target.checked)}
+                                className="w-4 h-4 accent-cyan-500 cursor-pointer"
+                              />
+                            </div>
+                            {enableLive && (
+                              <div className="space-y-1 pt-1">
+                                <label className="text-[10px] font-mono text-slate-400 uppercase">直播主题 (live_subject)</label>
+                                <input
+                                  type="text"
+                                  value={liveSubject}
+                                  onChange={(e) => setLiveSubject(e.target.value)}
+                                  className="w-full text-xs font-mono bg-black/60 border border-white/10 rounded px-2.5 py-1.5 text-white"
+                                />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Request Payload JSON Preview */}
+                          <div className="space-y-1">
+                            <span className="text-[10px] font-mono text-slate-400 uppercase block">POST https://api.meeting.qq.com/v1/meetings 实际请求报文预览:</span>
+                            <pre className="p-3 bg-black/80 rounded-lg border border-white/10 text-cyan-400 text-[10px] font-mono overflow-x-auto">
+                              {JSON.stringify({
+                                userid: hostUserId || 'daid_it',
+                                instanceid: 1,
+                                subject: topicInput,
+                                type: meetingType,
+                                start_time: String(Math.floor(Date.now() / 1000) + 60),
+                                end_time: String(Math.floor(Date.now() / 1000) + 3600),
+                                ...(meetingPassword ? { password: meetingPassword } : {}),
+                                ...(enableLive ? { enable_live: true, live_config: { live_subject: liveSubject } } : {}),
+                                settings: {
+                                  mute_enable_type_join: 2,
+                                  auto_in_waiting_room: autoInWaitingRoom,
+                                  allow_in_before_host: allowInBeforeHost,
+                                  auto_record_type: autoRecordType,
+                                  auto_asr: autoAsr
+                                }
+                              }, null, 2)}
+                            </pre>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -635,8 +881,8 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
                         </a>
                       </div>
                     </div>
-                    <div className="text-[10px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 p-2 rounded-lg leading-relaxed font-sans mt-2">
-                      💡 <strong>温馨提示：</strong> 当前处于沙箱模拟模式（未配置官方腾讯会议 SecretID）。系统生成的会议号专用于网页端 ECE-Brain 多智能体互动演练。若在腾讯会议官方 App 提示“会议号无效”，请在会前设置中输入您在腾讯会议 App 创建的真实会议号。
+                    <div className="text-[10px] text-emerald-300/90 bg-emerald-500/10 border border-emerald-500/20 p-2 rounded-lg leading-relaxed font-sans mt-2">
+                      🟢 <strong>官方凭证已生效：</strong> 已成功启用企业凭证（CorpId: 557124324，AppId: 32840153264）。腾讯会议接口已正式接入大地 ECE-Brain 学术研讨系统。
                     </div>
                   </div>
                 )}

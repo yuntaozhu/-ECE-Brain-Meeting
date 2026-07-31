@@ -8,6 +8,7 @@ import { Copy, Check, Share2, Shield, User } from "lucide-react";
 import MainRoom from "./components/MainRoom";
 import AgentPanel from "./components/AgentPanel";
 import MeetingSetup from "./components/MeetingSetup";
+import NetworkInspector from "./components/NetworkInspector";
 import { useMeetingStore } from "./store";
 import { useGeminiLive } from "./hooks/useGeminiLive";
 import { useRole } from "./hooks/useRole";
@@ -57,7 +58,12 @@ export default function App() {
   }, [joined]);
 
   if (activeView === "setup") {
-    return <MeetingSetup onSetupComplete={() => setActiveView("meeting")} />;
+    return (
+      <>
+        <MeetingSetup onSetupComplete={() => setActiveView("meeting")} />
+        <NetworkInspector />
+      </>
+    );
   }
 
   return (
@@ -144,6 +150,8 @@ export default function App() {
          <MainRoom />
          {joined && <AgentPanel />}
        </main>
+
+       <NetworkInspector />
     </div>
   );
 }

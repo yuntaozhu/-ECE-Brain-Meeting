@@ -5,6 +5,7 @@ import {
   TencentAccessTokenResponse 
 } from '../types';
 import { logger } from './logger';
+import { networkLogger } from './networkLogger';
 
 /**
  * Client module for Tencent Meeting API interactions.
@@ -42,16 +43,24 @@ export class TencentMeetingClient {
    * Acquire Access Token via backend proxy.
    */
   async getAccessToken(): Promise<TencentAccessTokenResponse> {
+    const url = `${this.apiBaseUrl}/token`;
+    const reqId = networkLogger.logRequest('GET', url, { 'Content-Type': 'application/json' });
+    const startTime = Date.now();
     try {
-      logger.log('TENCENT', 'TencentClient', `🚀 Fetching Access Token from ${this.apiBaseUrl}/token`);
-      const response = await fetch(`${this.apiBaseUrl}/token`);
+      logger.log('TENCENT', 'TencentClient', `🚀 Fetching Access Token from ${url}`);
+      const response = await fetch(url);
       const json = await this.parseJsonResponse(response);
+      const duration = Date.now() - startTime;
+      networkLogger.logResponse(reqId, response.status, json, duration);
+
       logger.log('TENCENT', 'TencentClient', `GetAccessToken response status: ${response.status}`, { status: response.status, ok: response.ok, body: json });
       if (!response.ok || !json.success) {
         throw new Error(json.error || `HTTP ${response.status}`);
       }
       return json.data;
     } catch (error: any) {
+      const duration = Date.now() - startTime;
+      networkLogger.logResponse(reqId, 500, { error: error.message }, duration, error.message);
       logger.log('WARN', 'TencentClient', `⚠️ Failed to fetch AccessToken, falling back: ${error.message}`);
       return {
         accessToken: `client_fallback_${Date.now()}`,
@@ -65,15 +74,21 @@ export class TencentMeetingClient {
    * Create a Tencent Meeting and receive meeting_code and join_url.
    */
   async createMeeting(params: CreateMeetingParams): Promise<TencentMeetingInfo> {
+    const url = `${this.apiBaseUrl}/meetings/create`;
+    const reqId = networkLogger.logRequest('POST', url, { 'Content-Type': 'application/json' }, params);
+    const startTime = Date.now();
     try {
       logger.log('TENCENT', 'TencentClient', `🚀 Requesting CreateMeeting with subject: "${params.subject}"`, params);
-      const response = await fetch(`${this.apiBaseUrl}/meetings/create`, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(params),
       });
 
       const json = await this.parseJsonResponse(response);
+      const duration = Date.now() - startTime;
+      networkLogger.logResponse(reqId, response.status, json, duration, response.ok ? undefined : (json.error || 'HTTP Error'));
+
       logger.log('TENCENT', 'TencentClient', `CreateMeeting response status: ${response.status}`, { status: response.status, ok: response.ok, body: json });
 
       if (!response.ok || !json.success) {
@@ -84,6 +99,8 @@ export class TencentMeetingClient {
       logger.log('TENCENT', 'TencentClient', `✅ Meeting created successfully! Code: ${data.meetingCode}, JoinURL: ${data.joinUrl}`, data);
       return data;
     } catch (error: any) {
+      const duration = Date.now() - startTime;
+      networkLogger.logResponse(reqId, 500, { error: error.message }, duration, error.message);
       logger.log('ERROR', 'TencentClient', `❌ CreateMeeting error encountered: ${error.message}`, { stack: error.stack });
       
       const fallbackCode = String(Math.floor(328000000 + Math.random() * 100000000));
@@ -106,14 +123,22 @@ export class TencentMeetingClient {
    * Query meeting status and details by meetingId.
    */
   async getMeetingDetails(meetingId: string, userId: string = 'daid_it'): Promise<TencentMeetingInfo> {
+    const url = `${this.apiBaseUrl}/meetings/${encodeURIComponent(meetingId)}?userId=${encodeURIComponent(userId)}`;
+    const reqId = networkLogger.logRequest('GET', url);
+    const startTime = Date.now();
     try {
-      const response = await fetch(`${this.apiBaseUrl}/meetings/${encodeURIComponent(meetingId)}?userId=${encodeURIComponent(userId)}`);
+      const response = await fetch(url);
       const json = await this.parseJsonResponse(response);
+      const duration = Date.now() - startTime;
+      networkLogger.logResponse(reqId, response.status, json, duration);
+
       if (!response.ok || !json.success) {
         throw new Error(json.error || `HTTP ${response.status}`);
       }
       return json.data;
     } catch (error: any) {
+      const duration = Date.now() - startTime;
+      networkLogger.logResponse(reqId, 500, { error: error.message }, duration, error.message);
       console.warn(`[TencentClient] GetMeetingDetails error for ${meetingId}:`, error.message);
       return {
         meetingId,
@@ -130,14 +155,22 @@ export class TencentMeetingClient {
    * Fetch active participants in the Tencent Meeting room.
    */
   async getParticipants(meetingId: string, userId: string = 'daid_it'): Promise<TencentParticipant[]> {
+    const url = `${this.apiBaseUrl}/meetings/${encodeURIComponent(meetingId)}/participants?userId=${encodeURIComponent(userId)}`;
+    const reqId = networkLogger.logRequest('GET', url);
+    const startTime = Date.now();
     try {
-      const response = await fetch(`${this.apiBaseUrl}/meetings/${encodeURIComponent(meetingId)}/participants?userId=${encodeURIComponent(userId)}`);
+      const response = await fetch(url);
       const json = await this.parseJsonResponse(response);
+      const duration = Date.now() - startTime;
+      networkLogger.logResponse(reqId, response.status, json, duration);
+
       if (!response.ok || !json.success) {
         throw new Error(json.error || `HTTP ${response.status}`);
       }
       return json.data.participants || [];
     } catch (error: any) {
+      const duration = Date.now() - startTime;
+      networkLogger.logResponse(reqId, 500, { error: error.message }, duration, error.message);
       console.warn(`[TencentClient] GetParticipants error for ${meetingId}:`, error.message);
       return [
         { userId: 'daid_it', userName: '大地特级高管 (Host)', userRole: 'host', isMuted: false },

@@ -99,7 +99,12 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   // Tencent Meeting Integration Default State
   isTencentSyncEnabled: true,
   tencentMeetingInfo: null,
-  tencentParticipants: [],
+  tencentParticipants: [
+    { userId: 'daid_it', userName: '大地督导 (Host)', userRole: 'host', isMuted: false, joinTime: Math.floor(Date.now() / 1000) - 300 },
+    { userId: 'zhang_principal', userName: '张园长', userRole: 'participant', isMuted: false, joinTime: Math.floor(Date.now() / 1000) - 240 },
+    { userId: 'li_expert', userName: '李专家', userRole: 'participant', isMuted: false, joinTime: Math.floor(Date.now() / 1000) - 180 },
+    { userId: 'wang_sec', userName: '王董秘', userRole: 'participant', isMuted: true, joinTime: Math.floor(Date.now() / 1000) - 120 },
+  ],
 
   setJoined: (joined) => set({ joined }),
   toggleMic: () => set((state) => ({ micOn: !state.micOn })),

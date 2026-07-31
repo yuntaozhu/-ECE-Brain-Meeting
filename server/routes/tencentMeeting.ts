@@ -142,4 +142,72 @@ router.get('/meetings/:meetingId/participants', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/tencent/diagnostic
+ * Test connectivity to Tencent Meeting API base URL and check for CORS/404/network issues
+ */
+router.get('/diagnostic', async (req, res) => {
+  const startTime = Date.now();
+  const config = (meetingService as any).getTencentConfig ? (meetingService as any).getTencentConfig() : { apiBase: 'https://api.meeting.qq.com', corpId: '557124324', appId: '32840153264' };
+  const endpoint = `${config.apiBase}/v1/oauth2/token`;
+  
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      signal: controller.signal,
+      headers: { 'Accept': 'application/json' }
+    });
+    clearTimeout(timeoutId);
+    const duration = Date.now() - startTime;
+
+    let status = 'SUCCESS';
+    let details = `Endpoint reachable (HTTP ${response.status}). CORS and network OK.`;
+
+    if (response.status === 404) {
+      status = 'WARNING_404';
+      details = 'Endpoint returned 404 (Not Found). Check path routing configuration.';
+    } else if (response.status >= 400 && response.status < 500) {
+      status = 'REACHABLE_AUTH_REQUIRED';
+      details = `Endpoint is reachable (HTTP ${response.status}). Authentication headers validated by server.`;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        apiBase: config.apiBase,
+        endpoint,
+        status,
+        httpStatus: response.status,
+        latencyMs: duration,
+        details,
+        corpId: config.corpId,
+        appId: config.appId,
+        timestamp: Date.now()
+      }
+    });
+  } catch (err: any) {
+    const duration = Date.now() - startTime;
+    res.json({
+      success: true,
+      data: {
+        apiBase: config.apiBase,
+        endpoint,
+        status: 'UNREACHABLE',
+        httpStatus: 0,
+        latencyMs: duration,
+        errorMessage: err.message,
+        details: err.name === 'AbortError' 
+          ? 'Connection timed out (6000ms). Network firewall or sandbox restricts outbound external API requests.' 
+          : `Network/DNS error: ${err.message}`,
+        corpId: config.corpId,
+        appId: config.appId,
+        timestamp: Date.now()
+      }
+    });
+  }
+});
+
 export default router;

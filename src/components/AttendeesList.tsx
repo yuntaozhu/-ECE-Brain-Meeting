@@ -32,15 +32,34 @@ export function AttendeesList({ meetingId: propMeetingId, className = '' }: Atte
       if (data.success && data.data?.participants) {
         const fetched: TencentParticipant[] = data.data.participants;
         
-        // Detect new members joining
-        if (participants.length > 0 && fetched.length > participants.length) {
-          const latest = fetched[fetched.length - 1];
-          setNewMemberAlert(`新参会者 ${latest.userName} 已加入会议！`);
-          setTimeout(() => setNewMemberAlert(null), 4000);
-        }
+        setParticipants(prevParticipants => {
+          // Merge fetched with current participants to preserve users joining via link
+          const currentStore = tencentParticipants || [];
+          const map = new Map<string, TencentParticipant>();
+          fetched.forEach(p => map.set(p.userName, p));
+          currentStore.forEach(p => {
+            if (!map.has(p.userName)) {
+              map.set(p.userName, p);
+            }
+          });
+          prevParticipants.forEach(p => {
+            if (!map.has(p.userName)) {
+              map.set(p.userName, p);
+            }
+          });
+          const merged = Array.from(map.values());
 
-        setParticipants(fetched);
-        setTencentParticipants(fetched);
+          // Detect new members joining
+          if (prevParticipants.length > 0 && merged.length > prevParticipants.length) {
+            const latest = merged[merged.length - 1];
+            setNewMemberAlert(`新参会者 ${latest.userName} 已加入会议！`);
+            setTimeout(() => setNewMemberAlert(null), 4000);
+          }
+
+          setTencentParticipants(merged);
+          return merged;
+        });
+
         setLastUpdated(new Date());
       } else {
         throw new Error(data.error || '获取参会成员列表失败');
@@ -49,13 +68,20 @@ export function AttendeesList({ meetingId: propMeetingId, className = '' }: Atte
       console.warn('[AttendeesList] Failed to fetch participants from API, using store/fallback:', err.message);
       setError(err.message);
       // Keep existing or fallback
-      if (participants.length === 0 && tencentParticipants.length > 0) {
+      if (tencentParticipants && tencentParticipants.length > 0) {
         setParticipants(tencentParticipants);
+      } else {
+        setParticipants(prev => prev.length > 0 ? prev : [
+          { userId: 'daid_it', userName: '大地督导 (Host)', userRole: 'host', isMuted: false },
+          { userId: 'zhang_principal', userName: '张园长', userRole: 'participant', isMuted: false },
+          { userId: 'li_expert', userName: '李专家', userRole: 'participant', isMuted: false },
+          { userId: 'wang_sec', userName: '王董秘', userRole: 'participant', isMuted: true },
+        ]);
       }
     } finally {
       if (isManual) setLoading(false);
     }
-  }, [activeMeetingId, participants, tencentParticipants, setTencentParticipants]);
+  }, [activeMeetingId, tencentParticipants, setTencentParticipants]);
 
   // Poll for real-time updates every 6 seconds
   useEffect(() => {

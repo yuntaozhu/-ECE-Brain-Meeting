@@ -22,19 +22,65 @@ export interface TranscriptLine {
 }
 
 export interface TencentMeetingSettings {
+  mute_enable_type_join?: number; // 0:关闭, 1:开启, 2:超过6人后自动
+  mute_enable_join?: boolean;
+  allow_unmute_self?: boolean;
   allow_in_before_host?: boolean;
   auto_in_waiting_room?: boolean;
-  allow_unmute_self?: boolean;
   allow_screen_shared_watermark?: boolean;
-  mute_enable_join?: boolean;
+  water_mark_type?: number; // 0:单排, 1:多排
+  only_enterprise_user_allowed?: boolean;
+  only_user_join_type?: number; // 1:所有, 2:仅受邀, 3:仅企业
+  auto_record_type?: string; // none, local, cloud
+  participant_join_auto_record?: boolean;
+  enable_host_pause_auto_record?: boolean;
+  allow_multi_device?: boolean;
+  change_nickname?: number; // 1:允许, 2:不允许
+  auto_asr?: boolean; // 自动文字转写
+  open_asr_view?: number; // 0:打开, 1:不打开
+  audio_watermark?: boolean;
+}
+
+export interface TencentUserObject {
+  userid: string;
+  is_anonymous?: boolean;
+  nick_name?: string;
+}
+
+export interface TencentRecurringRule {
+  recurring_type?: number; // 0:每天, 1:工作日, 2:每周, 3:每两周, 4:每月
+  until_type?: number; // 0:按日期, 1:按次数
+  until_date?: number;
+  until_count?: number;
+}
+
+export interface TencentLiveConfig {
+  live_subject?: string;
+  live_summary?: string;
+  enable_live_password?: boolean;
+  live_password?: string;
+  enable_live_im?: boolean;
+  enable_live_replay?: boolean;
 }
 
 export interface CreateMeetingParams {
   subject: string;
   type?: number; // 0: scheduled, 1: instant
+  instanceid?: number; // 1: PC, 5: Web, etc.
   startTime?: number | string; // unix timestamp in seconds
   endTime?: number | string; // unix timestamp in seconds
   userId?: string;
+  hosts?: TencentUserObject[];
+  invitees?: TencentUserObject[];
+  password?: string;
+  meeting_type?: number; // 0:普通, 1:周期性, 5:个人号
+  recurring_rule?: TencentRecurringRule;
+  enable_live?: boolean;
+  live_config?: TencentLiveConfig;
+  enable_host_key?: boolean;
+  host_key?: string; // 6 digits
+  time_zone?: string;
+  location?: string;
   settings?: TencentMeetingSettings;
 }
 
@@ -48,6 +94,9 @@ export interface TencentMeetingInfo {
   endTime?: number;
   hostUserId?: string;
   currentParticipantsCount?: number;
+  password?: string;
+  hostKey?: string;
+  liveAddr?: string;
 }
 
 export interface TencentParticipant {
@@ -63,4 +112,5 @@ export interface TencentAccessTokenResponse {
   expiresIn: number;
   tokenType: string;
 }
+
 
