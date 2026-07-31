@@ -28,7 +28,12 @@ export function AttendeesList({ meetingId: propMeetingId, className = '' }: Atte
     setError(null);
     try {
       const res = await fetch(`/api/tencent/meetings/${activeMeetingId}/participants`);
-      const data = await res.json();
+      const contentType = res.headers.get('content-type') || '';
+      const text = await res.text();
+      if (!contentType.includes('application/json')) {
+        throw new Error(`Non-JSON response received (${contentType})`);
+      }
+      const data = JSON.parse(text);
       if (data.success && data.data?.participants) {
         const fetched: TencentParticipant[] = data.data.participants;
         

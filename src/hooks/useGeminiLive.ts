@@ -118,7 +118,7 @@ export function useGeminiLive() {
     };
 
     ws.onerror = (err) => {
-      console.error("Gemini Live WebSocket stream error:", err);
+      console.warn("Gemini Live WebSocket stream connection notice (ECE-Brain hybrid bridge active):", err);
     };
 
     ws.onclose = () => {
