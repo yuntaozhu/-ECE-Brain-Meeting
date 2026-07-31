@@ -25,15 +25,15 @@ export class TencentMeetingClient {
     const contentType = response.headers.get('content-type') || '';
     const text = await response.text();
 
-    if (!contentType.includes('application/json')) {
-      logger.log('ERROR', 'TencentClient', `❌ Non-JSON response received (Content-Type: ${contentType}, Status: ${response.status})`, { bodySnippet: text.substring(0, 500) });
-      throw new Error(`Expected JSON response but received Content-Type '${contentType}' (Status ${response.status}). Preview: ${text.substring(0, 200)}`);
+    if (contentType.includes('text/html') || contentType.includes('text/plain') || !contentType.includes('application/json')) {
+      logger.log('ERROR', 'TencentClient', `❌ Non-JSON response received (Content-Type: ${contentType}, Status: ${response.status})`, { bodyPreview: text });
+      throw new Error(`Expected JSON response but received Content-Type '${contentType}' (Status ${response.status}). Raw body content: ${text}`);
     }
 
     try {
       return JSON.parse(text);
     } catch (syntaxError: any) {
-      logger.log('ERROR', 'TencentClient', `❌ JSON parsing failed (Status: ${response.status}): ${syntaxError.message}`, { rawText: text.substring(0, 500) });
+      logger.log('ERROR', 'TencentClient', `❌ JSON parsing failed (Status: ${response.status}): ${syntaxError.message}`, { rawText: text });
       throw new Error(`Failed to parse JSON response: ${syntaxError.message}. Response preview: ${text.substring(0, 200)}`);
     }
   }
