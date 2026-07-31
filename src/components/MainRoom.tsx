@@ -38,7 +38,8 @@ export default function MainRoom() {
     isTencentSyncEnabled,
     tencentMeetingInfo,
     tencentParticipants,
-    setTencentParticipants
+    setTencentParticipants,
+    transcript
   } = useMeetingStore();
 
   // Periodically query Tencent Meeting participant list if sync is active
@@ -61,6 +62,50 @@ export default function MainRoom() {
 
     return () => clearInterval(interval);
   }, [isTencentSyncEnabled, tencentMeetingInfo, setTencentParticipants]);
+
+  // Cross-device meeting state synchronization via server API
+  useEffect(() => {
+    if (!joined || !meetingId) return;
+
+    const syncInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/meeting/state/${meetingId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && data.state) {
+            const serverState = data.state;
+            if (serverState.tencentParticipants && serverState.tencentParticipants.length > 0) {
+              setTencentParticipants(serverState.tencentParticipants);
+            }
+          }
+        }
+      } catch (e) {
+        // Silent fallback
+      }
+    }, 2000);
+
+    const pushState = async () => {
+      try {
+        await fetch(`/api/meeting/state/${meetingId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            currentTopic,
+            agendaStage,
+            transcript,
+            mountedFiles: useMeetingStore.getState().mountedFiles,
+            tencentParticipants
+          })
+        });
+      } catch (e) {
+        // Silent fallback
+      }
+    };
+
+    pushState();
+
+    return () => clearInterval(syncInterval);
+  }, [joined, meetingId, currentTopic, agendaStage, transcript, tencentParticipants, setTencentParticipants]);
 
   const {
     remoteUsers,

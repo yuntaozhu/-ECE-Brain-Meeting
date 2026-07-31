@@ -99,11 +99,7 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   // Tencent Meeting Integration Default State
   isTencentSyncEnabled: true,
   tencentMeetingInfo: null,
-  tencentParticipants: [
-    { userId: 'daid_it', userName: '大地特级高管 (Host)', userRole: 'host', isMuted: false },
-    { userId: 'zhang_principal', userName: '张园长 (腾讯会议)', userRole: 'participant', isMuted: false },
-    { userId: 'li_expert', userName: '李专家 (腾讯会议)', userRole: 'participant', isMuted: false }
-  ],
+  tencentParticipants: [],
 
   setJoined: (joined) => set({ joined }),
   toggleMic: () => set((state) => ({ micOn: !state.micOn })),
@@ -133,15 +129,26 @@ export const useMeetingStore = create<MeetingState>((set) => ({
     const isAttendeeQuery = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("role") === "attendee";
     const actualRoleType = roleType || (isAttendeeQuery ? "attendee" : "creator");
     const isAttendee = actualRoleType === "attendee";
+    const actualName = name || (isAttendee ? "客座顾问" : "张园长");
+    const actualRole = role || (isAttendee ? "数字化教研员" : "学前数字融合组长");
+
+    const newParticipant = {
+      userId: `user_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      userName: actualName,
+      userRole: actualRole,
+      userRoleType: actualRoleType,
+      isMuted: !state.micOn
+    };
 
     return {
-      userName: name || (isAttendee ? "客座顾问" : "张园长"),
-      userRole: role || (isAttendee ? "数字化教研员" : "学前数字融合组长"),
+      userName: actualName,
+      userRole: actualRole,
       meetingId: roomId || "10086",
       userRoleType: actualRoleType,
       joined: true,
+      tencentParticipants: [newParticipant],
       transcript: [
-        { speaker: "系统提示", text: `🎯 参会者 ${name || (isAttendee ? "客座顾问" : "张园长")}(职务：${role || (isAttendee ? "数字化教研员" : "学前数字融合组长")}) 以【${isAttendee ? "普通参会嘉宾 (Attendee)" : "会议发起高管 (Creator/Host)"}】身份成功加入研讨通道。`, timestamp: new Date() },
+        { speaker: "系统提示", text: `🎯 参会者 ${actualName}(职务：${actualRole}) 以【${isAttendee ? "普通参会嘉宾 (Attendee)" : "会议发起高管 (Creator/Host)"}】身份成功加入研讨通道。`, timestamp: new Date() },
         { speaker: "系统提示", text: isAttendee 
           ? "💡 您已作为被邀请的正常参会嘉宾加入。系统已锁定主控制栏权限，普通参会者不能跳过议程阶段或强制挂断大局会议。"
           : "💡 您作为大地特级发起人：点击【正式开始会议】会自动激活 AI 虚拟主席发出主题致辞、并按照定制的议程大纲控场开篇。", timestamp: new Date() }

@@ -16,42 +16,31 @@ export interface RemoteAttendee {
 }
 
 export function useTrtcMultiUser() {
-  const { addTranscriptLine, joined, micOn, videoOn, setMicOn, toggleMic, toggleVideo } = useMeetingStore();
+  const { addTranscriptLine, joined, micOn, videoOn, setMicOn, toggleMic, toggleVideo, tencentParticipants } = useMeetingStore();
   const { sendControlText } = useGeminiLive();
 
-  // State representing current human active participants list
-  const [remoteUsers, setRemoteUsers] = useState<RemoteAttendee[]>([
-    {
-      id: "user_lee",
-      name: "李园长",
-      role: "双语托班特教组长",
-      avatar: "L",
-      micOn: true,
-      videoOn: true,
-      volumeLevel: 0,
-      isSpeaking: false,
-    },
-    {
-      id: "user_wang",
-      name: "王董秘",
-      role: "项目投资与预算主管",
-      avatar: "W",
-      micOn: true,
-      videoOn: false,
-      volumeLevel: 0,
-      isSpeaking: false,
-    },
-    {
-      id: "user_zhang",
-      name: "张校董",
-      role: "集团硬件供应链总监",
-      avatar: "Z",
-      micOn: false,
-      videoOn: true,
-      volumeLevel: 0,
-      isSpeaking: false,
+  // State representing current human active participants list (Starts empty, populated as real participants join)
+  const [remoteUsers, setRemoteUsers] = useState<RemoteAttendee[]>([]);
+
+  // Sync remoteUsers with tencentParticipants from meeting store / cross-device state
+  useEffect(() => {
+    if (tencentParticipants && tencentParticipants.length > 0) {
+      const mapped = tencentParticipants.map(p => ({
+        id: p.userId,
+        name: p.userName,
+        role: p.userRole || "参会嘉宾",
+        avatar: p.userName ? p.userName.slice(-2) : "嘉宾",
+        micOn: p.isMuted !== true,
+        videoOn: true,
+        volumeLevel: 0,
+        isSpeaking: false,
+        isRealTrtcUser: true
+      }));
+      setRemoteUsers(mapped);
+    } else {
+      setRemoteUsers([]);
     }
-  ]);
+  }, [tencentParticipants]);
 
   const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
   const [isAutoDiscussing, setIsAutoDiscussing] = useState<boolean>(false);

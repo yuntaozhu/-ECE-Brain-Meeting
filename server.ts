@@ -24,6 +24,37 @@ app.get("/api/health", (req, res) => {
 // Tencent Meeting API Routes
 app.use("/api/tencent", tencentMeetingRouter);
 
+// In-memory cross-device meeting state store for real-time synchronization between sharing links and devices
+const meetingStates = new Map<string, any>();
+
+app.get("/api/meeting/state/:roomId", (req, res) => {
+  const { roomId } = req.params;
+  const state = meetingStates.get(roomId) || null;
+  res.json({ success: true, state });
+});
+
+app.post("/api/meeting/state/:roomId", (req, res) => {
+  const { roomId } = req.params;
+  const incoming = req.body;
+  const existing = meetingStates.get(roomId) || {
+    currentTopic: "关于下一代幼儿教育数字化基础设施的规划",
+    agendaStage: "IceBreaking",
+    transcript: [],
+    mountedFiles: [],
+    tencentParticipants: [],
+    isMeetingActive: false
+  };
+  const updated = {
+    ...existing,
+    ...incoming,
+    tencentParticipants: incoming.tencentParticipants || existing.tencentParticipants,
+    transcript: incoming.transcript || existing.transcript,
+    updatedAt: Date.now()
+  };
+  meetingStates.set(roomId, updated);
+  res.json({ success: true, state: updated });
+});
+
 // KaibanJS Orchestration endpoint
 app.post("/api/meeting/evaluate", async (req, res) => {
   const { transcript, currentTopic } = req.body;
