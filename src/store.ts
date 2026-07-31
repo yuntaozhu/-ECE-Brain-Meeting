@@ -129,16 +129,21 @@ export const useMeetingStore = create<MeetingState>((set) => ({
     const isAttendeeQuery = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("role") === "attendee";
     const actualRoleType = roleType || (isAttendeeQuery ? "attendee" : "creator");
     const isAttendee = actualRoleType === "attendee";
-    const actualName = name || (isAttendee ? "客座顾问" : "张园长");
-    const actualRole = role || (isAttendee ? "数字化教研员" : "学前数字融合组长");
+    const actualName = name || (isAttendee ? "杨督导" : "张园长");
+    const actualRole = role || (isAttendee ? "省优质名园考评长" : "学前数字融合组长");
 
     const newParticipant = {
       userId: `user_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       userName: actualName,
       userRole: actualRole,
       userRoleType: actualRoleType,
-      isMuted: !state.micOn
+      isMuted: !state.micOn,
+      joinTime: Math.floor(Date.now() / 1000)
     };
+
+    const existingParticipants = state.tencentParticipants || [];
+    const filtered = existingParticipants.filter(p => p.userName !== actualName);
+    const updatedParticipants = [...filtered, newParticipant];
 
     return {
       userName: actualName,
@@ -146,12 +151,10 @@ export const useMeetingStore = create<MeetingState>((set) => ({
       meetingId: roomId || "10086",
       userRoleType: actualRoleType,
       joined: true,
-      tencentParticipants: [newParticipant],
+      tencentParticipants: updatedParticipants,
       transcript: [
-        { speaker: "系统提示", text: `🎯 参会者 ${actualName}(职务：${actualRole}) 以【${isAttendee ? "普通参会嘉宾 (Attendee)" : "会议发起高管 (Creator/Host)"}】身份成功加入研讨通道。`, timestamp: new Date() },
-        { speaker: "系统提示", text: isAttendee 
-          ? "💡 您已作为被邀请的正常参会嘉宾加入。系统已锁定主控制栏权限，普通参会者不能跳过议程阶段或强制挂断大局会议。"
-          : "💡 您作为大地特级发起人：点击【正式开始会议】会自动激活 AI 虚拟主席发出主题致辞、并按照定制的议程大纲控场开篇。", timestamp: new Date() }
+        ...state.transcript,
+        { speaker: "系统提示", text: `🎯 参会者 ${actualName}(职务：${actualRole}) 以【${isAttendee ? "普通参会嘉宾 (Attendee)" : "会议发起高管 (Creator/Host)"}】身份成功加入研讨通道。`, timestamp: new Date() }
       ]
     };
   }),

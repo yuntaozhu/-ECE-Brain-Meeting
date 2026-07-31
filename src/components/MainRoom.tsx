@@ -16,6 +16,7 @@ import { useRole } from "../hooks/useRole";
 import AgendaKanbanBoard from "./AgendaKanbanBoard";
 import { SystemDebugConsole } from "./SystemDebugConsole";
 import { ApiHealthPanel } from "./ApiHealthPanel";
+import { AttendeesList } from "./AttendeesList";
 import { Terminal } from "lucide-react";
 
 export default function MainRoom() {
@@ -42,6 +43,17 @@ export default function MainRoom() {
     transcript
   } = useMeetingStore();
 
+  const [lobbyRoomId, setLobbyRoomId] = useState(() => {
+    if (typeof window !== "undefined") {
+      const searchParams = new URLSearchParams(window.location.search);
+      const rmId = searchParams.get("roomId");
+      if (rmId) return rmId;
+      const match = window.location.pathname.match(/^\/meeting\/([^/]+)/);
+      return match ? match[1] : "10086";
+    }
+    return "10086";
+  });
+
   // Periodically query Tencent Meeting participant list if sync is active
   useEffect(() => {
     if (!isTencentSyncEnabled || !tencentMeetingInfo?.meetingId) return;
@@ -65,28 +77,44 @@ export default function MainRoom() {
 
   // Cross-device meeting state synchronization via server API
   useEffect(() => {
-    if (!joined || !meetingId) return;
+    const activeId = meetingId || lobbyRoomId || '10086';
+    if (!activeId) return;
 
-    const syncInterval = setInterval(async () => {
+    const fetchServerState = async () => {
       try {
-        const res = await fetch(`/api/meeting/state/${meetingId}`);
+        const res = await fetch(`/api/meeting/state/${activeId}`);
         if (res.ok) {
           const data = await res.json();
           if (data && data.success && data.state) {
             const serverState = data.state;
+            if (serverState.currentTopic) useMeetingStore.setState({ currentTopic: serverState.currentTopic });
+            if (serverState.agendaStage) useMeetingStore.setState({ agendaStage: serverState.agendaStage });
+            if (serverState.transcript && serverState.transcript.length > 0) {
+              useMeetingStore.setState({ transcript: serverState.transcript });
+            }
+            if (serverState.mountedFiles) useMeetingStore.setState({ mountedFiles: serverState.mountedFiles });
             if (serverState.tencentParticipants && serverState.tencentParticipants.length > 0) {
               setTencentParticipants(serverState.tencentParticipants);
+            }
+            if (serverState.meetingStarted !== undefined) {
+              useMeetingStore.setState({ meetingStarted: serverState.meetingStarted });
             }
           }
         }
       } catch (e) {
         // Silent fallback
       }
-    }, 2000);
+    };
+
+    // Fetch immediately on mount
+    fetchServerState();
+
+    const syncInterval = setInterval(fetchServerState, 2000);
 
     const pushState = async () => {
+      if (!joined) return;
       try {
-        await fetch(`/api/meeting/state/${meetingId}`, {
+        await fetch(`/api/meeting/state/${activeId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -94,7 +122,8 @@ export default function MainRoom() {
             agendaStage,
             transcript,
             mountedFiles: useMeetingStore.getState().mountedFiles,
-            tencentParticipants
+            tencentParticipants,
+            meetingStarted: useMeetingStore.getState().meetingStarted
           })
         });
       } catch (e) {
@@ -102,10 +131,12 @@ export default function MainRoom() {
       }
     };
 
-    pushState();
+    if (joined) {
+      pushState();
+    }
 
     return () => clearInterval(syncInterval);
-  }, [joined, meetingId, currentTopic, agendaStage, transcript, tencentParticipants, setTencentParticipants]);
+  }, [joined, meetingId, lobbyRoomId, currentTopic, agendaStage, transcript, tencentParticipants, setTencentParticipants]);
 
   const {
     remoteUsers,
@@ -161,17 +192,6 @@ export default function MainRoom() {
       }
     }
     return "学前数字融合组长";
-  });
-
-  const [lobbyRoomId, setLobbyRoomId] = useState(() => {
-    if (typeof window !== "undefined") {
-      const searchParams = new URLSearchParams(window.location.search);
-      const rmId = searchParams.get("roomId");
-      if (rmId) return rmId;
-      const match = window.location.pathname.match(/^\/meeting\/([^/]+)/);
-      return match ? match[1] : "10086";
-    }
-    return "10086";
   });
 
   const handleJoin = () => {
@@ -585,6 +605,9 @@ export default function MainRoom() {
           {/* AI active speech wave visualizer */}
           <AIWaveformActive />
         </div>
+
+        {/* Real-time Attendees List Component integrated with Tencent Meeting REST API */}
+        <AttendeesList className="mb-6" />
 
         {/* HUMAN GRID LAYOUT (Responsive Grid of 4 attendees: 1 Local + 3 Simulated) */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
