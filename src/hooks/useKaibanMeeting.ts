@@ -3,6 +3,8 @@ import { useMeetingStore } from "../store";
 
 export type AgentStatusType = "Idle" | "Thinking" | "Intervening";
 
+import { speakText } from "../lib/audioSpeech";
+
 export function useKaibanMeeting() {
   const { 
     transcript, 
@@ -76,41 +78,26 @@ export function useKaibanMeeting() {
       const res = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, speaker: "Puck" }) // Using formal Puck voice for AI chair
+        body: JSON.stringify({ text, speaker: "Puck" })
       });
-      if (!res.ok) throw new Error("HTTP connection failed");
-      const data = await res.json();
-      if (data.audioData) {
-        const binary = atob(data.audioData);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-          bytes[i] = binary.charCodeAt(i);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.audioData) {
+          const binary = atob(data.audioData);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+          }
+          const blob = new Blob([bytes], { type: "audio/wav" });
+          const audioUrl = URL.createObjectURL(blob);
+          const audio = new Audio(audioUrl);
+          await audio.play();
+          return;
         }
-        const blob = new Blob([bytes], { type: "audio/wav" });
-        const audioUrl = URL.createObjectURL(blob);
-        const audio = new Audio(audioUrl);
-        await audio.play();
-        return;
       }
-      throw new Error("Neural TTS returned empty or fallback payload");
+      throw new Error("Neural TTS fallback requested");
     } catch (err: any) {
-      console.warn("Kaiban Meeting premium TTS failed, falling back to WebSpeech:", err.message);
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        const synth = window.speechSynthesis;
-        synth.cancel();
-        
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "zh-CN";
-        utterance.rate = 1.15;
-        utterance.pitch = 0.95;
-        
-        const voices = synth.getVoices();
-        const zhVoice = voices.find(v => v.lang.includes("zh") || v.lang.includes("ZH"));
-        if (zhVoice) {
-          utterance.voice = zhVoice;
-        }
-        synth.speak(utterance);
-      }
+      speakText(text, { rate: 1.1, pitch: 0.95 });
     }
   };
 

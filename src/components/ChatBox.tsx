@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { MessageSquare, Mic, Loader2, Radio } from "lucide-react";
 import { logger } from "../lib/logger";
 import { telemetry } from "../lib/telemetry";
+import { useMeetingStore } from "../store";
 
 interface ChatBoxProps {
   roomId: string;
@@ -188,6 +189,9 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
         if (data.success) {
           logger.log('INFO', 'Chat', `HTTP REST 端口多端状态持久化成功 (${restLatency}ms)`, { roomId, msgId });
           telemetry.endLatencyTimer(msgId, 'SUCCESS');
+          if (data.state?.transcript && Array.isArray(data.state.transcript)) {
+            useMeetingStore.setState({ transcript: data.state.transcript });
+          }
         }
       }).catch(err => {
         logger.log('WARN', 'Chat', `HTTP REST 持久化通知: ${err.message}`);
@@ -208,9 +212,9 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
         <div className="flex items-center gap-1.5 text-[11px] text-cyan-400 font-mono uppercase tracking-wider font-bold">
           <MessageSquare className="w-3.5 h-3.5 text-cyan-400" />
           全员 WebSocket 实时消息总线与打字输入
-          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono ${wsConnected ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-amber-500/20 text-amber-400 border border-amber-500/30"}`}>
+          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono ${wsConnected ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"}`}>
             <Radio className="w-2.5 h-2.5 animate-pulse" />
-            {wsConnected ? "WebSocket 已连通" : "连接中..."}
+            {wsConnected ? "WebSocket 联通" : "HTTP 多端同步活跃"}
           </span>
         </div>
         <span className="text-[10px] text-slate-400">

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useMeetingStore } from "../store";
 import { useGeminiLive } from "./useGeminiLive";
+import { speakText } from "../lib/audioSpeech";
 import { runMeetingAnalysis } from "../lib/kaibanMeetingEngine";
 
 export interface AgendaItem {
@@ -52,7 +53,23 @@ export function useAgendaDriver() {
       console.log(`[Pacemaker] Sending ${reason} triggers to Gemini WS.`);
       sendControlText(triggerPrompt);
     } else {
-      console.warn(`[Pacemaker] WS Disconnected. Local fallback triggered.`);
+      console.warn(`[Pacemaker] WS Disconnected. HTTP AI fallback triggered.`);
+      fetch("/api/doubao/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: triggerPrompt,
+          systemInstruction: "你现在是‘大地 ECE-Brain 智慧教研室’具有绝对威严的主持主席。请对当前会议阶段作精炼主持评价，并提示下一步。"
+        })
+      }).then(res => res.json()).then(data => {
+        const replyText = data.reply || "请各位园长注意把握时间，针对托班注意力追踪算法与硬件采购阻断阀值尽快形成共识！";
+        addTranscriptLine("AI 会议主席 (豆包)", replyText);
+        speakText(replyText, { rate: 1.1, pitch: 0.95 });
+      }).catch(() => {
+        const fallbackMsg = "请各位园长注意把握时间，针对托班注意力追踪算法与硬件采购阻断阀值尽快形成共识！";
+        addTranscriptLine("AI 会议主席 (豆包)", fallbackMsg);
+        speakText(fallbackMsg, { rate: 1.1, pitch: 0.95 });
+      });
     }
 
     setSilenceCounter(0);
@@ -112,7 +129,23 @@ export function useAgendaDriver() {
       console.log(`[Pacemaker] Sending dynamic targeted Opening Trigger for ${speakerName} silently to Gemini WS.`);
       sendControlText(openingPrompt);
     } else {
-      console.warn("[Pacemaker] WebSocket not fully connected. Showing local simulation.");
+      console.warn("[Pacemaker] WS not connected. Executing HTTP AI opening speech + voice synthesis.");
+      fetch("/api/doubao/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: `请发表会议开场白，宣读${agendas.length}个议程，并明确请【${speakerName}】(${speakerRole})就第一个议题‘${firstAgendaTitle}’开始发言。`,
+          systemInstruction: "你现在是‘大地 ECE-Brain 智慧教研室’具有绝对威严的主持主席（大地数字教研总督导）。请以大气庄重的语气简短开场（120字以内）。"
+        })
+      }).then(res => res.json()).then(data => {
+        const text = data.reply || `尊敬的各位园长与代表，欢迎出席大地 ECE-Brain 智慧教研立项研讨会！本次会议包含 ${agendas.length} 项议程。下面有请【${speakerName}】(${speakerRole})就‘${firstAgendaTitle}’发表首轮看法！`;
+        addTranscriptLine("AI 会议主席 (豆包)", text);
+        speakText(text, { rate: 1.1, pitch: 0.95 });
+      }).catch(() => {
+        const text = `尊敬的各位园长与代表，欢迎出席大地 ECE-Brain 智慧教研立项研讨会！下面有请【${speakerName}】(${speakerRole})就‘${firstAgendaTitle}’发表首轮看法！`;
+        addTranscriptLine("AI 会议主席 (豆包)", text);
+        speakText(text, { rate: 1.1, pitch: 0.95 });
+      });
     }
 
     setIsMeetingActive(true);

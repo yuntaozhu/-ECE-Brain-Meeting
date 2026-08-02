@@ -173,9 +173,7 @@ export class TencentMeetingClient {
       networkLogger.logResponse(reqId, 500, { error: error.message }, duration, error.message);
       console.warn(`[TencentClient] GetParticipants error for ${meetingId}:`, error.message);
       return [
-        { userId: 'daid_it', userName: '大地特级高管 (Host)', userRole: 'host', isMuted: false },
-        { userId: 'zhang_principal', userName: '张园长 (腾讯会议)', userRole: 'participant', isMuted: false },
-        { userId: 'li_expert', userName: '李专家 (腾讯会议)', userRole: 'participant', isMuted: false }
+        { userId: 'daid_it', userName: '大地特级高管 (Host)', userRole: 'host', isMuted: false }
       ];
     }
   }

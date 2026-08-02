@@ -279,9 +279,6 @@ export function registerParticipant(meetingId: string, participant: TencentParti
   if (!registeredParticipantsMap[meetingId]) {
     registeredParticipantsMap[meetingId] = [
       { userId: 'daid_it', userName: '大地督导 (Host)', userRole: 'host', isMuted: false, joinTime: Math.floor(Date.now() / 1000) - 300 },
-      { userId: 'zhang_principal', userName: '张园长', userRole: 'participant', isMuted: false, joinTime: Math.floor(Date.now() / 1000) - 240 },
-      { userId: 'li_expert', userName: '李专家', userRole: 'participant', isMuted: false, joinTime: Math.floor(Date.now() / 1000) - 180 },
-      { userId: 'wang_sec', userName: '王董秘', userRole: 'participant', isMuted: true, joinTime: Math.floor(Date.now() / 1000) - 120 },
     ];
   }
   const existing = registeredParticipantsMap[meetingId];
@@ -306,9 +303,6 @@ export async function getMeetingParticipants(meetingId: string, userId?: string)
   if (!config.secretId || config.secretId === 'your_secret_id') {
     baseParticipants = [
       { userId: 'daid_it', userName: '大地督导 (Host)', userRole: 'host', isMuted: false, joinTime: Math.floor(Date.now() / 1000) - 300 },
-      { userId: 'zhang_principal', userName: '张园长', userRole: 'participant', isMuted: false, joinTime: Math.floor(Date.now() / 1000) - 240 },
-      { userId: 'li_expert', userName: '李专家', userRole: 'participant', isMuted: false, joinTime: Math.floor(Date.now() / 1000) - 180 },
-      { userId: 'wang_sec', userName: '王董秘', userRole: 'participant', isMuted: true, joinTime: Math.floor(Date.now() / 1000) - 120 },
     ];
   } else {
     const uri = `/v1/meetings/${meetingId}/participants`;
@@ -333,9 +327,6 @@ export async function getMeetingParticipants(meetingId: string, userId?: string)
       console.warn(`[Tencent Meeting Service] Participants query fallback (${err.message}). Returning mock active roster.`);
       baseParticipants = [
         { userId: 'daid_it', userName: '大地督导 (Host)', userRole: 'host', isMuted: false },
-        { userId: 'zhang_principal', userName: '张园长', userRole: 'participant', isMuted: false },
-        { userId: 'li_expert', userName: '李专家', userRole: 'participant', isMuted: false },
-        { userId: 'wang_sec', userName: '王董秘', userRole: 'participant', isMuted: true },
       ];
     }
   }

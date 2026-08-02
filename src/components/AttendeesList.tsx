@@ -74,9 +74,6 @@ export function AttendeesList({ meetingId: propMeetingId, className = '' }: Atte
       } else {
         setParticipants(prev => prev.length > 0 ? prev : [
           { userId: 'daid_it', userName: '大地督导 (Host)', userRole: 'host', isMuted: false },
-          { userId: 'zhang_principal', userName: '张园长', userRole: 'participant', isMuted: false },
-          { userId: 'li_expert', userName: '李专家', userRole: 'participant', isMuted: false },
-          { userId: 'wang_sec', userName: '王董秘', userRole: 'participant', isMuted: true },
         ]);
       }
     } finally {

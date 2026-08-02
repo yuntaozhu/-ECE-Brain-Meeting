@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useMeetingStore } from "../store";
 import { useGeminiLive } from "./useGeminiLive";
+import { speakText } from "../lib/audioSpeech";
 import { telemetry } from "../lib/telemetry";
 import TRTC from "trtc-js-sdk";
 
@@ -104,46 +105,13 @@ export function useTrtcMultiUser() {
     const textPayload = simulationStatements[Math.floor(Math.random() * simulationStatements.length)];
     addTranscriptLine(speakerName, textPayload);
 
-    // Play the simulated speech out loud using HTML5 SpeechSynthesis with custom voice tuning
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      try {
-        const synth = window.speechSynthesis;
-        synth.cancel(); // Barge In: Stop any current speech playback instantly
-        
-        const utterance = new SpeechSynthesisUtterance(textPayload);
-        utterance.lang = "zh-CN";
-        
-        // Persona Tuning: customize frequency and speed based on role
-        if (userId === "user_lee") {
-          utterance.pitch = 1.3; // High nurturing female voice pitch
-          utterance.rate = 0.98;
-        } else if (userId === "user_wang") {
-          utterance.pitch = 0.95; // Business executive male pitch
-          utterance.rate = 1.18;
-        } else if (userId === "user_zhang") {
-          utterance.pitch = 0.82; // Authoritative elder pitch
-          utterance.rate = 1.05;
-        } else {
-          utterance.pitch = 1.0;
-          utterance.rate = 1.1;
-        }
-
-        const voices = synth.getVoices();
-        const zhVoices = voices.filter(v => v.lang.includes("zh") || v.lang.includes("ZH"));
-        if (zhVoices.length > 0) {
-          // Attempt to assign distinct voice profiles if more than one exist
-          if (userId === "user_lee" && zhVoices.length > 1) {
-            utterance.voice = zhVoices[1];
-          } else {
-            utterance.voice = zhVoices[0];
-          }
-        }
-        
-        synth.speak(utterance);
-      } catch (speechErr) {
-        console.warn("[Simulated Speak] HTML5 Speech synthesis failed to start:", speechErr);
-      }
-    }
+    // Play the simulated speech out loud using robust audio speech engine
+    let pitch = 1.0;
+    let rate = 1.1;
+    if (userId === "user_lee") { pitch = 1.3; rate = 0.98; }
+    else if (userId === "user_wang") { pitch = 0.95; rate = 1.18; }
+    else if (userId === "user_zhang") { pitch = 0.82; rate = 1.05; }
+    speakText(textPayload, { pitch, rate });
 
     // Disable visual speaker indicators after the timeframe
     setTimeout(() => {

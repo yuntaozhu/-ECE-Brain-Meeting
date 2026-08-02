@@ -98,9 +98,27 @@ export default function MainRoom() {
               useMeetingStore.setState({ agendaStage: serverState.agendaStage });
             }
             if (serverState.transcript && Array.isArray(serverState.transcript)) {
-              if (serverState.transcript.length > currentState.transcript.length) {
-                useMeetingStore.setState({ transcript: serverState.transcript });
-                logger.log('INFO', 'MeetingState', `多设备同步: 收到最新的会议发言数据 (${serverState.transcript.length} 条)`, { roomId: activeId, total: serverState.transcript.length });
+              const currentList = currentState.transcript || [];
+              const map = new Map<string, any>();
+              
+              for (const item of currentList) {
+                if (!item) continue;
+                const spk = item.speaker || (item as any).sender || "参会者";
+                const txt = (item.text || "").trim();
+                if (txt) map.set(`${spk}_${txt}`, { ...item, speaker: spk, text: txt });
+              }
+              for (const item of serverState.transcript) {
+                if (!item) continue;
+                const spk = item.speaker || item.sender || "参会者";
+                const txt = (item.text || "").trim();
+                if (txt && !map.has(`${spk}_${txt}`)) {
+                  map.set(`${spk}_${txt}`, { ...item, speaker: spk, text: txt });
+                }
+              }
+              const mergedList = Array.from(map.values());
+              if (mergedList.length !== currentList.length) {
+                useMeetingStore.setState({ transcript: mergedList });
+                logger.log('INFO', 'MeetingState', `多设备同步: 收到最新的会议发言数据 (${mergedList.length} 条)`, { roomId: activeId, total: mergedList.length });
               }
             }
             if (serverState.mountedFiles) {

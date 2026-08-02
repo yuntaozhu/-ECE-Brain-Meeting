@@ -4,6 +4,8 @@ import { useGeminiLive } from "./useGeminiLive";
 import { runMeetingAnalysis } from "../lib/kaibanMeetingEngine";
 import { AgendaStageType } from "../types";
 
+import { speakText } from "../lib/audioSpeech";
+
 export function useMeetingOrchestrator() {
   const { 
     transcript, 
@@ -32,11 +34,10 @@ export function useMeetingOrchestrator() {
   const speakTeacherIntervention = async (text: string) => {
     console.log("[Orchestration Audio] Instructing AI Chairperson to speak out loud:", text);
     try {
-      // 1. Try to fetch premium neural speech from Gemini TTS proxy
       const res = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, speaker: "Puck" }) // Using Puck authoritative voice and tone
+        body: JSON.stringify({ text, speaker: "Puck" })
       });
       if (res.ok) {
         const data = await res.json();
@@ -51,32 +52,12 @@ export function useMeetingOrchestrator() {
           const audioUrl = URL.createObjectURL(blob);
           const audio = new Audio(audioUrl);
           await audio.play();
-          return; // Neural speaking completed successfully!
+          return;
         }
       }
-      throw new Error("Neural TTS failed or key quota exceeded");
+      throw new Error("Neural TTS fallback requested");
     } catch (err: any) {
-      console.warn("[Orchestration Audio] Neural TTS endpoint failed, falling back to browser SpeechSynthesis:", err.message);
-      
-      // HTML5 Synthesis fallback: completely free, robust, and offline compatible
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        const synth = window.speechSynthesis;
-        synth.cancel(); // Barge In: interrupt any currently speaking audio streams instantly!
-        
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "zh-CN";
-        utterance.rate = 1.15; // Dignified speed
-        utterance.pitch = 0.95; // Authoritative pitch
-        
-        // Find suitable local Mandarin Chinese profiles
-        const voices = synth.getVoices();
-        const zhVoice = voices.find(v => v.lang.includes("zh") || v.lang.includes("ZH"));
-        if (zhVoice) {
-          utterance.voice = zhVoice;
-        }
-        
-        synth.speak(utterance);
-      }
+      speakText(text, { rate: 1.1, pitch: 0.95 });
     }
   };
 

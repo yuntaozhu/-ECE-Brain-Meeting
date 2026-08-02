@@ -210,6 +210,32 @@ app.use("/api/tencent", tencentMeetingRouter);
 // In-memory cross-device meeting state store for real-time synchronization between sharing links and devices
 export const meetingStates = new Map<string, any>();
 
+export function mergeTranscripts(existingList: any[] = [], incomingList: any[] = []) {
+  const map = new Map<string, any>();
+  
+  for (const item of existingList) {
+    if (!item) continue;
+    const speaker = item.speaker || item.sender || "参会者";
+    const text = (item.text || "").trim();
+    if (!text) continue;
+    const key = `${speaker}_${text}`;
+    map.set(key, { ...item, speaker, text });
+  }
+  
+  for (const item of incomingList) {
+    if (!item) continue;
+    const speaker = item.speaker || item.sender || "参会者";
+    const text = (item.text || "").trim();
+    if (!text) continue;
+    const key = `${speaker}_${text}`;
+    if (!map.has(key)) {
+      map.set(key, { ...item, speaker, text });
+    }
+  }
+
+  return Array.from(map.values());
+}
+
 export function saveChatMessageToServerState(roomId: string, sender: string, text: string) {
   const existing = meetingStates.get(roomId) || {
     currentTopic: "关于下一代幼儿教育数字化基础设施的规划",
@@ -221,7 +247,7 @@ export function saveChatMessageToServerState(roomId: string, sender: string, tex
   };
 
   const newEntry = { speaker: sender, text, timestamp: new Date().toISOString() };
-  const updatedTranscript = [...(existing.transcript || []), newEntry];
+  const updatedTranscript = mergeTranscripts(existing.transcript || [], [newEntry]);
   const updated = {
     ...existing,
     transcript: updatedTranscript,
@@ -258,11 +284,13 @@ app.post("/api/meeting/state/:roomId", (req, res) => {
     tencentParticipants: [],
     isMeetingActive: false
   };
+  const mergedTranscript = mergeTranscripts(existing.transcript || [], incoming.transcript || []);
+
   const updated = {
     ...existing,
     ...incoming,
     tencentParticipants: incoming.tencentParticipants || existing.tencentParticipants,
-    transcript: incoming.transcript || existing.transcript,
+    transcript: mergedTranscript,
     updatedAt: Date.now()
   };
   meetingStates.set(roomId, updated);

@@ -162,10 +162,7 @@ function getSandboxFallbackResponse(uri: string, method: string, bodyData?: any)
       code: 0,
       msg: 'success',
       participants: [
-        { userid: 'daid_it', user_name: '大地督导 (Host)', user_role: 1, is_muted: false, join_time: Math.floor(Date.now() / 1000) - 300 },
-        { userid: 'zhang_principal', user_name: '张园长', user_role: 3, is_muted: false, join_time: Math.floor(Date.now() / 1000) - 240 },
-        { userid: 'li_expert', user_name: '李专家', user_role: 3, is_muted: false, join_time: Math.floor(Date.now() / 1000) - 180 },
-        { userid: 'wang_sec', user_name: '王董秘', user_role: 3, is_muted: true, join_time: Math.floor(Date.now() / 1000) - 120 }
+        { userid: 'daid_it', user_name: '大地督导 (Host)', user_role: 1, is_muted: false, join_time: Math.floor(Date.now() / 1000) - 300 }
       ]
     };
   }
