@@ -7,6 +7,7 @@ import { WebSocketServer } from "ws";
 import { runMeetingAnalysisServer } from "./src/lib/kaibanMeetingEngine.server";
 import tencentMeetingRouter from "./server/routes/tencentMeeting";
 import { setupMeetingWebSocket } from "./server/websocketMeeting";
+import { setupSocketIOServer } from "./server/index";
 
 const app = express();
 const server = http.createServer(app);
@@ -390,6 +391,7 @@ if (!process.env.VERCEL) {
     });
 
     setupMeetingWebSocket(server);
+    setupSocketIOServer(io);
   });
 }
 
