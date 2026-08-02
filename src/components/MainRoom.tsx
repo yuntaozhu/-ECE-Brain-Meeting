@@ -768,12 +768,13 @@ export default function MainRoom() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           
           {/* USER 1: Local User card (自定义绑定的身份) */}
-          <div className={`relative rounded-xl border p-4 bg-black/40 backdrop-blur transition-all flex flex-col justify-between aspect-[4/3] ${
+          <div className={`relative rounded-xl border p-4 bg-black/40 backdrop-blur transition-all flex flex-col justify-between aspect-[4/3] overflow-hidden ${
             activeSpeakerId === "user_me" || micOn
               ? "border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.1)]"
               : "border-white/5"
           }`}>
-            <div className="flex items-center justify-between">
+            <div id="trtc-local-viewport" className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none z-0" />
+            <div className="flex items-center justify-between relative z-10">
               <Badge className="bg-cyan-500/10 text-cyan-400 px-2 py-0 border-cyan-500/20 text-[9px]">
                 LOCAL ({userName || "我"})
               </Badge>
@@ -834,13 +835,14 @@ export default function MainRoom() {
             return (
               <div 
                 key={user.id} 
-                className={`relative rounded-xl border p-4 bg-black/40 backdrop-blur transition-all flex flex-col justify-between aspect-[4/3] ${
+                className={`relative rounded-xl border p-4 bg-black/40 backdrop-blur transition-all flex flex-col justify-between aspect-[4/3] overflow-hidden ${
                   isSpeaking 
                     ? "border-amber-400/60 shadow-[0_0_15px_rgba(245,158,11,0.15)] bg-amber-500/[0.02]"
                     : "border-white/5"
                 }`}
               >
-                <div className="flex items-center justify-between">
+                <div id={`trtc-remote-${user.id}`} className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none z-0" />
+                <div className="flex items-center justify-between relative z-10">
                   <Badge className={`px-2 py-0 border text-[9px] ${
                     isSpeaking 
                       ? "bg-amber-500/20 text-amber-400 border-amber-500/30" 

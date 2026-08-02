@@ -3,15 +3,33 @@ import { telemetry } from "./telemetry";
 
 let audioCtx: AudioContext | null = null;
 
-function getAudioContext(): AudioContext {
+export function getAudioContext(): AudioContext {
   if (!audioCtx) {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     audioCtx = new AudioContextClass();
   }
   if (audioCtx.state === 'suspended') {
-    audioCtx.resume();
+    audioCtx.resume().catch(() => {});
   }
   return audioCtx;
+}
+
+// Global user interaction unblock listener for Web Audio API & SpeechSynthesis
+if (typeof window !== "undefined") {
+  const unblockAudio = () => {
+    try {
+      const ctx = getAudioContext();
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      if ('speechSynthesis' in window && window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+    } catch (e) {}
+  };
+  window.addEventListener('click', unblockAudio, { passive: true });
+  window.addEventListener('touchstart', unblockAudio, { passive: true });
+  window.addEventListener('keydown', unblockAudio, { passive: true });
 }
 
 /**
@@ -62,36 +80,42 @@ export async function speakText(text: string, options?: { rate?: number; pitch?:
       if (synth.paused) {
         synth.resume();
       }
-      synth.cancel(); // Interrupt any prior speech immediately
 
       const utterance = new SpeechSynthesisUtterance(cleanText);
       utterance.lang = "zh-CN";
-      utterance.rate = options?.rate || 1.1;
+      utterance.rate = options?.rate || 1.08;
       utterance.pitch = options?.pitch || 1.0;
 
       const setVoiceAndSpeak = () => {
-        const voices = synth.getVoices();
-        const zhVoice = voices.find(v => v.lang.includes("zh") || v.lang.includes("ZH") || v.name.includes("Chinese"));
-        if (zhVoice) {
-          utterance.voice = zhVoice;
+        try {
+          const voices = synth.getVoices();
+          const zhVoice = voices.find(v => v.lang.includes("zh") || v.lang.includes("ZH") || v.name.includes("Chinese") || v.name.includes("Mandarin"));
+          if (zhVoice) {
+            utterance.voice = zhVoice;
+          }
+
+          utterance.onstart = () => {
+            logger.log('INFO', 'AudioSpeech', 'SpeechSynthesis 朗读已启动');
+            telemetry.recordAudioBuffer({ sampleRate: 16000, rms: 0.25, queueLength: 1 });
+          };
+
+          utterance.onend = () => {
+            logger.log('INFO', 'AudioSpeech', 'SpeechSynthesis 朗读正常完成');
+            if (options?.onEnd) options.onEnd();
+          };
+
+          utterance.onerror = (e) => {
+            logger.log('WARN', 'AudioSpeech', `SpeechSynthesis notice [${e.error || 'notice'}]`, e);
+            if (options?.onEnd) options.onEnd();
+          };
+
+          if (synth.speaking || synth.pending) {
+            synth.cancel();
+          }
+          synth.speak(utterance);
+        } catch (err: any) {
+          logger.log('WARN', 'AudioSpeech', `SpeechSynthesis speak notice: ${err?.message}`);
         }
-
-        utterance.onstart = () => {
-          logger.log('INFO', 'AudioSpeech', 'SpeechSynthesis 朗读已启动');
-          telemetry.recordAudioBuffer({ sampleRate: 16000, rms: 0.25, queueLength: 1 });
-        };
-
-        utterance.onend = () => {
-          logger.log('INFO', 'AudioSpeech', 'SpeechSynthesis 朗读正常完成');
-          if (options?.onEnd) options.onEnd();
-        };
-
-        utterance.onerror = (e) => {
-          logger.log('WARN', 'AudioSpeech', `SpeechSynthesis 抛出 notice [${e.error || 'notice'}]`, e);
-          if (options?.onEnd) options.onEnd();
-        };
-
-        synth.speak(utterance);
       };
 
       if (synth.getVoices().length > 0) {
@@ -101,11 +125,10 @@ export async function speakText(text: string, options?: { rate?: number; pitch?:
           setVoiceAndSpeak();
           synth.onvoiceschanged = null;
         };
-        // Fallback immediate call if event doesn't fire
         setTimeout(setVoiceAndSpeak, 100);
       }
     } catch (err: any) {
-      logger.log('WARN', 'AudioSpeech', `SpeechSynthesis 初始化失败: ${err?.message}`);
+      logger.log('WARN', 'AudioSpeech', `SpeechSynthesis 初始化 Notice: ${err?.message}`);
     }
   }
 }
