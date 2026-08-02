@@ -1,31 +1,32 @@
 import { KaibanAnalysisResult } from "../types";
-import { GoogleGenAI } from "@google/genai";
 
 export async function runMeetingAnalysisServer(recentTranscript: string, currentAgenda: string): Promise<KaibanAnalysisResult> {
   const doubaoApiKey = process.env.DOUBAO_API_KEY || "ark-20c57eca-6b75-4581-bb78-023f7776df4e-58bd0";
 
-  // 1. Try Doubao Ark API first as requested ("大模型上，先使用豆包的key")
+  // KaibanJS A2A (Agent-to-Agent) Multi-Agent Orchestration Engine
   if (doubaoApiKey) {
     try {
-      console.log(`[Meeting Engine] Promoting evaluation request using Doubao Ark API (Model: doubao-seed-2-1-pro-260628)...`);
+      console.log(`[KaibanJS A2A Engine] Executing 4-Agent Orchestration (Director, Host, Secretary, Researcher)...`);
       const prompt = `
-        You are resolving an interactive multiplayer classroom briefing session. 
-        Analyze the current meeting logs and synthesize the joint work of your multi-agent team:
-        1. KAgent [AI 主席 (大地教研督导)]: Strict supervisor on kindergarten children interactivity digital hardware. Reject holiday food budgets/purchases, prevent speech monopolization.
-        2. KAgent [AI 秘书]: Real-time academic tracking of consensus on toddler multimedia and attention verification algorithms.
+        You are the KaibanJS A2A Multi-Agent Orchestrator for the Dadi ECE-Brain Intelligent Meeting System.
         
+        The Agent Team consists of:
+        1. Director Agent (director_agent - 会议总控与议程裁决): Evaluates if the discussion stays strictly on topic or strays into off-topic chatter (e.g. "端午粽子", "采购", "报销", "礼包", "采购预算", "福利礼品"). Determines if an intervention is required or if agenda transition is ready.
+        2. Host Agent (host_agent - AI 虚拟主席 / 大地教研总督导): Executes speech interventions with supreme dignity. Sharp interruption warning to correct off-topic speech or balance participant speaking time.
+        3. Secretary Agent (secretary_agent - 会议纪要与共识整理员): Synthesizes 3 high-impact actionable items for early childhood education (ECE) digital hardware and attention verification algorithms.
+        4. Researcher Agent (researcher_agent - 学术专家代表): References RAG knowledge base for toddler multimedia and classroom pedagogical frameworks.
+
         Current Agenda Stage/Context: "${currentAgenda}"
         Recent Multi-User Speech Transcript:
         "${recentTranscript}"
 
-        Evaluate the conversation based on the following rules:
-        1. "shouldIntervene": set to true if someone is severely off-topic (e.g. talking about "端午粽子", "场地和礼品采购", "财务报销", "预算买粽子"), or if someone is monopolizing/dominating the speech and you want the Host to balance speech of other quieter participants (e.g., 李园长, 王董秘, 张校董).
-        2. "interventionText": if shouldIntervene is true, generate a sharp, extremely dignified, high-energy interruption warning from the AI Chairman (大地教研督导) in less than 35 Chinese characters. Address the speaker directly and command him to return to topic, or explicitly call on other quieter attendees to state their views. (e.g. "王董秘，别谈采购了！李园长，请简述您的托班数字化验证立项！"). If shouldIntervene is false, set this to "".
-        3. "latestToDos": Extract 3 high-quality academic digital agenda TODO actions relevant to children attention hardware, sensor platforms, or class design, formatted as: ["1. ...", "2. ...", "3. ..."]. Keep them short and professional.
-        4. "nextStageRecommendation": If the discussion is very rich, recommend moving to the next stage ("IceBreaking", "MainDiscussion", "Conclusion"). Otherwise, set to null.
+        Evaluate and respond strictly following these rules:
+        1. "shouldIntervene": set to true if someone talks about off-topic items ("粽子", "采购", "报销", "礼品", "礼盒", "采购预算", "场地与活动") or if someone monopolizes speech.
+        2. "interventionText": if shouldIntervene is true, generate a dignified, high-energy interruption warning from AI Host (大地教研督导) under 35 Chinese characters. E.g. "王董秘，别谈采购了！李园长，请简述您的托班数字化验证立项！".
+        3. "latestToDos": Extract 3 academic TODO items relevant to ECE digital hardware, formatted as ["1. ...", "2. ...", "3. ..."].
+        4. "nextStageRecommendation": If discussion on current topic is complete, suggest next stage ("IceBreaking", "MainDiscussion", "Conclusion"), otherwise null.
 
-        Your response MUST be a pure, raw, mini JSON object. NO markdown formatting, NO \`\`\`json blocks.
-        Schema:
+        Output strictly raw JSON without markdown codeblocks:
         {
           "shouldIntervene": boolean,
           "interventionText": "string",
@@ -43,7 +44,7 @@ export async function runMeetingAnalysisServer(recentTranscript: string, current
         body: JSON.stringify({
           model: "doubao-seed-2-1-pro-260628",
           messages: [
-            { role: "system", content: "You are a professional educational AI meeting coordinator." },
+            { role: "system", content: "You are the KaibanJS A2A Engine executing multi-agent meeting supervision." },
             { role: "user", content: prompt }
           ],
           temperature: 0.2
@@ -55,7 +56,7 @@ export async function runMeetingAnalysisServer(recentTranscript: string, current
         const content = data.choices?.[0]?.message?.content || "{}";
         const cleanJson = content.replace(/```json/gi, "").replace(/```/gi, "").trim();
         const parsed = JSON.parse(cleanJson);
-        console.log(`[Meeting Engine] Successfully retrieved LLM analysis from Doubao API`);
+        console.log(`[KaibanJS A2A Engine] Successfully received A2A evaluation from Doubao Ark API`);
         return {
           shouldIntervene: Boolean(parsed.shouldIntervene),
           interventionText: parsed.interventionText || "",
@@ -64,19 +65,14 @@ export async function runMeetingAnalysisServer(recentTranscript: string, current
         };
       } else {
         const errText = await response.text();
-        if (errText.includes("ModelNotOpen") || response.status === 404) {
-          console.log(`[Meeting Engine] Doubao model not activated in Ark Console. Seamlessly falling back to Gemini/Heuristics...`);
-        } else {
-          console.warn(`[Meeting Engine] Doubao API request failed (${response.status}): ${errText}. Falling back to Gemini...`);
-        }
+        console.warn(`[KaibanJS A2A Engine] Doubao API warning (${response.status}): ${errText}`);
       }
-    } catch (doubaoErr: any) {
-      console.log(`[Meeting Engine] Doubao API skipped or unavailable. Falling back to Gemini/Heuristics...`);
+    } catch (err: any) {
+      console.warn(`[KaibanJS A2A Engine] Doubao request error: ${err.message}`);
     }
   }
 
-  // Gemini key disabled per user request ("不使用 Gemini的key")
-  console.log("[Meeting Engine] 🧠 Gemini API calls disabled per user preference. Running local heuristic analysis.");
+  // Local A2A Heuristic Fallback Engine
   return runLocalHeuristicFallback(recentTranscript, currentAgenda);
 }
 

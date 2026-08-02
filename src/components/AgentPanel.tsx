@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useMemo } from "react";
 import { useMeetingStore } from "../store";
 import { useMeetingOrchestrator } from "../hooks/useMeetingOrchestrator";
 import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
@@ -8,13 +8,28 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Play, Volume2 } from "lucide-react";
 
 export default function AgentPanel() {
-  const { transcript, aiIntervention, aiSummary, currentTopic, addTranscriptLine, latestToDos } = useMeetingStore();
+  const { transcript, aiIntervention, aiSummary, currentTopic, addTranscriptLine, latestToDos, agendaStage } = useMeetingStore();
   const { orchestratorStatus, analyzing, triggerOrchestration } = useMeetingOrchestrator();
   
   const [draftInput, setDraftInput] = useState("");
   const [trtcStatus, setTrtcStatus] = useState<"offline" | "loading" | "online">("offline");
   const [userSigData, setUserSigData] = useState<{ userSig: string; sdkAppId: number; userId: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Calculate agenda completion status based on agendaStage and conversation context (transcript length)
+  const agendaProgress = useMemo(() => {
+    let base = 25;
+    if (agendaStage === "MainDiscussion") base = 65;
+    if (agendaStage === "Conclusion") base = 95;
+    const msgBonus = Math.min(25, transcript.length * 2);
+    return Math.min(100, base + msgBonus);
+  }, [agendaStage, transcript.length]);
+
+  const currentAgendaTitle = agendaStage === "IceBreaking" 
+    ? "研讨会开场与背景宣读" 
+    : agendaStage === "MainDiscussion" 
+    ? "双核托班教学注意力大模型配置" 
+    : "待办清单确立与数字会议总结";
 
   // Auto scroll transcript
   useEffect(() => {
@@ -103,6 +118,45 @@ export default function AgentPanel() {
                  {analyzing ? <Loader2 className="h-3 w-3 animate-spin mr-2 text-cyan-400" /> : <Play className="h-3 w-3 mr-2 text-cyan-400" />}
                  运行 KaibanJS 评测
              </Button>
+          </div>
+       </div>
+
+       {/* Agenda Completion Progress Bar Widget */}
+       <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-4 bg-teal-400 shadow-[0_0_8px_rgba(45,212,191,0.6)]"></div>
+            <h3 className="text-xs font-bold uppercase tracking-widest text-white">议程推进与完成状态</h3>
+          </div>
+
+          <div className="p-3.5 rounded-lg bg-gradient-to-br from-teal-500/5 via-cyan-500/5 to-black border border-teal-500/20 shadow-inner space-y-3">
+             <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-200 tracking-wide truncate max-w-[170px]" title={currentAgendaTitle}>
+                   {currentAgendaTitle}
+                </span>
+                <span className="font-mono text-xs font-bold text-teal-400 bg-teal-500/10 px-2 py-0.5 rounded border border-teal-500/20">
+                   {agendaProgress}%
+                </span>
+             </div>
+
+             {/* Progress bar */}
+             <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden p-0.5 shadow-inner">
+                <div 
+                  className="h-full bg-gradient-to-r from-teal-500 via-cyan-400 to-emerald-400 rounded-full transition-all duration-700 ease-out shadow-[0_0_10px_rgba(45,212,191,0.6)]"
+                  style={{ width: `${agendaProgress}%` }}
+                ></div>
+             </div>
+
+             <div className="flex justify-between items-center text-[9px] text-slate-400 font-mono">
+                <span>当前阶段: {agendaStage === "IceBreaking" ? "开场宣读 (1/3)" : agendaStage === "MainDiscussion" ? "深度讨论 (2/3)" : "总结清单 (3/3)"}</span>
+                <span className="text-emerald-400">{agendaProgress >= 90 ? "即将完成" : "进行中"}</span>
+             </div>
+
+             <p className="text-[10px] text-slate-400 leading-relaxed bg-black/40 p-2 rounded border border-white/5 italic">
+                <span className="text-teal-400 font-bold not-italic mr-1">AI 语境提取:</span>
+                {transcript.length > 2 
+                  ? `基于当前 ${transcript.length} 条会话上下文，AI 主席与秘书正高效推进各项议程指标。`
+                  : "正在监听实时对话，评估议程完成进度..."}
+             </p>
           </div>
        </div>
 

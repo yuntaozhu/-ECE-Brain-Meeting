@@ -85,12 +85,12 @@ export function useGeminiLive() {
     const host = window.location.host;
     const wsUrl = `${protocol}//${host}/api/live/stream`;
     
-    console.log("Connecting to core Gemini Live Stream Bridge:", wsUrl);
+    console.log("Connecting to Doubao & Tencent Meeting Stream Bridge:", wsUrl);
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log("Gemini Live stream WebSocket opened.");
+      console.log("Doubao Meeting stream WebSocket opened.");
       setIsConnected(true);
       
       // Initialize AudioContext
@@ -118,11 +118,11 @@ export function useGeminiLive() {
     };
 
     ws.onerror = (err) => {
-      console.warn("Gemini Live WebSocket stream connection notice (ECE-Brain hybrid bridge active):", err);
+      console.warn("Doubao Meeting WebSocket stream connection notice:", err);
     };
 
     ws.onclose = () => {
-      console.log("Gemini Live server proxy connection stream closed.");
+      console.log("Doubao Meeting server proxy connection stream closed.");
       setIsConnected(false);
       wsRef.current = null;
       stopPlayback();

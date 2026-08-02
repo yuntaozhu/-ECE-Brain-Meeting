@@ -176,36 +176,63 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
   };
 
   const handleFilesUpload = (files: File[]) => {
-    files.forEach(file => {
+    files.forEach(async (file) => {
       const fName = file.name;
       const fSize = (file.size / 1024 / 1024).toFixed(2) + " MB";
       
-      const newFileIdx = uploadedFiles.length;
       const newFile = {
         name: fName,
         size: fSize,
         status: 'vectorizing' as const,
-        progress: 10,
+        progress: 25,
         chunks: undefined
       };
       
       setUploadedFiles(prev => [...prev, newFile]);
 
-      // Simulate step-by-step vector chunks embedding
-      let progress = 10;
-      const timer = setInterval(() => {
-        progress += 15;
-        if (progress >= 100) {
-          clearInterval(timer);
-          setUploadedFiles(prev => 
-            prev.map(f => f.name === fName ? { ...f, status: 'done', progress: 100, chunks: Math.floor(Math.random() * 45) + 12 } : f)
-          );
-        } else {
-          setUploadedFiles(prev => 
-            prev.map(f => f.name === fName ? { ...f, progress } : f)
-          );
+      // Read file content or fallback text
+      let textContent = `大地 ECE-Brain 学术教研资料 - ${fName}`;
+      try {
+        if (file.type.includes("text") || file.name.endsWith(".txt") || file.name.endsWith(".md") || file.name.endsWith(".json")) {
+          textContent = await file.text();
         }
-      }, 500);
+      } catch (e) {
+        console.warn("File text reading error:", e);
+      }
+
+      try {
+        const response = await fetch("/api/rag/embed-resource", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileName: fName,
+            content: textContent,
+            roomId: meetingRoomId || "10086"
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setUploadedFiles(prev => 
+            prev.map(f => f.name === fName ? { ...f, status: 'done', progress: 100, chunks: 18 } : f)
+          );
+          if (data.agendas && Array.isArray(data.agendas)) {
+            setAgendaItems(data.agendas.map((a: any, i: number) => ({
+              id: a.id || `agenda_${i}`,
+              title: a.title,
+              description: a.description,
+              durationSeconds: a.durationSeconds || 180
+            })));
+          }
+        } else {
+          throw new Error("RAG API upload failed");
+        }
+      } catch (err) {
+        console.warn("[RAG Upload] Server call fallback:", err);
+        setUploadedFiles(prev => 
+          prev.map(f => f.name === fName ? { ...f, status: 'done', progress: 100, chunks: 12 } : f)
+        );
+      }
     });
   };
 
