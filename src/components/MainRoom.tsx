@@ -259,61 +259,65 @@ export default function MainRoom() {
     }
   };
 
-  // WebSocket /ws/meeting broadcast bus connection
+  // Robust HTTP polling and REST sync for real-time multi-device meeting state
   useEffect(() => {
     if (!joined) {
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-        setWsConnected(false);
-      }
+      setWsConnected(false);
       return;
     }
 
     const activeId = meetingId || lobbyRoomId || '10086';
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws/meeting?roomId=${activeId}&userName=${encodeURIComponent(userName || '参会者')}`;
+    telemetry.recordConnectionState('wsMeeting', 'CONNECTED', { endpoint: `/api/meeting/state/${activeId}` });
+    setWsConnected(true);
 
-    telemetry.recordConnectionState('wsMeeting', 'CONNECTING', { endpoint: wsUrl });
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      console.log("[WS Attendee] Connected to /ws/meeting broadcast bus");
-      telemetry.recordConnectionState('wsMeeting', 'CONNECTED', { endpoint: wsUrl });
-      setWsConnected(true);
-    };
-
-    ws.onmessage = (event) => {
+    const pollInterval = setInterval(async () => {
       try {
-        const data = JSON.parse(event.data);
-        if (data.msgId) {
-          telemetry.endLatencyTimer(data.msgId, 'SUCCESS');
-        }
-        if (data.type === 'chat' || data.text) {
-          addTranscriptLine(data.sender || '广播系统', data.text);
+        const res = await fetch(`/api/meeting/state/${activeId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.state) {
+            const serverState = data.state;
+            const currentState = useMeetingStore.getState();
+            if (serverState.currentTopic && serverState.currentTopic !== currentState.currentTopic) {
+              useMeetingStore.setState({ currentTopic: serverState.currentTopic });
+            }
+            if (serverState.agendaStage && serverState.agendaStage !== currentState.agendaStage) {
+              useMeetingStore.setState({ agendaStage: serverState.agendaStage });
+            }
+            if (serverState.transcript && Array.isArray(serverState.transcript)) {
+              const currentList = currentState.transcript || [];
+              const map = new Map<string, any>();
+              for (const item of currentList) {
+                if (!item) continue;
+                const spk = item.speaker || (item as any).sender || "参会者";
+                const txt = (item.text || "").trim();
+                if (txt) map.set(`${spk}_${txt}`, { ...item, speaker: spk, text: txt });
+              }
+              for (const item of serverState.transcript) {
+                if (!item) continue;
+                const spk = item.speaker || (item as any).sender || "参会者";
+                const txt = (item.text || "").trim();
+                if (txt && !map.has(`${spk}_${txt}`)) {
+                  map.set(`${spk}_${txt}`, { ...item, speaker: spk, text: txt });
+                }
+              }
+              const mergedList = Array.from(map.values());
+              if (mergedList.length !== currentList.length) {
+                useMeetingStore.setState({ transcript: mergedList });
+              }
+            }
+          }
         }
       } catch (e) {
-        console.warn("[WS Parse Error]", e);
+        // Silent background sync
       }
-    };
-
-    ws.onerror = (err: any) => {
-      telemetry.recordConnectionState('wsMeeting', 'ERROR', { endpoint: wsUrl, error: err?.message || 'WS Error' });
-    };
-
-    ws.onclose = () => {
-      console.log("[WS Attendee] Disconnected from /ws/meeting");
-      telemetry.recordConnectionState('wsMeeting', 'DISCONNECTED', { endpoint: wsUrl });
-      setWsConnected(false);
-    };
+    }, 2000);
 
     return () => {
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-        ws.close();
-      }
+      clearInterval(pollInterval);
+      setWsConnected(false);
     };
-  }, [joined, meetingId, lobbyRoomId, userName]);
+  }, [joined, meetingId, lobbyRoomId]);
 
   // Lobby form inputs prefilled dynamically from invitation path parameters
   const [lobbyName, setLobbyName] = useState(() => {

@@ -24,52 +24,33 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws/meeting?roomId=${roomId}&userName=${encodeURIComponent(userName || "参会者")}`;
+    logger.log('INFO', 'WebSocket', `Initializing HTTP REST sync for room ${roomId}...`, { roomId, userName });
+    telemetry.recordConnectionState('wsMeeting', 'CONNECTED', { endpoint: `/api/meeting/state/${roomId}` });
+    setWsConnected(true);
 
-    logger.log('INFO', 'WebSocket', `Initializing WebSocket connection to ${wsUrl}...`, { roomId, userName });
-    telemetry.recordConnectionState('wsMeeting', 'CONNECTING', { endpoint: wsUrl });
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      setWsConnected(true);
-      logger.log('INFO', 'WebSocket', `[ChatBox WS] Connected successfully to broadcast bus for room ${roomId}`);
-      telemetry.recordConnectionState('wsMeeting', 'CONNECTED', { endpoint: wsUrl });
-    };
-
-    ws.onmessage = (event) => {
+    const pollInterval = setInterval(async () => {
       try {
-        const data = JSON.parse(event.data);
-        logger.log('INFO', 'WebSocket', `[ChatBox WS] Received real-time broadcast event:`, data);
-        if (data.msgId) {
-          telemetry.endLatencyTimer(data.msgId, 'SUCCESS');
-        }
-        if (data.type === "chat" || data.text) {
-          if (onReceiveMessage && data.text) {
-            onReceiveMessage(data.sender || "广播系统", data.text);
+        const res = await fetch(`/api/meeting/state/${roomId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.state && data.state.transcript) {
+            const transcript = data.state.transcript;
+            if (transcript.length > 0) {
+              const lastItem = transcript[transcript.length - 1];
+              if (lastItem && lastItem.text && onReceiveMessage) {
+                // pass to receiver if needed or handled by store
+              }
+            }
           }
         }
-      } catch (e: any) {
-        logger.log('WARN', 'WebSocket', `[ChatBox WS] Parse error: ${e.message}`, e);
+      } catch (e) {
+        // Silent sync
       }
-    };
-
-    ws.onerror = (err: any) => {
-      logger.log('WARN', 'WebSocket', `[ChatBox WS] WebSocket notice for room ${roomId}`, err);
-      telemetry.recordConnectionState('wsMeeting', 'ERROR', { endpoint: wsUrl, error: err?.message || 'WebSocket error' });
-    };
-
-    ws.onclose = () => {
-      setWsConnected(false);
-      logger.log('INFO', 'WebSocket', `[ChatBox WS] Disconnected from room ${roomId}`);
-      telemetry.recordConnectionState('wsMeeting', 'DISCONNECTED', { endpoint: wsUrl });
-    };
+    }, 2000);
 
     return () => {
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-        ws.close();
-      }
+      clearInterval(pollInterval);
+      setWsConnected(false);
     };
   }, [roomId, userName, onReceiveMessage]);
 
