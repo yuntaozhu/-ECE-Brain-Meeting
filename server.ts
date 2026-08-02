@@ -250,7 +250,7 @@ app.post("/api/doubao/chat", async (req, res) => {
         "Authorization": `Bearer ${doubaoApiKey}`
       },
       body: JSON.stringify({
-        model: "doubao-seed-2-1-pro-260628",
+        model: "doubao-seed-2-1-turbo-260628",
         messages: [
           { role: "system", content: systemInstruction || "你现在是‘大地 ECE-Brain 智慧教研室’具有绝对威严的主持主席（大地数字教研总督导），由豆包大模型驱动。严厉打击形式主义与无关话题（如买粽子等），专注幼儿教育数字化基础设施及注意力捕捉算法立项。" },
           { role: "user", content: prompt }

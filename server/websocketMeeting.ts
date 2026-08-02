@@ -15,24 +15,30 @@ export function setupMeetingWebSocket(server: http.Server) {
   const doubaoWss = new WebSocketServer({ noServer: true });
 
   server.on("upgrade", (request, socket, head) => {
-    const parsedUrl = new URL(request.url || "", `http://${request.headers.host || "localhost"}`);
-    const pathname = parsedUrl.pathname;
+    try {
+      const parsedUrl = new URL(request.url || "", `http://${request.headers.host || "localhost"}`);
+      const pathname = parsedUrl.pathname;
 
-    if (pathname === "/ws/meeting") {
-      meetingWss.handleUpgrade(request, socket, head, (ws) => {
-        meetingWss.emit("connection", ws, request);
-      });
-    } else if (pathname === "/api/live/stream") {
-      doubaoWss.handleUpgrade(request, socket, head, (ws) => {
-        doubaoWss.emit("connection", ws, request);
-      });
-    } else {
-      socket.destroy();
+      if (pathname === "/ws/meeting" || pathname === "/ws/meeting/") {
+        meetingWss.handleUpgrade(request, socket, head, (ws) => {
+          meetingWss.emit("connection", ws, request);
+        });
+      } else if (pathname === "/api/live/stream" || pathname === "/api/live/stream/") {
+        doubaoWss.handleUpgrade(request, socket, head, (ws) => {
+          doubaoWss.emit("connection", ws, request);
+        });
+      }
+      // Do NOT destroy socket if path is for Socket.IO (/socket.io) or Vite HMR
+    } catch (e) {
+      console.warn("[WS Upgrade Error]", e);
     }
   });
 
   // 1. /ws/meeting Broadcast Bus
   meetingWss.on("connection", (ws, req) => {
+    ws.on("error", (err) => {
+      console.warn("[WS /ws/meeting Connection Error]", err?.message || err);
+    });
     const parsedUrl = new URL(req.url || "", `http://${req.headers.host || "localhost"}`);
     const roomId = parsedUrl.searchParams.get("roomId") || "10086";
     const userName = parsedUrl.searchParams.get("userName") || "参者";
@@ -99,6 +105,9 @@ export function setupMeetingWebSocket(server: http.Server) {
 
   // 2. /api/live/stream Doubao stream bridge
   doubaoWss.on("connection", async (ws) => {
+    ws.on("error", (err) => {
+      console.warn("[WS /api/live/stream Connection Error]", err?.message || err);
+    });
     console.log("Client connected to Doubao Meeting stream bridge (/api/live/stream)");
     const doubaoApiKey = process.env.DOUBAO_API_KEY || "ark-20c57eca-6b75-4581-bb78-023f7776df4e-58bd0";
 
@@ -119,7 +128,7 @@ export function setupMeetingWebSocket(server: http.Server) {
               "Authorization": `Bearer ${doubaoApiKey}`
             },
             body: JSON.stringify({
-              model: "doubao-seed-2-1-pro-260628",
+              model: "doubao-seed-2-1-turbo-260628",
               messages: [
                 { role: "system", content: "你现在是‘大地 ECE-Brain 智慧教研室’具有绝对威严的主持主席（大地数字教研总督导），由豆包大模型驱动。请针对以下系统指令或参会发言进行强势、威严、求真高效的教研纠偏与主席发言，字数在35字以内：" },
                 { role: "user", content: parsed.text }

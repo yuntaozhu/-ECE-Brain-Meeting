@@ -42,7 +42,7 @@ export async function runMeetingAnalysisServer(recentTranscript: string, current
           "Authorization": `Bearer ${doubaoApiKey}`
         },
         body: JSON.stringify({
-          model: "doubao-seed-2-1-pro-260628",
+          model: "doubao-seed-2-1-turbo-260628",
           messages: [
             { role: "system", content: "You are the KaibanJS A2A Engine executing multi-agent meeting supervision." },
             { role: "user", content: prompt }
