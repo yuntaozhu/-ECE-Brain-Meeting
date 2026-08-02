@@ -2,6 +2,8 @@ import { WebSocketServer, WebSocket } from "ws";
 import http from "http";
 import { URL } from "url";
 
+import { saveChatMessageToServerState } from "../server";
+
 interface RoomClient {
   ws: WebSocket;
   roomId: string;
@@ -70,6 +72,7 @@ export function setupMeetingWebSocket(server: http.Server) {
             text: msg.text,
             timestamp: Date.now()
           };
+          saveChatMessageToServerState(roomId, chatPayload.sender, chatPayload.text);
           broadcastToRoom(roomId, chatPayload);
         } else if (msg.type === "audio" || msg.type === "speech") {
           broadcastToRoom(roomId, {

@@ -159,9 +159,17 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   setMicOn: (on) => set({ micOn: on }),
   toggleVideo: () => set((state) => ({ videoOn: !state.videoOn })),
   setTopic: (topic) => set({ currentTopic: topic }),
-  addTranscriptLine: (speaker, text) => set((state) => ({
-    transcript: [...state.transcript, { speaker, text, timestamp: new Date() }]
-  })),
+  addTranscriptLine: (speaker, text) => set((state) => {
+    if (!text || !text.trim()) return state;
+    const trimmedText = text.trim();
+    const last = state.transcript[state.transcript.length - 1];
+    if (last && last.speaker === speaker && last.text === trimmedText && (Date.now() - new Date(last.timestamp).getTime() < 3000)) {
+      return state;
+    }
+    return {
+      transcript: [...state.transcript, { speaker, text: trimmedText, timestamp: new Date() }]
+    };
+  }),
   setAiIntervention: (text) => set({ aiIntervention: text }),
   setAiSummary: (text) => set({ aiSummary: text }),
   setAgendaStage: (stage) => set({ agendaStage: stage }),

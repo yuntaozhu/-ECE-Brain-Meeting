@@ -1,4 +1,5 @@
 import { Server as SocketIOServer, Socket } from "socket.io";
+import { saveChatMessageToServerState } from "../server";
 
 export interface ChatMessagePayload {
   type: "chat";
@@ -100,11 +101,16 @@ export function setupSocketIOServer(io: SocketIOServer) {
       const participant = activeParticipants.get(socket.id);
       const roomId = data.roomId || participant?.roomId || queryRoomId;
       const sender = data.sender || participant?.userName || queryUserName;
+      const text = data.text || data.message || "";
+
+      if (text) {
+        saveChatMessageToServerState(roomId, sender, text);
+      }
 
       const payload: ChatMessagePayload = {
         type: "chat",
         sender,
-        text: data.text || data.message || "",
+        text,
         timestamp: Date.now(),
         roomId,
         userRole: data.userRole || participant?.userRole
@@ -119,11 +125,16 @@ export function setupSocketIOServer(io: SocketIOServer) {
       const participant = activeParticipants.get(socket.id);
       const roomId = data.roomId || participant?.roomId || queryRoomId;
       const sender = data.sender || participant?.userName || queryUserName;
+      const text = data.text || data.message || "";
+
+      if (text) {
+        saveChatMessageToServerState(roomId, sender, text);
+      }
 
       const payload: ChatMessagePayload = {
         type: "chat",
         sender,
-        text: data.text || data.message || "",
+        text,
         timestamp: Date.now(),
         roomId,
         userRole: data.userRole || participant?.userRole

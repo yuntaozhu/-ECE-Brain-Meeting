@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMeetingStore } from "../store";
+import { logger } from "../lib/logger";
+import { telemetry } from "../lib/telemetry";
 
 export function useGeminiLive() {
   const { micOn, addTranscriptLine, setMicOn } = useMeetingStore();
@@ -86,12 +88,14 @@ export function useGeminiLive() {
     const wsUrl = `${protocol}//${host}/api/live/stream`;
     
     console.log("Connecting to Doubao & Tencent Meeting Stream Bridge:", wsUrl);
+    telemetry.recordConnectionState('wsAudioStream', 'CONNECTING', { endpoint: wsUrl });
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
       console.log("Doubao Meeting stream WebSocket opened.");
       setIsConnected(true);
+      telemetry.recordConnectionState('wsAudioStream', 'CONNECTED', { endpoint: wsUrl });
       
       // Initialize AudioContext
       if (!audioCtxRef.current) {
@@ -103,11 +107,13 @@ export function useGeminiLive() {
       const msg = JSON.parse(event.data);
       
       if (msg.audio) {
+        telemetry.recordAudioBuffer({ chunksReceivedDelta: 1 });
         playAudioChunk(msg.audio);
       }
 
       if (msg.interrupted) {
         console.warn("AI Chairperson got interrupted. Stopping local buffer playback.");
+        telemetry.recordAudioBuffer({ isUnderrun: true });
         stopPlayback();
       }
 
@@ -117,14 +123,16 @@ export function useGeminiLive() {
       }
     };
 
-    ws.onerror = (err) => {
+    ws.onerror = (err: any) => {
       console.warn("Doubao Meeting WebSocket stream connection notice:", err);
+      telemetry.recordConnectionState('wsAudioStream', 'ERROR', { endpoint: wsUrl, error: err?.message || 'Audio WS Error' });
     };
 
     ws.onclose = () => {
       console.log("Doubao Meeting server proxy connection stream closed.");
       setIsConnected(false);
       wsRef.current = null;
+      telemetry.recordConnectionState('wsAudioStream', 'DISCONNECTED', { endpoint: wsUrl });
       stopPlayback();
     };
   };
@@ -153,9 +161,9 @@ export function useGeminiLive() {
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        console.log("Physical microphone capture successful.");
+        logger.log('INFO', 'Mic', '物理麦克风音轨捕获成功，音频采集采样率与声纹通道初始化完成');
       } catch (deviceErr: any) {
-        console.warn("Physical microphone not available or denied, starting Web Audio virtual silent audio track:", deviceErr);
+        logger.log('WARN', 'Mic', `麦克风获取受限或不存在 [${deviceErr?.message || 'Permission Denied'}]，启动虚拟静音全双工音频流 fallback`, deviceErr);
         addTranscriptLine("系统提示", "🎙️ 未检测到外部麦克风（或设备占用/权限不足），已开启 ECE-Brain 虚拟全双工静音音频流进行平滑对接...");
         
         // Create an audio destination node that acts as a MediaStream
@@ -186,14 +194,15 @@ export function useGeminiLive() {
       processor.onaudioprocess = (e) => {
         const inputData = e.inputBuffer.getChannelData(0);
         
+        let sum = 0;
+        for (let i = 0; i < inputData.length; i++) {
+          sum += inputData[i] * inputData[i];
+        }
+        const rms = Math.sqrt(sum / inputData.length);
+
         // --- Core VAD Barge-in logic ---
         // If chairperson is currently playing, check energy levels to automatically barge-in
         if (activeSourcesRef.current.length > 0) {
-           let sum = 0;
-           for (let i = 0; i < inputData.length; i++) {
-              sum += inputData[i] * inputData[i];
-           }
-           const rms = Math.sqrt(sum / inputData.length);
            if (rms > 0.06) { // Voice energy threshold
               console.log("VAD Voice Detected (RMS: " + rms.toFixed(3) + ") during speech! Barging-in.");
               stopPlayback(); // stop immediately
@@ -206,6 +215,12 @@ export function useGeminiLive() {
 
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify({ audio: base64Pcm }));
+          telemetry.recordAudioBuffer({
+            rms,
+            sampleRate: audioCtx.sampleRate,
+            chunksSentDelta: 1,
+            queueLength: activeSourcesRef.current.length
+          });
         }
       };
 

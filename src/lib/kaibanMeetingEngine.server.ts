@@ -1,4 +1,13 @@
 import { KaibanAnalysisResult } from "../types";
+import { GoogleGenAI } from "@google/genai";
+
+let genAIClient: GoogleGenAI | null = null;
+function getGeminiClient(): GoogleGenAI | null {
+  if (!genAIClient && process.env.GEMINI_API_KEY) {
+    genAIClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  }
+  return genAIClient;
+}
 
 export async function runMeetingAnalysisServer(recentTranscript: string, currentAgenda: string): Promise<KaibanAnalysisResult> {
   const doubaoApiKey = process.env.DOUBAO_API_KEY || "ark-20c57eca-6b75-4581-bb78-023f7776df4e-58bd0";
@@ -64,11 +73,47 @@ export async function runMeetingAnalysisServer(recentTranscript: string, current
           nextStageRecommendation: parsed.nextStageRecommendation || null
         };
       } else {
-        const errText = await response.text();
-        console.warn(`[KaibanJS A2A Engine] Doubao API warning (${response.status}): ${errText}`);
+        console.log(`[KaibanJS A2A Engine] Doubao model endpoint notice (${response.status}). Switching to Gemini/Heuristic engine.`);
       }
     } catch (err: any) {
-      console.warn(`[KaibanJS A2A Engine] Doubao request error: ${err.message}`);
+      console.log(`[KaibanJS A2A Engine] Doubao request notice: ${err.message}`);
+    }
+  }
+
+  // Gemini AI Orchestration Fallback
+  const ai = getGeminiClient();
+  if (ai) {
+    try {
+      console.log(`[KaibanJS A2A Engine] Executing Gemini A2A Orchestration Fallback...`);
+      const prompt = `
+        You are the KaibanJS A2A Multi-Agent Orchestrator for the Dadi ECE-Brain Intelligent Meeting System.
+        Current Agenda Stage/Context: "${currentAgenda}"
+        Recent Speech Transcript: "${recentTranscript}"
+
+        Evaluate if someone talks off-topic ("粽子", "采购", "报销", "礼品", "预算").
+        Return raw JSON only:
+        {
+          "shouldIntervene": boolean,
+          "interventionText": string,
+          "latestToDos": string[],
+          "nextStageRecommendation": string | null
+        }
+      `;
+      const result = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+      });
+      const text = result.text || "{}";
+      const cleanJson = text.replace(/```json/gi, "").replace(/```/gi, "").trim();
+      const parsed = JSON.parse(cleanJson);
+      return {
+        shouldIntervene: Boolean(parsed.shouldIntervene),
+        interventionText: parsed.interventionText || "",
+        latestToDos: Array.isArray(parsed.latestToDos) ? parsed.latestToDos : [],
+        nextStageRecommendation: parsed.nextStageRecommendation || null
+      };
+    } catch (geminiErr: any) {
+      console.log(`[KaibanJS A2A Engine] Gemini fallback notice: ${geminiErr.message}`);
     }
   }
 

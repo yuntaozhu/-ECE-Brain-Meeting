@@ -1,8 +1,10 @@
 import { useMeetingStore } from "../store";
+import { logger } from "../lib/logger";
+import { telemetry } from "../lib/telemetry";
 import { 
   Copy, Mic, MicOff, Video, VideoOff, LogOut, Loader2, Play, Users, 
   HelpCircle, Sparkles, MessageSquare, ShieldAlert, CheckCircle2,
-  Zap, Clock, Shuffle, ChevronRight, Settings, Shield, Lock
+  Zap, Clock, Shuffle, ChevronRight, Settings, Shield, Lock, Activity
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -95,8 +97,11 @@ export default function MainRoom() {
             if (serverState.agendaStage && serverState.agendaStage !== currentState.agendaStage) {
               useMeetingStore.setState({ agendaStage: serverState.agendaStage });
             }
-            if (serverState.transcript && serverState.transcript.length > currentState.transcript.length) {
-              useMeetingStore.setState({ transcript: serverState.transcript });
+            if (serverState.transcript && Array.isArray(serverState.transcript)) {
+              if (serverState.transcript.length > currentState.transcript.length) {
+                useMeetingStore.setState({ transcript: serverState.transcript });
+                logger.log('INFO', 'MeetingState', `多设备同步: 收到最新的会议发言数据 (${serverState.transcript.length} 条)`, { roomId: activeId, total: serverState.transcript.length });
+              }
             }
             if (serverState.mountedFiles) {
               useMeetingStore.setState({ mountedFiles: serverState.mountedFiles });
@@ -251,17 +256,22 @@ export default function MainRoom() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws/meeting?roomId=${activeId}&userName=${encodeURIComponent(userName || '参会者')}`;
 
+    telemetry.recordConnectionState('wsMeeting', 'CONNECTING', { endpoint: wsUrl });
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
       console.log("[WS Attendee] Connected to /ws/meeting broadcast bus");
+      telemetry.recordConnectionState('wsMeeting', 'CONNECTED', { endpoint: wsUrl });
       setWsConnected(true);
     };
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        if (data.msgId) {
+          telemetry.endLatencyTimer(data.msgId, 'SUCCESS');
+        }
         if (data.type === 'chat' || data.text) {
           addTranscriptLine(data.sender || '广播系统', data.text);
         }
@@ -270,8 +280,13 @@ export default function MainRoom() {
       }
     };
 
+    ws.onerror = (err: any) => {
+      telemetry.recordConnectionState('wsMeeting', 'ERROR', { endpoint: wsUrl, error: err?.message || 'WS Error' });
+    };
+
     ws.onclose = () => {
       console.log("[WS Attendee] Disconnected from /ws/meeting");
+      telemetry.recordConnectionState('wsMeeting', 'DISCONNECTED', { endpoint: wsUrl });
       setWsConnected(false);
     };
 
@@ -519,10 +534,10 @@ export default function MainRoom() {
             variant="outline" 
             size="sm" 
             onClick={() => setShowDebugConsole(true)}
-            className="text-[10px] border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 rounded-lg h-8 font-mono animate-pulse"
+            className="text-[10px] border-cyan-500/40 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 rounded-lg h-8 font-mono shadow-[0_0_12px_rgba(6,182,212,0.2)]"
           >
-            <Terminal className="h-3 w-3 mr-1 text-amber-400" />
-            🛠️ AI调试日志控制台
+            <Activity className="h-3 w-3 mr-1 text-cyan-400 animate-pulse" />
+            📡 遥测与调试控制台
           </Button>
 
           <Button 

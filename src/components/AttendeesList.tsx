@@ -12,7 +12,6 @@ interface AttendeesListProps {
 
 export function AttendeesList({ meetingId: propMeetingId, className = '' }: AttendeesListProps) {
   const storeMeetingId = useMeetingStore((state) => state.meetingId);
-  const setTencentParticipants = useMeetingStore((state) => state.setTencentParticipants);
   const tencentParticipants = useMeetingStore((state) => state.tencentParticipants);
 
   const activeMeetingId = propMeetingId || storeMeetingId || '10086';
@@ -37,44 +36,41 @@ export function AttendeesList({ meetingId: propMeetingId, className = '' }: Atte
       if (data.success && data.data?.participants) {
         const fetched: TencentParticipant[] = data.data.participants;
         
-        setParticipants(prevParticipants => {
-          // Merge fetched with current participants to preserve users joining via link
-          const currentStore = tencentParticipants || [];
-          const map = new Map<string, TencentParticipant>();
-          fetched.forEach(p => map.set(p.userName, p));
-          currentStore.forEach(p => {
-            if (!map.has(p.userName)) {
-              map.set(p.userName, p);
-            }
-          });
-          prevParticipants.forEach(p => {
-            if (!map.has(p.userName)) {
-              map.set(p.userName, p);
-            }
-          });
-          const merged = Array.from(map.values());
+        // Read current store state directly to avoid reactive dependency loops
+        const currentStore = useMeetingStore.getState().tencentParticipants || [];
+        const map = new Map<string, TencentParticipant>();
+        fetched.forEach(p => map.set(p.userName, p));
+        currentStore.forEach(p => {
+          if (!map.has(p.userName)) {
+            map.set(p.userName, p);
+          }
+        });
+        const merged = Array.from(map.values());
 
-          // Detect new members joining
+        // Check for newly joined members before updating state
+        setParticipants(prevParticipants => {
           if (prevParticipants.length > 0 && merged.length > prevParticipants.length) {
             const latest = merged[merged.length - 1];
-            setNewMemberAlert(`新参会者 ${latest.userName} 已加入会议！`);
-            setTimeout(() => setNewMemberAlert(null), 4000);
+            setTimeout(() => {
+              setNewMemberAlert(`新参会者 ${latest.userName} 已加入会议！`);
+              setTimeout(() => setNewMemberAlert(null), 4000);
+            }, 0);
           }
-
-          setTencentParticipants(merged);
           return merged;
         });
 
+        // Synchronize store outside of state updater callback
+        useMeetingStore.getState().setTencentParticipants(merged);
         setLastUpdated(new Date());
       } else {
         throw new Error(data.error || '获取参会成员列表失败');
       }
     } catch (err: any) {
-      console.warn('[AttendeesList] Failed to fetch participants from API, using store/fallback:', err.message);
+      console.log('[AttendeesList] Using synced store/fallback participants:', err.message);
       setError(err.message);
-      // Keep existing or fallback
-      if (tencentParticipants && tencentParticipants.length > 0) {
-        setParticipants(tencentParticipants);
+      const storeParticipants = useMeetingStore.getState().tencentParticipants;
+      if (storeParticipants && storeParticipants.length > 0) {
+        setParticipants(storeParticipants);
       } else {
         setParticipants(prev => prev.length > 0 ? prev : [
           { userId: 'daid_it', userName: '大地督导 (Host)', userRole: 'host', isMuted: false },
@@ -86,7 +82,7 @@ export function AttendeesList({ meetingId: propMeetingId, className = '' }: Atte
     } finally {
       if (isManual) setLoading(false);
     }
-  }, [activeMeetingId, tencentParticipants, setTencentParticipants]);
+  }, [activeMeetingId]);
 
   // Poll for real-time updates every 6 seconds
   useEffect(() => {

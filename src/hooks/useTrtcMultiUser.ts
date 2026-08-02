@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useMeetingStore } from "../store";
 import { useGeminiLive } from "./useGeminiLive";
+import { telemetry } from "../lib/telemetry";
 import TRTC from "trtc-js-sdk";
 
 export interface RemoteAttendee {
@@ -207,12 +208,14 @@ export function useTrtcMultiUser() {
         if (Number(sdkAppId) === 1400112233) {
           console.warn("[TRTC Client] Default placeholder SDKAppID (1400112233) detected. Activating pure TRTC Sandbox Simulation Tunnel.");
           setTrtcStatusText("TRTC Active (Sandbox Mode)");
+          telemetry.recordConnectionState('trtcState', 'CONNECTED', { endpoint: 'TRTC-Sandbox-10086' });
           addTranscriptLine("系统提示", "🎯 已成功直连腾讯云 TRTC 虚拟研讨室：Room 10086 (已激活硬件模拟机制)");
           return;
         }
 
         console.log(`[TRTC Client] Initializing Client with AppId: ${sdkAppId}, UserId: ${userId}`);
         setTrtcStatusText("Connecting TRTC...");
+        telemetry.recordConnectionState('trtcState', 'JOINING', { endpoint: `TRTC-AppId-${sdkAppId}` });
 
         // 2. Create high-fidelity TRTC Client session (Task 1)
         const client = TRTC.createClient({

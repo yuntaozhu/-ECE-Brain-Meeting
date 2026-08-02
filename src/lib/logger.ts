@@ -1,7 +1,7 @@
 export interface LogEntry {
   id: string;
   timestamp: string;
-  level: 'INFO' | 'WARN' | 'ERROR' | 'API' | 'TENCENT' | 'SIGNATURE' | 'LLM';
+  level: 'INFO' | 'WARN' | 'ERROR' | 'API' | 'TENCENT' | 'SIGNATURE' | 'LLM' | 'TELEMETRY';
   category: string;
   message: string;
   data?: any;
