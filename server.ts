@@ -428,10 +428,13 @@ app.post("/api/trtc/usersig", async (req, res) => {
       userSig = `mock_sig_${userId}_${Date.now()}`;
     }
 
+    const isPlaceholderKey = !process.env.TRTC_SECRET_KEY || secretKey === "laTTal0Lj2OpGijqIlRBvejyJu7SsIpS" || actualSdkAppId === 1400112233;
+
     res.json({
       userSig,
       sdkAppId: actualSdkAppId,
       userId,
+      isPlaceholderKey,
       time: Math.floor(Date.now() / 1000)
     });
   } catch (err: any) {
