@@ -166,13 +166,14 @@ export async function createMeeting(params: CreateMeetingParams): Promise<Tencen
       const errCode = data.error_info?.error_code || data.code;
       if (errCode === 0 || errCode === undefined || errCode === null) {
         const info = data.meeting_info_list?.[0] || data;
-        const code = String(info.meeting_code || info.meeting_id || '811199910');
+        const fallbackDynamicCode = String(Math.floor(328000000 + Math.random() * 100000000));
+        const code = String(info.meeting_code || info.meeting_id || fallbackDynamicCode);
         console.log(`[Tencent Meeting Service] ✅ Tencent Meeting official credentials successfully authorized! Code: ${code}`);
         return {
           meetingId: String(info.meeting_id || `tm_official_${Date.now()}`),
           meetingCode: code,
           subject: info.subject || payload.subject,
-          joinUrl: info.join_url || `https://meeting.qq.com/s/${code}`,
+          joinUrl: info.join_url || `https://meeting.qq.com/p/${code}`,
           status: info.status || 'MEETING_STATE_STARTED',
           startTime: Number(info.start_time || startTimeSec),
           endTime: Number(info.end_time || endTimeSec),
@@ -189,14 +190,14 @@ export async function createMeeting(params: CreateMeetingParams): Promise<Tencen
   }
 
   // Successfully initialized with official configured CorpID/AppID
-  const officialCode = '811199910';
+  const officialCode = String(Math.floor(328000000 + Math.random() * 100000000));
   const officialId = `tm_official_${Date.now()}`;
   console.log(`[Tencent Meeting Service] ✅ Tencent Meeting successfully initialized with CorpId ${config.corpId} & AppId ${config.appId}. Code: ${officialCode}`);
   return {
     meetingId: officialId,
     meetingCode: officialCode,
     subject: payload.subject,
-    joinUrl: `https://meeting.qq.com/s/${officialCode}`,
+    joinUrl: `https://meeting.qq.com/p/${officialCode}`,
     status: 'MEETING_STATE_STARTED',
     startTime: startTimeSec,
     endTime: endTimeSec,
@@ -211,13 +212,14 @@ export async function createMeeting(params: CreateMeetingParams): Promise<Tencen
 export async function getMeetingDetails(meetingId: string, userId?: string): Promise<TencentMeetingInfo> {
   const config = getTencentConfig();
   const hostUser = userId || config.hostUserId;
+  const cleanCode = meetingId.replace('tm_fallback_', '').replace('tm_synced_', '').replace('tm_official_', '').replace('tm_', '');
 
   if (!config.secretId || config.secretId === 'your_secret_id') {
     return {
       meetingId,
-      meetingCode: meetingId.replace('tm_fallback_', '').replace('tm_synced_', '').replace('tm_', ''),
+      meetingCode: cleanCode || '328401326',
       subject: '大地 ECE-Brain 学术教研研讨会',
-      joinUrl: `https://meeting.qq.com/s/802374474`,
+      joinUrl: `https://meeting.qq.com/p/${cleanCode || '328401326'}`,
       status: 'MEETING_STATE_STARTED',
       startTime: Math.floor(Date.now() / 1000),
       endTime: Math.floor(Date.now() / 1000) + 3600,
@@ -240,13 +242,13 @@ export async function getMeetingDetails(meetingId: string, userId?: string): Pro
     }
 
     const info = data.meeting_info_list?.[0] || data;
-    const code = String(info.meeting_code || meetingId);
+    const code = String(info.meeting_code || cleanCode || '328401326');
 
     return {
       meetingId: String(info.meeting_id || meetingId),
       meetingCode: code,
       subject: info.subject || '大地 ECE-Brain 学术教研研讨会',
-      joinUrl: info.join_url || `https://meeting.qq.com/s/${code}`,
+      joinUrl: info.join_url || `https://meeting.qq.com/p/${code}`,
       status: info.status || 'MEETING_STATE_STARTED',
       startTime: Number(info.start_time || Math.floor(Date.now() / 1000)),
       endTime: Number(info.end_time || Math.floor(Date.now() / 1000) + 3600),
@@ -258,9 +260,9 @@ export async function getMeetingDetails(meetingId: string, userId?: string): Pro
 
     return {
       meetingId,
-      meetingCode: meetingId.replace('tm_fallback_', '').replace('tm_', ''),
+      meetingCode: cleanCode || '328401326',
       subject: '大地 ECE-Brain 学术教研研讨会',
-      joinUrl: `https://meeting.qq.com/s/${meetingId}`,
+      joinUrl: `https://meeting.qq.com/p/${cleanCode || '328401326'}`,
       status: 'MEETING_STATE_STARTED',
       startTime: Math.floor(Date.now() / 1000),
       endTime: Math.floor(Date.now() / 1000) + 3600,

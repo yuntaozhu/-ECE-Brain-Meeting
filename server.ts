@@ -6,6 +6,7 @@ import { createServer as createViteServer } from "vite";
 import { WebSocketServer } from "ws";
 import { runMeetingAnalysisServer } from "./src/lib/kaibanMeetingEngine.server";
 import tencentMeetingRouter from "./server/routes/tencentMeeting";
+import { setupMeetingWebSocket } from "./server/websocketMeeting";
 
 const app = express();
 const server = http.createServer(app);
@@ -388,69 +389,7 @@ if (!process.env.VERCEL) {
       console.log(`Server running on http://localhost:${PORT}`);
     });
 
-    const wss = new WebSocketServer({ noServer: true });
-
-    server.on("upgrade", (request, socket, head) => {
-      const pathname = request.url ? new URL(request.url, `http://${request.headers.host || "localhost"}`).pathname : "";
-      if (pathname === "/api/live/stream") {
-        wss.handleUpgrade(request, socket, head, (ws) => {
-          wss.emit("connection", ws, request);
-        });
-      } else {
-        socket.destroy();
-      }
-    });
-
-    wss.on("connection", async (ws) => {
-      console.log("Client connected to Doubao Meeting stream bridge");
-      const doubaoApiKey = process.env.DOUBAO_API_KEY || "ark-20c57eca-6b75-4581-bb78-023f7776df4e-58bd0";
-
-      ws.send(JSON.stringify({ 
-        text: "【大地 ECE-Brain 智慧教研】已成功连接至豆包大模型与腾讯会议开放平台搜索服务协同桥接网关。会议主席（大地督导）已就位。", 
-        speaker: "大地督导" 
-      }));
-
-      ws.on("message", async (msg) => {
-        try {
-          const parsed = JSON.parse(msg.toString());
-          if (parsed.text) {
-            console.log("Received control command text for Doubao:", parsed.text);
-            const response = await fetch("https://ark.cn-beijing.volces.com/api/v3/chat/completions", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${doubaoApiKey}`
-              },
-              body: JSON.stringify({
-                model: "doubao-seed-2-1-pro-260628",
-                messages: [
-                  { role: "system", content: "你现在是‘大地 ECE-Brain 智慧教研室’具有绝对威严的主持主席（大地数字教研总督导），由豆包大模型驱动。请针对以下系统指令或参会发言进行强势、威严、求真高效的教研纠偏与主席发言，字数在35字以内：" },
-                  { role: "user", content: parsed.text }
-                ],
-                temperature: 0.3
-              })
-            });
-
-            if (response.ok) {
-              const data = await response.json();
-              const reply = data.choices?.[0]?.message?.content || "请各位园长聚焦托班互动硬件立项，切勿讨论无关采购！";
-              ws.send(JSON.stringify({ text: reply, speaker: "大地督导 (豆包驱动)" }));
-            } else {
-              ws.send(JSON.stringify({ text: `【督导插话】收到指令：“${parsed.text}”。请各单位专注托班互动硬件与注意力捕捉算法论证！`, speaker: "大地督导" }));
-            }
-          } else if (parsed.audio) {
-            // Audio data received from mic, simulate smart voice response periodically or on threshold
-            // Send acknowledgement or brief feedback
-          }
-        } catch (e) {
-          console.error("Error processing WebSocket message:", e);
-        }
-      });
-
-      ws.on("close", () => {
-        console.log("Doubao meeting stream client disconnected.");
-      });
-    });
+    setupMeetingWebSocket(server);
   });
 }
 

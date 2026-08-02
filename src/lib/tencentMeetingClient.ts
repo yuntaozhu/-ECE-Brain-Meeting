@@ -109,7 +109,7 @@ export class TencentMeetingClient {
         meetingId: `tm_client_fallback_${Date.now()}`,
         meetingCode: fallbackCode,
         subject: params.subject || '大地 ECE-Brain 学术教研研讨会',
-        joinUrl: `https://meeting.qq.com/s/${fallbackCode}`,
+        joinUrl: `https://meeting.qq.com/p/${fallbackCode}`,
         status: 'MEETING_STATE_STARTED',
         startTime: Math.floor(Date.now() / 1000),
         endTime: Math.floor(Date.now() / 1000) + 3600,
@@ -144,7 +144,7 @@ export class TencentMeetingClient {
         meetingId,
         meetingCode: meetingId.replace('tm_client_fallback_', '').replace('tm_', ''),
         subject: '大地 ECE-Brain 学术教研研讨会',
-        joinUrl: `https://meeting.qq.com/s/${meetingId}`,
+        joinUrl: `https://meeting.qq.com/p/${meetingId.replace('tm_client_fallback_', '').replace('tm_', '')}`,
         status: 'MEETING_STATE_STARTED',
         currentParticipantsCount: 3
       };

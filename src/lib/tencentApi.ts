@@ -170,13 +170,14 @@ function getSandboxFallbackResponse(uri: string, method: string, bodyData?: any)
     };
   }
   if (uri.includes('/v1/meetings/')) {
-    const meetingId = uri.split('/')[3] || '811199910';
+    const meetingId = uri.split('/')[3] || String(Math.floor(328000000 + Math.random() * 100000000));
+    const meetingCode = meetingId.replace('tm_fallback_', '').replace('tm_custom_', '').replace('tm_', '');
     return {
       code: 0,
       msg: 'success',
       meeting_info_list: [{
         meeting_id: meetingId,
-        meeting_code: meetingId.replace('tm_fallback_', ''),
+        meeting_code: meetingCode,
         subject: bodyData?.subject || '大地 ECE-Brain 学术教研研讨会',
         start_time: Math.floor(Date.now() / 1000).toString(),
         end_time: (Math.floor(Date.now() / 1000) + 3600).toString(),
@@ -184,24 +185,25 @@ function getSandboxFallbackResponse(uri: string, method: string, bodyData?: any)
         status: 1
       }],
       meeting_id: meetingId,
-      meeting_code: meetingId.replace('tm_fallback_', ''),
+      meeting_code: meetingCode,
       subject: bodyData?.subject || '大地 ECE-Brain 学术教研研讨会'
     };
   }
   if (method === 'POST' || uri.includes('/meetings')) {
-    const meetingId = '811199910';
+    const meetingCode = String(Math.floor(328000000 + Math.random() * 100000000));
+    const meetingId = `tm_${meetingCode}`;
     return {
       code: 0,
       msg: 'success',
       meeting_info_list: [{
         meeting_id: meetingId,
-        meeting_code: meetingId,
+        meeting_code: meetingCode,
         subject: bodyData?.subject || '大地 ECE-Brain 学术教研研讨会',
-        join_url: `https://meeting.qq.com/s/${meetingId}`
+        join_url: `https://meeting.qq.com/p/${meetingCode}`
       }],
       meeting_id: meetingId,
-      meeting_code: meetingId,
-      join_url: `https://meeting.qq.com/s/${meetingId}`
+      meeting_code: meetingCode,
+      join_url: `https://meeting.qq.com/p/${meetingCode}`
     };
   }
   return { code: 0, msg: 'success', data: {} };

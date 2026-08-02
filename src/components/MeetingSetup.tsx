@@ -267,11 +267,13 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
     let tencentData = null;
 
     if (tencentSyncToggle) {
+      const currentOrigin = typeof window !== "undefined" ? window.location.origin : "https://dadimeeting.minervaedu.app";
+
       if (customTencentMeetingId.trim()) {
         const customCode = customTencentMeetingId.trim().replace(/\s+/g, '');
         tencentData = {
           meetingCode: customCode,
-          joinUrl: `https://meeting.qq.com/s/${customCode}`,
+          joinUrl: `${currentOrigin}/?roomId=${customCode}&role=attendee`,
           meetingId: `tm_custom_${customCode}`
         };
         setTencentMeetingResult(tencentData);
@@ -317,9 +319,10 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
             }
           });
 
+          const directJoinUrl = `${currentOrigin}/?roomId=${meetingInfo.meetingCode}&role=attendee`;
           tencentData = {
             meetingCode: meetingInfo.meetingCode,
-            joinUrl: meetingInfo.joinUrl,
+            joinUrl: directJoinUrl,
             meetingId: meetingInfo.meetingId
           };
 
@@ -329,16 +332,17 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
             meetingId: meetingInfo.meetingId,
             meetingCode: meetingInfo.meetingCode,
             subject: topicInput.trim(),
-            joinUrl: meetingInfo.joinUrl,
+            joinUrl: directJoinUrl,
             status: 'MEETING_STATE_STARTED',
             currentParticipantsCount: 3
           });
         } catch (err) {
           console.warn("[MeetingSetup] Tencent Meeting API fallback mode activated:", err);
           const fallbackCode = String(Math.floor(328000000 + Math.random() * 100000000));
+          const directJoinUrl = `${currentOrigin}/?roomId=${fallbackCode}&role=attendee`;
           tencentData = {
             meetingCode: fallbackCode,
-            joinUrl: `https://meeting.qq.com/s/${fallbackCode}`,
+            joinUrl: directJoinUrl,
             meetingId: `tm_fallback_${Date.now()}`
           };
           setTencentMeetingResult(tencentData);
@@ -347,7 +351,7 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
             meetingId: tencentData.meetingId,
             meetingCode: tencentData.meetingCode,
             subject: topicInput.trim(),
-            joinUrl: tencentData.joinUrl,
+            joinUrl: directJoinUrl,
             status: 'MEETING_STATE_STARTED',
             currentParticipantsCount: 3
           });
@@ -357,11 +361,9 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
 
     const activeRoomId = tencentData ? tencentData.meetingCode : meetingRoomId;
 
-    // Generate link for standard attendee with production domain
-    const origin = typeof window !== "undefined" && window.location.hostname.includes("dadimeeting.minervaedu.app")
-      ? window.location.origin 
-      : "https://dadimeeting.minervaedu.app";
-    const invite = `${origin}?role=attendee&roomId=${activeRoomId}`;
+    // Generate link for standard attendee with current active domain
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://dadimeeting.minervaedu.app";
+    const invite = `${origin}/?role=attendee&roomId=${activeRoomId}`;
     setInviteUrl(invite);
     
     setIsCreatingTencentMeeting(false);
@@ -903,13 +905,23 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
                     </div>
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono pt-1">
-                      <div className="bg-black/60 p-2 rounded-lg border border-white/10">
-                        <span className="text-[9px] text-slate-400 block uppercase">腾讯会议号</span>
-                        <span className="text-cyan-400 font-bold text-sm tracking-wider">{tencentMeetingResult.meetingCode}</span>
+                      <div className="bg-black/60 p-2 rounded-lg border border-white/10 flex flex-col justify-between">
+                        <div>
+                          <span className="text-[9px] text-slate-400 block uppercase">腾讯会议号</span>
+                          <span className="text-cyan-400 font-bold text-sm tracking-wider">{tencentMeetingResult.meetingCode}</span>
+                        </div>
+                        <a 
+                          href={`https://meeting.qq.com/p/${tencentMeetingResult.meetingCode}`} 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className="text-[10px] text-slate-400 hover:text-cyan-300 underline mt-1 block"
+                        >
+                          客户端调起入口 ↗
+                        </a>
                       </div>
                       <div className="bg-black/60 p-2 rounded-lg border border-white/10 truncate">
-                        <span className="text-[9px] text-slate-400 block uppercase">直达入会 URL</span>
-                        <a href={tencentMeetingResult.joinUrl} target="_blank" rel="noreferrer" className="text-blue-400 hover:underline text-[11px] truncate block">
+                        <span className="text-[9px] text-slate-400 block uppercase">直达研讨大本营 URL</span>
+                        <a href={tencentMeetingResult.joinUrl} target="_blank" rel="noreferrer" className="text-blue-400 hover:underline text-[11px] truncate block font-bold">
                           {tencentMeetingResult.joinUrl}
                         </a>
                       </div>
