@@ -13,6 +13,12 @@ export interface KaibanAnalysisResult {
   interventionText: string;
   latestToDos: string[];
   nextStageRecommendation?: AgendaStageType | null;
+  pushAudioStream?: boolean;
+  hostAgentPayload?: {
+    targetAgent: string;
+    audioOrchestratorNotify: boolean;
+    ttsText: string;
+  };
   a2aCommand?: {
     sender: string;
     target: string;

@@ -32,7 +32,13 @@ export async function runMeetingAnalysisServer(recentTranscript: string, current
           "shouldIntervene": boolean,
           "interventionText": "string",
           "latestToDos": ["string"],
-          "nextStageRecommendation": "IceBreaking" | "MainDiscussion" | "Conclusion" | null
+          "nextStageRecommendation": "IceBreaking" | "MainDiscussion" | "Conclusion" | null,
+          "pushAudioStream": boolean,
+          "hostAgentPayload": {
+            "targetAgent": "HostAgent",
+            "audioOrchestratorNotify": boolean,
+            "ttsText": "string"
+          }
         }
       `;
 
@@ -63,13 +69,20 @@ export async function runMeetingAnalysisServer(recentTranscript: string, current
           interventionText: parsed.interventionText || "",
           latestToDos: Array.isArray(parsed.latestToDos) ? parsed.latestToDos : [],
           nextStageRecommendation: parsed.nextStageRecommendation || null,
+          pushAudioStream: Boolean(parsed.pushAudioStream || parsed.shouldIntervene),
+          hostAgentPayload: parsed.hostAgentPayload || {
+            targetAgent: "HostAgent",
+            audioOrchestratorNotify: Boolean(parsed.shouldIntervene),
+            ttsText: parsed.interventionText || ""
+          },
           a2aCommand: Boolean(parsed.shouldIntervene) ? {
             sender: "DirectorAgent",
             target: "AudioOrchestrator",
             action: "ROUTE_AUDIO_TRTC",
             payload: {
               interventionText: parsed.interventionText || "",
-              reason: "OFF_TOPIC_OR_SILENCE"
+              pushAudioStream: true,
+              reason: "OFF_TOPIC_OR_SILENCE_DOUBAO"
             }
           } : undefined
         };
