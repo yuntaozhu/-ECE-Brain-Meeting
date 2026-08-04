@@ -20,6 +20,7 @@ import { SystemDebugConsole } from "./SystemDebugConsole";
 import { ApiHealthPanel } from "./ApiHealthPanel";
 import { AttendeesList } from "./AttendeesList";
 import { ChatBox } from "./ChatBox";
+import { AudioOrchestrator } from "./AudioOrchestrator";
 import { Terminal } from "lucide-react";
 
 export default function MainRoom() {
@@ -603,6 +604,9 @@ export default function MainRoom() {
           <pre className="whitespace-pre-wrap font-sans">{getAudioMixingConcept()}</pre>
         </div>
       )}
+
+      {/* AudioOrchestrator: Routes AI TTS to TRTC stream via A2A protocol */}
+      <AudioOrchestrator />
 
       {/* TASK 2 COMPLIANCE: AI PROACTIVE ORCHESTRATION PACEMAKER CONTROL CONSOLE */}
       <div className="mb-6 p-4 rounded-2xl border border-dashed border-cyan-500/30 bg-cyan-950/5 relative overflow-hidden backdrop-blur shadow-[0_0_20px_rgba(6,182,212,0.03)]">

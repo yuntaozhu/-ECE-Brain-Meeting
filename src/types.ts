@@ -13,6 +13,12 @@ export interface KaibanAnalysisResult {
   interventionText: string;
   latestToDos: string[];
   nextStageRecommendation?: AgendaStageType | null;
+  a2aCommand?: {
+    sender: string;
+    target: string;
+    action: string;
+    payload: any;
+  };
 }
 
 export interface TranscriptLine {

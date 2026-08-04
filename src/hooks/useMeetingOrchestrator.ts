@@ -104,10 +104,28 @@ export function useMeetingOrchestrator() {
           );
         }
 
-        // 3. Control Injection (Task 2)
+        // 3. Control Injection (Task 2 & AudioOrchestrator A2A Flow)
         if (result.shouldIntervene && result.interventionText) {
           setOrchestratorStatus("Intervening");
           setAiIntervention(result.interventionText);
+
+          // Emit A2A command to AudioOrchestrator via Socket.IO
+          try {
+            const { io } = await import("socket.io-client");
+            const sock = io("/ws/meeting", { query: { roomId: "10086", userName: "DirectorAgent", userRole: "agent" } });
+            sock.emit("a2a_event", {
+              sender: "DirectorAgent",
+              target: "AudioOrchestrator",
+              action: "ROUTE_AUDIO_TRTC",
+              payload: {
+                interventionText: result.interventionText,
+                reason: "OFF_TOPIC_DETECTED_BY_DIRECTOR"
+              }
+            });
+            setTimeout(() => sock.disconnect(), 1000);
+          } catch (sockErr) {
+            console.warn("Socket A2A emit note:", sockErr);
+          }
 
           // Force voice barge-in by relaying the commanding text over the WS connection
           if (isConnected) {

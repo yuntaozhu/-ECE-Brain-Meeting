@@ -62,7 +62,16 @@ export async function runMeetingAnalysisServer(recentTranscript: string, current
           shouldIntervene: Boolean(parsed.shouldIntervene),
           interventionText: parsed.interventionText || "",
           latestToDos: Array.isArray(parsed.latestToDos) ? parsed.latestToDos : [],
-          nextStageRecommendation: parsed.nextStageRecommendation || null
+          nextStageRecommendation: parsed.nextStageRecommendation || null,
+          a2aCommand: Boolean(parsed.shouldIntervene) ? {
+            sender: "DirectorAgent",
+            target: "AudioOrchestrator",
+            action: "ROUTE_AUDIO_TRTC",
+            payload: {
+              interventionText: parsed.interventionText || "",
+              reason: "OFF_TOPIC_OR_SILENCE"
+            }
+          } : undefined
         };
       } else {
         console.log(`[KaibanJS A2A Engine] Doubao Ark API response status ${response.status}. Falling back to Doubao A2A Rule Engine.`);
@@ -126,6 +135,15 @@ function runLocalHeuristicFallback(recentTranscript: string, currentAgenda: stri
     shouldIntervene,
     interventionText,
     latestToDos: defaultToDos,
-    nextStageRecommendation
+    nextStageRecommendation,
+    a2aCommand: shouldIntervene ? {
+      sender: "DirectorAgent",
+      target: "AudioOrchestrator",
+      action: "ROUTE_AUDIO_TRTC",
+      payload: {
+        interventionText,
+        reason: "OFF_TOPIC_FALLBACK"
+      }
+    } : undefined
   };
 }
