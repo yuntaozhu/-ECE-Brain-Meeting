@@ -82,6 +82,12 @@ export function useMeetingOrchestrator() {
         // 1. Process To-Dos
         if (result.latestToDos && result.latestToDos.length > 0) {
           setLatestToDos(result.latestToDos);
+          // Sync SecretaryAgent TODOs to Tencent Meeting Docs API
+          fetch("/api/tencent/doc/append", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ todos: result.latestToDos })
+          }).catch(() => {});
         }
 
         // 2. Process Agenda Stage transition recommendation (Task 3)
@@ -121,8 +127,8 @@ export function useMeetingOrchestrator() {
           setOrchestratorStatus("Idle");
         }
       }
-    } catch (err) {
-      console.error("KaibanJS orchestration evaluating cycle error:", err);
+    } catch (err: any) {
+      console.warn("KaibanJS orchestration evaluating cycle notice:", err?.message || err);
       setOrchestratorStatus("Idle");
     } finally {
       setAnalyzing(false);

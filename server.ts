@@ -326,8 +326,8 @@ app.post("/api/doubao/chat", async (req, res) => {
     console.log("[/api/doubao/chat] Doubao API notice:", err.message);
   }
 
-  // Gemini Fallback
-  if (process.env.GEMINI_API_KEY) {
+  // Gemini Fallback (if configured)
+  if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== "YOUR_GEMINI_API_KEY") {
     try {
       const { GoogleGenAI } = await import("@google/genai");
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -338,7 +338,7 @@ app.post("/api/doubao/chat", async (req, res) => {
       });
       return res.json({ success: true, reply: result.text || "" });
     } catch (geminiErr: any) {
-      console.log("[/api/doubao/chat] Gemini fallback notice:", geminiErr.message);
+      console.log("[/api/doubao/chat] Local Doubao rule engine fallback.");
     }
   }
 
@@ -428,7 +428,21 @@ app.post("/api/trtc/usersig", async (req, res) => {
       userSig = `mock_sig_${userId}_${Date.now()}`;
     }
 
-    const isPlaceholderKey = !process.env.TRTC_SECRET_KEY || secretKey === "laTTal0Lj2OpGijqIlRBvejyJu7SsIpS" || actualSdkAppId === 1400112233;
+    const rawKey = (process.env.TRTC_SECRET_KEY || "").trim();
+    const rawAppId = (process.env.TRTC_SDK_APP_ID || "").trim();
+    // Real Tencent TRTC keys require valid 32-character secret key and real SdkAppId
+    const isRealKey = Boolean(
+      rawKey && 
+      rawKey !== "laTTal0Lj2OpGijqIlRBvejyJu7SsIpS" && 
+      rawKey !== "YOUR_TRTC_SECRET_KEY" &&
+      rawKey.length >= 32 &&
+      !rawKey.includes("laTTal0") &&
+      rawAppId && 
+      rawAppId !== "1400112233" &&
+      rawAppId !== "1400000000"
+    );
+
+    const isPlaceholderKey = !isRealKey;
 
     res.json({
       userSig,

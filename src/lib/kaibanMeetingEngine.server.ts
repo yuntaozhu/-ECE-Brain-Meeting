@@ -1,21 +1,13 @@
 import { KaibanAnalysisResult } from "../types";
-import { GoogleGenAI } from "@google/genai";
-
-let genAIClient: GoogleGenAI | null = null;
-function getGeminiClient(): GoogleGenAI | null {
-  if (!genAIClient && process.env.GEMINI_API_KEY) {
-    genAIClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  }
-  return genAIClient;
-}
 
 export async function runMeetingAnalysisServer(recentTranscript: string, currentAgenda: string): Promise<KaibanAnalysisResult> {
   const doubaoApiKey = process.env.DOUBAO_API_KEY || "ark-20c57eca-6b75-4581-bb78-023f7776df4e-58bd0";
+  const doubaoModel = process.env.DOUBAO_MODEL_ENDPOINT || "doubao-seed-2-1-turbo-260628";
 
-  // KaibanJS A2A (Agent-to-Agent) Multi-Agent Orchestration Engine
+  // KaibanJS A2A Multi-Agent Orchestration Engine powered by Doubao LLM
   if (doubaoApiKey) {
     try {
-      console.log(`[KaibanJS A2A Engine] Executing 4-Agent Orchestration (Director, Host, Secretary, Researcher)...`);
+      console.log(`[KaibanJS A2A Engine] Executing Doubao 4-Agent Orchestration (Director, Host, Secretary, Researcher)...`);
       const prompt = `
         You are the KaibanJS A2A Multi-Agent Orchestrator for the Dadi ECE-Brain Intelligent Meeting System.
         
@@ -51,9 +43,9 @@ export async function runMeetingAnalysisServer(recentTranscript: string, current
           "Authorization": `Bearer ${doubaoApiKey}`
         },
         body: JSON.stringify({
-          model: "doubao-seed-2-1-turbo-260628",
+          model: doubaoModel,
           messages: [
-            { role: "system", content: "You are the KaibanJS A2A Engine executing multi-agent meeting supervision." },
+            { role: "system", content: "You are the KaibanJS A2A Engine executing multi-agent meeting supervision powered by Doubao LLM." },
             { role: "user", content: prompt }
           ],
           temperature: 0.2
@@ -73,51 +65,14 @@ export async function runMeetingAnalysisServer(recentTranscript: string, current
           nextStageRecommendation: parsed.nextStageRecommendation || null
         };
       } else {
-        console.log(`[KaibanJS A2A Engine] Doubao model endpoint notice (${response.status}). Switching to Gemini/Heuristic engine.`);
+        console.log(`[KaibanJS A2A Engine] Doubao Ark API response status ${response.status}. Falling back to Doubao A2A Rule Engine.`);
       }
     } catch (err: any) {
-      console.log(`[KaibanJS A2A Engine] Doubao request notice: ${err.message}`);
+      console.log(`[KaibanJS A2A Engine] Doubao request note: ${err?.message || err}`);
     }
   }
 
-  // Gemini AI Orchestration Fallback
-  const ai = getGeminiClient();
-  if (ai) {
-    try {
-      console.log(`[KaibanJS A2A Engine] Executing Gemini A2A Orchestration Fallback...`);
-      const prompt = `
-        You are the KaibanJS A2A Multi-Agent Orchestrator for the Dadi ECE-Brain Intelligent Meeting System.
-        Current Agenda Stage/Context: "${currentAgenda}"
-        Recent Speech Transcript: "${recentTranscript}"
-
-        Evaluate if someone talks off-topic ("粽子", "采购", "报销", "礼品", "预算").
-        Return raw JSON only:
-        {
-          "shouldIntervene": boolean,
-          "interventionText": string,
-          "latestToDos": string[],
-          "nextStageRecommendation": string | null
-        }
-      `;
-      const result = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: prompt,
-      });
-      const text = result.text || "{}";
-      const cleanJson = text.replace(/```json/gi, "").replace(/```/gi, "").trim();
-      const parsed = JSON.parse(cleanJson);
-      return {
-        shouldIntervene: Boolean(parsed.shouldIntervene),
-        interventionText: parsed.interventionText || "",
-        latestToDos: Array.isArray(parsed.latestToDos) ? parsed.latestToDos : [],
-        nextStageRecommendation: parsed.nextStageRecommendation || null
-      };
-    } catch (geminiErr: any) {
-      console.log(`[KaibanJS A2A Engine] Gemini fallback notice: ${geminiErr.message}`);
-    }
-  }
-
-  // Local A2A Heuristic Fallback Engine
+  // Local Doubao A2A Heuristic Fallback Engine
   return runLocalHeuristicFallback(recentTranscript, currentAgenda);
 }
 
