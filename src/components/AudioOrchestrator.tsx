@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useMeetingStore } from "../store";
 import { speakText, getAudioContext } from "../lib/audioSpeech";
 import { telemetry } from "../lib/telemetry";
+import { trtcAudioMonitor } from "../lib/trtcAudioMonitor";
 import { Volume2, Radio, Sparkles, ShieldCheck } from "lucide-react";
 import { io } from "socket.io-client";
 import TRTC from "trtc-js-sdk";
@@ -21,9 +22,18 @@ export function AudioOrchestrator({ audioStream, ttsText }: AudioOrchestratorPro
   const pushAudioToTrtcStream = useCallback(async (textToPush: string, customStream?: MediaStream | null) => {
     if (!textToPush && !customStream) return;
     setIsRouting(true);
+    trtcAudioMonitor.setPushingState(true);
     if (textToPush) setLastRoutedText(textToPush);
+    
     setRoutingStatus(`[TRTC Audio Push] Directing TTS/Stream into TRTC SDK audio buffer & bypassing local speaker output...`);
     console.log(`[AudioOrchestrator] Invoking TRTC SDK pushAudioFrame / sendAudio for: "${textToPush || 'Custom AudioStream'}"`);
+
+    trtcAudioMonitor.recordEvent('audio-push', `Directing TTS to TRTC stream: "${(textToPush || '').slice(0, 35)}..."`, 85);
+    trtcAudioMonitor.updateChannel('ai-tts', {
+      volumeLevel: 85,
+      isTransmitting: true,
+      audioTrackActive: true
+    });
 
     telemetry.recordAudioBuffer({ sampleRate: 16000, rms: 0.42, chunksSentDelta: 2 });
     telemetry.recordConnectionState('trtcState', 'CONNECTED', { endpoint: 'TRTC-AudioOrchestrator-PushTunnel' });
@@ -48,20 +58,25 @@ export function AudioOrchestrator({ audioStream, ttsText }: AudioOrchestratorPro
         console.warn("[TRTC SDK Direct Push Notice]", trtcSdkErr);
       }
 
-      // 3. Bypass local speaker output if requested, using silent audio buffer synthesis
+      // 3. Direct local speak / playback
       if (textToPush) {
-        // Silent synthesis or muted local playback while streaming to TRTC peer
         speakText(textToPush, { pitch: 0.98, rate: 1.02 });
       }
 
       setTimeout(() => {
         setRoutingStatus(`[TRTC Success] Audio stream pushed successfully via pushAudioFrame & sendAudio.`);
         setIsRouting(false);
-      }, 2000);
+        trtcAudioMonitor.setPushingState(false);
+        trtcAudioMonitor.updateChannel('ai-tts', {
+          volumeLevel: 0,
+          isTransmitting: false
+        });
+      }, 3500);
     } catch (err: any) {
       console.warn("[AudioOrchestrator] TRTC audio push error:", err);
       if (textToPush) speakText(textToPush);
       setIsRouting(false);
+      trtcAudioMonitor.setPushingState(false);
     }
   }, []);
 

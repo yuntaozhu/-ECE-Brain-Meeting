@@ -3,6 +3,7 @@ import { useMeetingStore } from "../store";
 import { useGeminiLive } from "./useGeminiLive";
 import { speakText } from "../lib/audioSpeech";
 import { telemetry } from "../lib/telemetry";
+import { trtcAudioMonitor } from "../lib/trtcAudioMonitor";
 import TRTC from "trtc-js-sdk";
 
 export interface RemoteAttendee {
@@ -223,6 +224,13 @@ export function useTrtcMultiUser() {
                 evt.result.forEach((item: any) => {
                   const uid = item.userId;
                   const vol = item.audioVolume;
+                  
+                  // Report to TRTC Audio Monitor
+                  trtcAudioMonitor.updateChannel(uid || 'local-mic', {
+                    volumeLevel: vol,
+                    isTransmitting: vol > 0
+                  });
+
                   if (vol > 10) {
                     setRemoteUsers(prev => prev.map(u => u.id === uid ? { ...u, volumeLevel: vol, isSpeaking: true } : u));
                   } else {
@@ -238,6 +246,14 @@ export function useTrtcMultiUser() {
             const peerId = evt.userId;
             console.log(`[TRTC Event] Remote Participant Joined: ${peerId}`);
             addTranscriptLine("系统提示", `👥 远程参会者已接入 TRTC 频道: ${peerId}`);
+            trtcAudioMonitor.recordEvent('peer-join', `远程参会者已接入: ${peerId}`);
+            trtcAudioMonitor.updateChannel(peerId, {
+              id: peerId,
+              name: `TRTC 参会者 (${peerId.substring(0, 6)})`,
+              role: '远程参会者',
+              audioTrackActive: true,
+              muted: false
+            });
             
             setRemoteUsers(prev => {
               if (prev.some(u => u.id === peerId)) return prev;
@@ -259,6 +275,7 @@ export function useTrtcMultiUser() {
             const peerId = evt.userId;
             console.log(`[TRTC Event] Remote Participant Left: ${peerId}`);
             addTranscriptLine("系统提示", `👋 远程参会者已退出 TRTC 频道: ${peerId}`);
+            trtcAudioMonitor.recordEvent('peer-leave', `远程参会者退出: ${peerId}`);
             setRemoteUsers(prev => prev.filter(u => u.id !== peerId));
           });
 
@@ -266,6 +283,7 @@ export function useTrtcMultiUser() {
             const remoteStream = evt.stream;
             const peerId = remoteStream.getUserId();
             console.log(`[TRTC Stream-Added] New Remote Stream from: ${peerId}`);
+            trtcAudioMonitor.recordEvent('stream-published', `发现新远程音频流: ${peerId}`);
             setTrtcStatusText("Subscribing TRTC Stream...");
             try {
               await client.subscribe(remoteStream);
@@ -278,6 +296,11 @@ export function useTrtcMultiUser() {
             const remoteStream = evt.stream;
             const peerId = remoteStream.getUserId();
             console.log(`[TRTC Stream-Subscribed] Subscribed to Remote Stream: ${peerId}`);
+            trtcAudioMonitor.recordEvent('stream-subscribed', `成功订阅远程音频流: ${peerId}`);
+            trtcAudioMonitor.updateChannel(peerId, {
+              isTransmitting: true,
+              audioTrackActive: true
+            });
             
             setTimeout(() => {
               try {
@@ -297,6 +320,7 @@ export function useTrtcMultiUser() {
             const remoteStream = evt.stream;
             const peerId = remoteStream.getUserId();
             console.log(`[TRTC Stream-Removed] Closed stream: ${peerId}`);
+            trtcAudioMonitor.recordEvent('stream-removed', `远程音频流关闭: ${peerId}`);
             try {
               remoteStream.stop();
             } catch (err) {}
