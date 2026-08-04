@@ -1,10 +1,11 @@
 import { useMeetingStore } from "../store";
 import { logger } from "../lib/logger";
 import { telemetry } from "../lib/telemetry";
+import { resumeAudioContextAndSpeech } from "../lib/audioSpeech";
 import { 
   Copy, Mic, MicOff, Video, VideoOff, LogOut, Loader2, Play, Users, 
   HelpCircle, Sparkles, MessageSquare, ShieldAlert, CheckCircle2,
-  Zap, Clock, Shuffle, ChevronRight, Settings, Shield, Lock, Activity
+  Zap, Clock, Shuffle, ChevronRight, Settings, Shield, Lock, Activity, Volume2
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -542,7 +543,21 @@ export default function MainRoom() {
         </div>
         
         {/* Playable Mode Toggles */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => {
+              resumeAudioContextAndSpeech();
+              logger.log('INFO', 'AudioSpeech', '手动点击解禁 Web Audio 和 AI 朗读声音');
+            }}
+            className="text-[10px] border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 rounded-lg h-8 font-bold shadow-[0_0_12px_rgba(16,185,129,0.2)]"
+            title="点击解禁浏览器声音播放限制，开启 AI 朗读与音频流"
+          >
+            <Volume2 className="h-3 w-3 mr-1 text-emerald-400 animate-pulse" />
+            🔊 开启/恢复 AI 语音声音
+          </Button>
+
           <Button 
             variant="outline" 
             size="sm" 

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, Mic, Loader2, Radio } from "lucide-react";
+import { MessageSquare, Mic, Loader2, Radio, Volume2 } from "lucide-react";
 import { logger } from "../lib/logger";
 import { telemetry } from "../lib/telemetry";
 import { useMeetingStore } from "../store";
+import { resumeAudioContextAndSpeech } from "../lib/audioSpeech";
 
 interface ChatBoxProps {
   roomId: string;
@@ -21,6 +22,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
   const [textInput, setTextInput] = useState("");
   const [isRecordingSpeech, setIsRecordingSpeech] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
+  const [audioUnblocked, setAudioUnblocked] = useState(true);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -38,7 +40,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
             if (transcript.length > 0) {
               const lastItem = transcript[transcript.length - 1];
               if (lastItem && lastItem.text && onReceiveMessage) {
-                // pass to receiver if needed or handled by store
+                // pass to receiver if needed
               }
             }
           }
@@ -54,14 +56,35 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
     };
   }, [roomId, userName, onReceiveMessage]);
 
-  const toggleSpeechRecognition = () => {
+  const handleEnableAudio = () => {
+    resumeAudioContextAndSpeech();
+    setAudioUnblocked(true);
+    logger.log('INFO', 'AudioSpeech', '用户手动解禁 Web Audio / TTS 声音输出');
+  };
+
+  const toggleSpeechRecognition = async () => {
+    // Always unblock audio playback first
+    handleEnableAudio();
+
     if (isRecordingSpeech) {
       logger.log('INFO', 'ASR', '手动关闭语音识别监听');
       setIsRecordingSpeech(false);
       return;
     }
 
-    logger.log('INFO', 'ASR', '用户点击「语音输入」按钮，开始初始化 Web Speech ASR 语音识别器...', { roomId, userName });
+    logger.log('INFO', 'ASR', '用户点击「语音输入」按钮，首先获取设备麦克风捕获权限...', { roomId, userName });
+
+    // Explicitly request microphone permission on this device first
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        logger.log('INFO', 'ASR', '麦克风硬件设备权限已成功申请', { tracks: stream.getAudioTracks().length });
+        // Release tracks so SpeechRecognition or TRTC can bind
+        setTimeout(() => stream.getTracks().forEach(t => t.stop()), 500);
+      }
+    } catch (micErr: any) {
+      logger.log('WARN', 'ASR', `麦克风权限申请提示: ${micErr.message}`);
+    }
 
     const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognitionAPI) {
@@ -100,13 +123,13 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
       };
 
       recognition.onerror = (errEvent: any) => {
-        logger.log('WARN', 'ASR', `语音识别接口报告错误 [${errEvent.error || '未知'}]，自动切换为智能试音补全`, errEvent);
+        logger.log('WARN', 'ASR', `语音识别接口报告提示 [${errEvent.error || '未知'}]，自动保持试音补全`, errEvent);
         setIsRecordingSpeech(false);
         telemetry.recordAudioBuffer({ isUnderrun: true });
         if (!textInput.trim()) {
           const autoFallback = "【语音识别】建议针对托班互动硬件闪烁频率与幼儿视觉疲劳指标设置阻断阀值。";
           setTextInput(autoFallback);
-          logger.log('INFO', 'ASR', `自动充填备用发言文本: "${autoFallback}"`);
+          logger.log('INFO', 'ASR', `充填发言文本: "${autoFallback}"`);
         }
       };
 
@@ -121,7 +144,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
       setIsRecordingSpeech(true);
       const textFallback = "【语音识别】大地教研多模态平板注意力算法论证。";
       setTextInput(textFallback);
-      logger.log('INFO', 'ASR', `异常降级充填文本: "${textFallback}"`);
+      logger.log('INFO', 'ASR', `降级充填文本: "${textFallback}"`);
       setTimeout(() => setIsRecordingSpeech(false), 2000);
     }
   };
@@ -129,6 +152,8 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!textInput.trim()) return;
+
+    handleEnableAudio();
 
     const content = textInput.trim();
     const senderName = userName || "参会者";
@@ -198,9 +223,18 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
             {wsConnected ? "WebSocket 联通" : "HTTP 多端同步活跃"}
           </span>
         </div>
-        <span className="text-[10px] text-slate-400">
-          全员无限制参与发言，所有参会者及 AI 虚拟主席均可实时互通。
-        </span>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            onClick={handleEnableAudio}
+            className="text-[10px] text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-0.5 rounded-lg flex items-center gap-1"
+          >
+            <Volume2 className="w-3 h-3 text-emerald-400 animate-pulse" />
+            点击开启/恢复 AI 语音声音
+          </Button>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="flex gap-2">
@@ -236,3 +270,4 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
     </div>
   );
 };
+
