@@ -205,6 +205,9 @@ export function useTrtcMultiUser() {
           });
           
           trtcClientRef.current = client;
+          if (typeof window !== "undefined") {
+            (window as any).__trtcClient = client;
+          }
 
           // Catch TRTC Client Signal/WS Notices
           client.on("error", (err: any) => {
@@ -380,6 +383,9 @@ export function useTrtcMultiUser() {
 
           console.log("[TRTC LocalStream] Media devices captured and initialized.");
           localStreamRef.current = localStream;
+          if (typeof window !== "undefined") {
+            (window as any).__trtcLocalStream = localStream;
+          }
 
           // Align local tracks to preset state values
           if (!micOn) localStream.muteAudio();
@@ -460,6 +466,9 @@ export function useTrtcMultiUser() {
         localStreamRef.current.close();
       } catch (err) {}
       localStreamRef.current = null;
+      if (typeof window !== "undefined") {
+        (window as any).__trtcLocalStream = null;
+      }
     }
 
     if (trtcClientRef.current) {

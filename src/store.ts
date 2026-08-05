@@ -23,6 +23,36 @@ if (typeof window !== "undefined") {
       console.warn("[Socket.IO Client] Serverless deployment notice (Using resilient REST & polling fallback):", err?.message);
     });
 
+    socket.on("chat-received", (data: { sender: string; text: string; timestamp?: any }) => {
+      if (data && data.text) {
+        const state = useMeetingStore.getState();
+        state.addTranscriptLine(data.sender || "参会者", data.text);
+        if ((data.sender || "").includes("AI") || (data.sender || "").includes("主席") || (data.sender || "").includes("督导")) {
+          import("./lib/audioSpeech").then(({ speakText, resumeAudioContextAndSpeech }) => {
+            resumeAudioContextAndSpeech();
+            speakText(data.text, { pitch: 0.98, rate: 1.05 });
+          });
+          import("./lib/trtcAudioMonitor").then(({ trtcAudioMonitor }) => {
+            trtcAudioMonitor.recordEvent('audio-push', `[AI 互动中心] AI 主席回应: "${data.text.slice(0, 25)}..."`, 85);
+            trtcAudioMonitor.updateChannel('ai-tts', { volumeLevel: 85, isTransmitting: true });
+            setTimeout(() => {
+              trtcAudioMonitor.updateChannel('ai-tts', { volumeLevel: 0, isTransmitting: false });
+            }, 3000);
+          });
+        }
+      }
+    });
+
+    socket.on("ai-intervention", (data: { roomId: string; text: string; state?: any }) => {
+      if (data && data.text) {
+        useMeetingStore.setState({ aiIntervention: data.text });
+        import("./lib/audioSpeech").then(({ speakText, resumeAudioContextAndSpeech }) => {
+          resumeAudioContextAndSpeech();
+          speakText(data.text, { pitch: 0.98, rate: 1.05 });
+        });
+      }
+    });
+
     socket.on("participants-updated", (data: { roomId: string; participants: TencentParticipant[] }) => {
       if (data && data.participants && Array.isArray(data.participants)) {
         useMeetingStore.setState({ tencentParticipants: data.participants });

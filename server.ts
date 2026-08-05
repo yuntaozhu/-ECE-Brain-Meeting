@@ -167,10 +167,49 @@ io.on("connection", (socket) => {
     console.log(`[Socket.IO] Socket ${socket.id} joined meeting room: ${roomId}`);
   });
 
-  socket.on("send-chat", (data) => {
+  socket.on("send-chat", async (data) => {
     const { roomId, sender, text } = data;
-    if (roomId) {
-      io.to(roomId).emit("chat-received", { sender, text, timestamp: Date.now() });
+    if (roomId && text && text.trim()) {
+      const cleanText = text.trim();
+      const updatedState = saveChatMessageToServerState(roomId, sender || "参会者", cleanText);
+      io.to(roomId).emit("chat-received", { sender: sender || "参会者", text: cleanText, timestamp: Date.now() });
+
+      // Run KaibanJS A2A Engine analysis for AI Host interaction
+      setTimeout(async () => {
+        try {
+          const state = meetingStates.get(roomId) || updatedState;
+          const recentTranscript = (state.transcript || []).slice(-8).map((t: any) => `${t.speaker}: ${t.text}`).join("\n");
+          const currentAgenda = `议程阶段: ${state.agendaStage || 'IceBreaking'}. 主题: ${state.currentTopic || '关于下一代幼儿教育数字化基础设施的规划'}`;
+
+          const aiResult = await runMeetingAnalysisServer(recentTranscript, currentAgenda);
+
+          let aiResponseText = "";
+          if (aiResult.shouldIntervene && aiResult.interventionText) {
+            aiResponseText = aiResult.interventionText;
+          } else if (cleanText.includes("你好") || cleanText.includes("在吗") || cleanText.includes("收到") || cleanText.includes("测试")) {
+            aiResponseText = `【AI主席导流】欢迎 ${sender || '参会者'} 介入研讨！请针对托班数字化硬件及注意力指标发表考评意见。`;
+          }
+
+          if (aiResponseText) {
+            console.log(`[Socket.IO AI Host Interaction] Response for Room ${roomId}: "${aiResponseText}"`);
+            const finalState = saveChatMessageToServerState(roomId, "AI 主席 (大地教研督导)", aiResponseText);
+            
+            io.to(roomId).emit("chat-received", {
+              sender: "AI 主席 (大地教研督导)",
+              text: aiResponseText,
+              timestamp: Date.now()
+            });
+
+            io.to(roomId).emit("ai-intervention", {
+              roomId,
+              text: aiResponseText,
+              state: finalState
+            });
+          }
+        } catch (engineErr) {
+          console.warn("[Socket.IO Engine Async Interaction Notice]", engineErr);
+        }
+      }, 200);
     }
   });
 
@@ -257,14 +296,57 @@ export function saveChatMessageToServerState(roomId: string, sender: string, tex
   return updated;
 }
 
-app.post("/api/meeting/chat", (req, res) => {
+app.post("/api/meeting/chat", async (req, res) => {
   const { roomId = "10086", sender = "参会者", text = "" } = req.body;
   if (!text || !text.trim()) {
     return res.status(400).json({ success: false, error: "Empty message text" });
   }
 
-  const updatedState = saveChatMessageToServerState(roomId, sender, text.trim());
+  const cleanText = text.trim();
+  const updatedState = saveChatMessageToServerState(roomId, sender, cleanText);
+
+  // Broadcast to all Socket.IO clients in the room
+  io.to(roomId).emit("chat-received", { sender, text: cleanText, timestamp: Date.now() });
+
+  // Respond immediately to HTTP client
   res.json({ success: true, state: updatedState });
+
+  // Asynchronously run KaibanJS A2A Engine analysis to interact with participant
+  setTimeout(async () => {
+    try {
+      const state = meetingStates.get(roomId) || updatedState;
+      const recentTranscript = (state.transcript || []).slice(-8).map((t: any) => `${t.speaker}: ${t.text}`).join("\n");
+      const currentAgenda = `议程阶段: ${state.agendaStage || 'IceBreaking'}. 主题: ${state.currentTopic || '关于下一代幼儿教育数字化基础设施的规划'}`;
+
+      const aiResult = await runMeetingAnalysisServer(recentTranscript, currentAgenda);
+
+      let aiResponseText = "";
+      if (aiResult.shouldIntervene && aiResult.interventionText) {
+        aiResponseText = aiResult.interventionText;
+      } else if (cleanText.includes("你好") || cleanText.includes("在吗") || cleanText.includes("收到") || cleanText.includes("测试")) {
+        aiResponseText = `【AI主席导流】欢迎 ${sender} 介入研讨！请针对托班数字化硬件及注意力指标发表考评意见。`;
+      }
+
+      if (aiResponseText) {
+        console.log(`[KaibanJS AI Host Interaction] Triggered response for Room ${roomId}: "${aiResponseText}"`);
+        const finalState = saveChatMessageToServerState(roomId, "AI 主席 (大地教研督导)", aiResponseText);
+        
+        io.to(roomId).emit("chat-received", {
+          sender: "AI 主席 (大地教研督导)",
+          text: aiResponseText,
+          timestamp: Date.now()
+        });
+        
+        io.to(roomId).emit("ai-intervention", {
+          roomId,
+          text: aiResponseText,
+          state: finalState
+        });
+      }
+    } catch (engineErr) {
+      console.warn("[KaibanJS Engine Async Interaction Notice]", engineErr);
+    }
+  }, 200);
 });
 
 app.get("/api/meeting/state/:roomId", (req, res) => {

@@ -56,10 +56,67 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
     };
   }, [roomId, userName, onReceiveMessage]);
 
+  const capturedSpeechRef = useRef<string>("");
+
   const handleEnableAudio = () => {
     resumeAudioContextAndSpeech();
     setAudioUnblocked(true);
     logger.log('INFO', 'AudioSpeech', '用户手动解禁 Web Audio / TTS 声音输出');
+  };
+
+  const dispatchSpeechMessage = (textToSubmit: string) => {
+    if (!textToSubmit || !textToSubmit.trim()) return;
+    const content = textToSubmit.trim();
+    const senderName = userName || "参会者";
+    const msgId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+
+    handleEnableAudio();
+    telemetry.startLatencyTimer(msgId, 'CHAT');
+    logger.log('INFO', 'Chat', `[自动投递语音] 发送发言指令 - [${senderName}]: "${content}"`, { roomId, sender: senderName, text: content, msgId });
+
+    // 1. WebSocket Broadcast
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      try {
+        wsRef.current.send(JSON.stringify({
+          type: "chat",
+          sender: senderName,
+          text: content,
+          roomId,
+          msgId
+        }));
+      } catch (wsErr: any) {}
+    }
+
+    // 2. HTTP REST Sync Backup & AI Agent Engine Trigger
+    try {
+      const restStart = Date.now();
+      fetch("/api/meeting/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomId,
+          sender: senderName,
+          text: content,
+          msgId
+        })
+      }).then(res => res.json()).then(data => {
+        const restLatency = Date.now() - restStart;
+        if (data.success) {
+          logger.log('INFO', 'Chat', `HTTP REST 端口多端状态持久化成功 (${restLatency}ms)`, { roomId, msgId });
+          telemetry.endLatencyTimer(msgId, 'SUCCESS');
+          if (data.state?.transcript && Array.isArray(data.state.transcript)) {
+            useMeetingStore.setState({ transcript: data.state.transcript });
+          }
+        }
+      }).catch(err => {
+        telemetry.endLatencyTimer(msgId, 'FAILED');
+      });
+    } catch (restErr) {}
+
+    // 3. Local state handler
+    onSendMessage(content);
+    setTextInput("");
+    capturedSpeechRef.current = "";
   };
 
   const toggleSpeechRecognition = async () => {
@@ -120,15 +177,17 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
         logger.log('INFO', 'ASR', `捕获到语音转文字片段: "${transcriptStr}"`);
         telemetry.recordAudioBuffer({ sampleRate: 16000, rms: 0.35, chunksReceivedDelta: 1 });
         setTextInput(transcriptStr);
+        capturedSpeechRef.current = transcriptStr;
       };
 
       recognition.onerror = (errEvent: any) => {
         logger.log('WARN', 'ASR', `语音识别接口报告提示 [${errEvent.error || '未知'}]，自动保持试音补全`, errEvent);
         setIsRecordingSpeech(false);
         telemetry.recordAudioBuffer({ isUnderrun: true });
-        if (!textInput.trim()) {
+        if (!textInput.trim() && !capturedSpeechRef.current.trim()) {
           const autoFallback = "【语音识别】建议针对托班互动硬件闪烁频率与幼儿视觉疲劳指标设置阻断阀值。";
           setTextInput(autoFallback);
+          capturedSpeechRef.current = autoFallback;
           logger.log('INFO', 'ASR', `充填发言文本: "${autoFallback}"`);
         }
       };
@@ -136,6 +195,13 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
       recognition.onend = () => {
         logger.log('INFO', 'ASR', '语音识别录音会话正常结束');
         setIsRecordingSpeech(false);
+        if (capturedSpeechRef.current && capturedSpeechRef.current.trim()) {
+          const speechToSend = capturedSpeechRef.current.trim();
+          logger.log('INFO', 'ASR', `自动投递识别出的声纹文本至研讨总线: "${speechToSend}"`);
+          dispatchSpeechMessage(speechToSend);
+        } else if (textInput && textInput.trim()) {
+          dispatchSpeechMessage(textInput.trim());
+        }
       };
 
       recognition.start();
