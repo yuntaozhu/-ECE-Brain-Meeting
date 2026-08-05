@@ -5,7 +5,7 @@ import { resumeAudioContextAndSpeech } from "../lib/audioSpeech";
 import { 
   Copy, Mic, MicOff, Video, VideoOff, LogOut, Loader2, Play, Users, 
   HelpCircle, Sparkles, MessageSquare, ShieldAlert, CheckCircle2,
-  Zap, Clock, Shuffle, ChevronRight, Settings, Shield, Lock, Activity, Volume2
+  Zap, Clock, Shuffle, ChevronRight, Settings, Shield, Lock, Activity, Volume2, QrCode
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import { ApiHealthPanel } from "./ApiHealthPanel";
 import { AttendeesList } from "./AttendeesList";
 import { ChatBox } from "./ChatBox";
 import { AudioOrchestrator } from "./AudioOrchestrator";
+import { MeetingQRCodeModal } from "./MeetingQRCodeModal";
 import { Terminal } from "lucide-react";
 
 export default function MainRoom() {
@@ -206,6 +207,7 @@ export default function MainRoom() {
   const [showMixExplanation, setShowMixExplanation] = useState(false);
   const [showDebugConsole, setShowDebugConsole] = useState(false);
   const [showApiHealth, setShowApiHealth] = useState(false);
+  const [showQrCodeModal, setShowQrCodeModal] = useState(false);
   const [textInput, setTextInput] = useState("");
   const [isRecordingSpeech, setIsRecordingSpeech] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
@@ -561,6 +563,17 @@ export default function MainRoom() {
           <Button 
             variant="outline" 
             size="sm" 
+            onClick={() => setShowQrCodeModal(true)}
+            className="text-[10px] border-cyan-500/40 bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 rounded-lg h-8 font-bold shadow-[0_0_12px_rgba(6,182,212,0.2)]"
+            title="显示手机扫码入会二维码"
+          >
+            <QrCode className="h-3 w-3 mr-1 text-cyan-400" />
+            📱 扫码入会
+          </Button>
+
+          <Button 
+            variant="outline" 
+            size="sm" 
             onClick={() => setShowApiHealth(true)}
             className="text-[10px] border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-300 rounded-lg h-8 font-mono"
           >
@@ -606,6 +619,13 @@ export default function MainRoom() {
 
       <SystemDebugConsole isOpen={showDebugConsole} onClose={() => setShowDebugConsole(false)} />
       <ApiHealthPanel isOpen={showApiHealth} onClose={() => setShowApiHealth(false)} />
+      <MeetingQRCodeModal 
+        isOpen={showQrCodeModal} 
+        onClose={() => setShowQrCodeModal(false)} 
+        meetingId={meetingId || lobbyRoomId || '10086'} 
+        topic={currentTopic}
+        tencentCode={tencentMeetingInfo?.meetingCode}
+      />
 
       {/* Audio mixing details slide panel */}
       {showMixExplanation && (

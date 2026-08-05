@@ -149,8 +149,9 @@ export async function createMeeting(params: CreateMeetingParams): Promise<Tencen
       water_mark_type: params.settings?.water_mark_type ?? 0,
       only_user_join_type: params.settings?.only_user_join_type ?? 1,
       auto_record_type: params.settings?.auto_record_type ?? 'none',
-      auto_asr: params.settings?.auto_asr ?? false,
-      open_asr_view: params.settings?.open_asr_view ?? 0,
+      auto_asr: params.settings?.auto_asr ?? true,
+      open_asr_view: params.settings?.open_asr_view ?? 1,
+      allow_chat: params.settings?.allow_chat ?? 1,
       audio_watermark: params.settings?.audio_watermark ?? true,
       ...(params.settings || {})
     },

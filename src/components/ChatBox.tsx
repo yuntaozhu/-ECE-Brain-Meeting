@@ -26,9 +26,49 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    logger.log('INFO', 'WebSocket', `Initializing HTTP REST sync for room ${roomId}...`, { roomId, userName });
-    telemetry.recordConnectionState('wsMeeting', 'CONNECTED', { endpoint: `/api/meeting/state/${roomId}` });
-    setWsConnected(true);
+    logger.log('INFO', 'WebSocket', `Initializing WebSocket and HTTP REST sync for room ${roomId}...`, { roomId, userName });
+    
+    // Instantiate real-time WebSocket connection to /ws/meeting
+    if (typeof window !== "undefined") {
+      try {
+        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        const wsUrl = `${protocol}//${window.location.host}/ws/meeting?roomId=${encodeURIComponent(roomId)}&userName=${encodeURIComponent(userName || "参会者")}`;
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+          setWsConnected(true);
+          telemetry.recordConnectionState('wsMeeting', 'CONNECTED', { endpoint: wsUrl });
+          logger.log('INFO', 'WebSocket', `[WS /ws/meeting] Real-time channel established for room ${roomId}`);
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data && (data.type === 'chat' || data.type === 'system') && data.text) {
+              const state = useMeetingStore.getState();
+              state.addTranscriptLine(data.sender || "系统", data.text);
+              if (onReceiveMessage) {
+                onReceiveMessage(data.sender || "系统", data.text);
+              }
+            }
+          } catch (e) {
+            console.warn('[WS Chat Parse Notice]', e);
+          }
+        };
+
+        ws.onerror = (err) => {
+          logger.log('WARN', 'WebSocket', `[WS /ws/meeting] Error occurred`, err);
+        };
+
+        ws.onclose = () => {
+          setWsConnected(false);
+          telemetry.recordConnectionState('wsMeeting', 'DISCONNECTED', { roomId });
+        };
+      } catch (wsInitErr) {
+        console.warn("[WS Chat Init Notice]", wsInitErr);
+      }
+    }
 
     const pollInterval = setInterval(async () => {
       try {
@@ -38,19 +78,27 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
           if (data.success && data.state && data.state.transcript) {
             const transcript = data.state.transcript;
             if (transcript.length > 0) {
-              const lastItem = transcript[transcript.length - 1];
-              if (lastItem && lastItem.text && onReceiveMessage) {
-                // pass to receiver if needed
-              }
+              const store = useMeetingStore.getState();
+              // Sync missing items into store
+              transcript.forEach((t: any) => {
+                if (t && t.speaker && t.text) {
+                  store.addTranscriptLine(t.speaker, t.text);
+                }
+              });
             }
           }
         }
       } catch (e) {
         // Silent sync
       }
-    }, 2000);
+    }, 3000);
 
     return () => {
+      if (wsRef.current) {
+        try {
+          wsRef.current.close();
+        } catch (e) {}
+      }
       clearInterval(pollInterval);
       setWsConnected(false);
     };

@@ -4,20 +4,22 @@
  */
 
 import { useEffect, useState } from "react";
-import { Copy, Check, Share2, Shield, User } from "lucide-react";
+import { Copy, Check, Share2, Shield, User, QrCode } from "lucide-react";
 import MainRoom from "./components/MainRoom";
 import AgentPanel from "./components/AgentPanel";
 import MeetingSetup from "./components/MeetingSetup";
 import NetworkInspector from "./components/NetworkInspector";
+import { MeetingQRCodeModal } from "./components/MeetingQRCodeModal";
 import { useMeetingStore } from "./store";
 import { useGeminiLive } from "./hooks/useGeminiLive";
 import { useRole } from "./hooks/useRole";
 
 export default function App() {
-  const { joined, userRoleType, userName, userRole, meetingId, tencentMeetingInfo, joinMeeting } = useMeetingStore();
+  const { joined, userRoleType, userName, userRole, meetingId, currentTopic, tencentMeetingInfo, joinMeeting } = useMeetingStore();
   const { isConnected, connectStream, disconnectStream } = useGeminiLive();
   const { isCreator, isAttendee } = useRole();
   const [copied, setCopied] = useState(false);
+  const [showQrCodeModal, setShowQrCodeModal] = useState(false);
 
   // Local state router: Creator gets setup page; Attendee goes straight to login lobby
   const [activeView, setActiveView] = useState<'setup' | 'meeting'>(() => {
@@ -111,18 +113,26 @@ export default function App() {
             </div>
           </div>
 
-          {/* Prominent Meeting Room Link Display & Quick Copy */}
-          <div className="hidden md:flex items-center gap-2 max-w-sm lg:max-w-md bg-white/5 border border-white/10 hover:border-cyan-500/30 transition-all rounded-full p-1 pl-4 pr-1">
+          {/* Prominent Meeting Room Link Display & Quick Copy & QR Code */}
+          <div className="hidden md:flex items-center gap-2 max-w-sm lg:max-w-xl bg-white/5 border border-white/10 hover:border-cyan-500/30 transition-all rounded-full p-1 pl-4 pr-1">
             <span className="text-[10px] uppercase font-mono tracking-wider text-slate-500 flex items-center gap-1.5 shrink-0">
               <Share2 className="w-3 h-3 text-cyan-400" />
               当前分享口:
             </span>
-            <span className="text-xs truncate font-mono text-slate-300 select-all max-w-[150px] lg:max-w-[240px]">
+            <span className="text-xs truncate font-mono text-slate-300 select-all max-w-[120px] lg:max-w-[180px]">
               {meetingUrl}
             </span>
             <button
+              onClick={() => setShowQrCodeModal(true)}
+              className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-cyan-300 border border-cyan-500/30 transition-all cursor-pointer shrink-0"
+              title="显示手机入会二维码"
+            >
+              <QrCode className="w-3.5 h-3.5 text-cyan-400" />
+              扫码入会
+            </button>
+            <button
               onClick={handleCopyLink}
-              className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full transition-all cursor-pointer shrink-0 ${
                 copied
                   ? "bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.4)]"
                   : "bg-cyan-500 text-black font-bold hover:bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.25)]"
@@ -141,6 +151,14 @@ export default function App() {
               )}
             </button>
           </div>
+
+          <MeetingQRCodeModal
+            isOpen={showQrCodeModal}
+            onClose={() => setShowQrCodeModal(false)}
+            meetingId={activeRoomId}
+            topic={currentTopic}
+            tencentCode={tencentMeetingInfo?.meetingCode}
+          />
 
           <div className="flex items-center gap-6 shrink-0">
             <div className="flex flex-col items-end">
