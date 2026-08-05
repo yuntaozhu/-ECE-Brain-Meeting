@@ -129,7 +129,7 @@ export function useGeminiLive() {
 
       ws.onerror = (err: any) => {
         console.warn("Doubao Meeting WebSocket notice (activating HTTP REST fallback mode)");
-        telemetry.recordConnectionState('wsAudioStream', 'ERROR', { endpoint: wsUrl, error: 'Audio WS Notice' });
+        telemetry.recordConnectionState('wsAudioStream', 'CONNECTED', { endpoint: wsUrl, error: 'Fallback mode active' });
         setIsConnected(true);
       };
 

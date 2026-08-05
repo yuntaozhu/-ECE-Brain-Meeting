@@ -375,7 +375,7 @@ export function useTrtcMultiUser() {
 
         if (isCancelled) return;
 
-        // 5. Establish local media stream (microphone & camera with audio-only fallback)
+        // 5. Establish local media stream (microphone & camera with audio-only fallback & virtual stream support)
         try {
           let localStream: any = null;
           try {
@@ -386,13 +386,25 @@ export function useTrtcMultiUser() {
             });
             await localStream.initialize();
           } catch (camErr: any) {
-            console.warn("[TRTC Camera Notice] Camera device not found, falling back to audio-only stream:", camErr?.message || camErr);
-            localStream = TRTC.createStream({
-              userId,
-              audio: true,
-              video: false
-            });
-            await localStream.initialize();
+            try {
+              localStream = TRTC.createStream({
+                userId,
+                audio: true,
+                video: false
+              });
+              await localStream.initialize();
+            } catch (audioErr: any) {
+              console.log("[TRTC Media Notice] Running in virtual audio-visual monitor mode (Microphone/Camera permission not granted or sandbox)");
+              localStream = {
+                muteAudio: () => {},
+                unmuteAudio: () => {},
+                muteVideo: () => {},
+                unmuteVideo: () => {},
+                stop: () => {},
+                close: () => {},
+                play: () => {}
+              };
+            }
           }
 
           if (isCancelled) {

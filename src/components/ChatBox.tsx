@@ -63,7 +63,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
 
         ws.onclose = () => {
           setWsConnected(false);
-          telemetry.recordConnectionState('wsMeeting', 'DISCONNECTED', { roomId });
+          telemetry.recordConnectionState('wsMeeting', 'DISCONNECTED', { endpoint: wsUrl });
         };
       } catch (wsInitErr) {
         console.warn("[WS Chat Init Notice]", wsInitErr);

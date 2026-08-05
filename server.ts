@@ -495,21 +495,6 @@ app.post("/api/trtc/usersig", async (req, res) => {
     const secretKey = process.env.TRTC_SECRET_KEY || "laTTal0Lj2OpGijqIlRBvejyJu7SsIpS";
     const actualSdkAppId = Number(sdkAppId || process.env.TRTC_SDK_APP_ID || "1400112233");
 
-    let userSig = "";
-    try {
-      const TLSSigAPIv2 = await import("tls-sig-api-v2");
-      const ApiClass = TLSSigAPIv2.Api || TLSSigAPIv2.default?.Api || TLSSigAPIv2.default || TLSSigAPIv2;
-      if (typeof ApiClass === 'function') {
-        const api = new ApiClass(actualSdkAppId, secretKey);
-        userSig = api.genUserSig(userId, 86400);
-      } else {
-        throw new Error("tls-sig-api-v2 constructor not found");
-      }
-    } catch (importErr: any) {
-      console.warn("tls-sig-api-v2 generation error, falling back to secure token simulation:", importErr.message);
-      userSig = `mock_sig_${userId}_${Date.now()}`;
-    }
-
     const rawKey = (process.env.TRTC_SECRET_KEY || "").trim();
     const rawAppId = (process.env.TRTC_SDK_APP_ID || "").trim();
     // Real Tencent TRTC keys require valid 32-character secret key and real SdkAppId
@@ -525,6 +510,25 @@ app.post("/api/trtc/usersig", async (req, res) => {
     );
 
     const isPlaceholderKey = !isRealKey;
+
+    let userSig = "";
+    if (isPlaceholderKey) {
+      userSig = `mock_sig_${userId}_${Date.now()}`;
+    } else {
+      try {
+        const TLSSigAPIv2 = await import("tls-sig-api-v2");
+        const ApiClass = TLSSigAPIv2.Api || TLSSigAPIv2.default?.Api || TLSSigAPIv2.default || TLSSigAPIv2;
+        if (typeof ApiClass === 'function') {
+          const api = new ApiClass(actualSdkAppId, secretKey);
+          userSig = api.genUserSig(userId, 86400);
+        } else {
+          throw new Error("tls-sig-api-v2 constructor not found");
+        }
+      } catch (importErr: any) {
+        console.warn("tls-sig-api-v2 generation error, falling back to secure token simulation:", importErr.message);
+        userSig = `mock_sig_${userId}_${Date.now()}`;
+      }
+    }
 
     res.json({
       userSig,

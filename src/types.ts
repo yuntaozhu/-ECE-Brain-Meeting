@@ -51,6 +51,7 @@ export interface TencentMeetingSettings {
   auto_asr?: boolean; // 自动文字转写
   open_asr_view?: number; // 0:打开, 1:不打开
   audio_watermark?: boolean;
+  allow_chat?: number;
 }
 
 export interface TencentUserObject {
