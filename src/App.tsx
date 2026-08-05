@@ -14,7 +14,7 @@ import { useGeminiLive } from "./hooks/useGeminiLive";
 import { useRole } from "./hooks/useRole";
 
 export default function App() {
-  const { joined, userRoleType, userName, userRole, meetingId, tencentMeetingInfo } = useMeetingStore();
+  const { joined, userRoleType, userName, userRole, meetingId, tencentMeetingInfo, joinMeeting } = useMeetingStore();
   const { isConnected, connectStream, disconnectStream } = useGeminiLive();
   const { isCreator, isAttendee } = useRole();
   const [copied, setCopied] = useState(false);
@@ -23,12 +23,25 @@ export default function App() {
   const [activeView, setActiveView] = useState<'setup' | 'meeting'>(() => {
     if (typeof window !== "undefined") {
       const searchParams = new URLSearchParams(window.location.search);
-      if (searchParams.get("role") === "attendee") {
+      if (searchParams.get("role") === "attendee" || searchParams.get("roomId")) {
         return "meeting";
       }
     }
     return "setup";
   });
+
+  // Auto-join meeting on mount if opened via share link with roomId
+  useEffect(() => {
+    if (typeof window !== "undefined" && !joined) {
+      const searchParams = new URLSearchParams(window.location.search);
+      const role = searchParams.get("role");
+      const roomId = searchParams.get("roomId");
+      if (role === "attendee" || roomId) {
+        const targetRoomId = roomId || "10086";
+        joinMeeting("杨督导", "省优质名园考评长", targetRoomId, "attendee");
+      }
+    }
+  }, [joined, joinMeeting]);
 
   // Get current meeting URL dynamically with active window location & meeting room ID parameters
   const activeRoomId = tencentMeetingInfo?.meetingCode || meetingId || "10086";

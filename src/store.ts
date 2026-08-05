@@ -2,7 +2,26 @@ import { create } from 'zustand';
 import { io } from 'socket.io-client';
 import { AgendaStageType, TranscriptLine, UserRoleType, DynamicAgendaItem, TencentMeetingInfo, TencentParticipant } from './types';
 
-// Initialize Socket.IO client for real-time bidirectional sync
+// Retrieve saved meeting session context from localStorage if available
+const savedMeetingContext = typeof window !== "undefined" ? localStorage.getItem("dadimeeting_context") : null;
+let parsedMeetingContext: any = null;
+try {
+  if (savedMeetingContext) {
+    parsedMeetingContext = JSON.parse(savedMeetingContext);
+  }
+} catch (e) {
+  console.warn("Failed to parse saved meeting context from localStorage:", e);
+}
+
+const initialSearchUrlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+const urlRoomId = initialSearchUrlParams ? initialSearchUrlParams.get("roomId") : null;
+const urlRole = initialSearchUrlParams ? initialSearchUrlParams.get("role") : null;
+
+const defaultMeetingId = urlRoomId || (parsedMeetingContext && parsedMeetingContext.meetingId) || "10086";
+const defaultJoined = urlRole === "attendee" || urlRoomId !== null || (parsedMeetingContext && parsedMeetingContext.joined) || false;
+const defaultUserName = (parsedMeetingContext && parsedMeetingContext.userName) || (urlRole === "attendee" ? "杨督导" : "我");
+const defaultUserRole = (parsedMeetingContext && parsedMeetingContext.userRole) || (urlRole === "attendee" ? "省优质名园考评长" : "大地教研代表");
+const defaultUserRoleType = (parsedMeetingContext && parsedMeetingContext.userRoleType) || (urlRole === "attendee" ? "attendee" : "creator");
 let socket: any = null;
 if (typeof window !== "undefined") {
   try {
@@ -12,10 +31,14 @@ if (typeof window !== "undefined") {
       transports: ['polling', 'websocket']
     });
     socket.on("connect", () => {
-      console.log("[Socket.IO Client] Connected successfully for real-time meeting sync.");
+      const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+      const searchRoomId = urlParams ? urlParams.get("roomId") : null;
+      console.log(`[Socket.IO Client] WebSocket handshake established successfully. Socket ID: ${socket.id}, Search RoomId param: ${searchRoomId}`);
       const state = useMeetingStore.getState();
-      if (state.meetingId) {
-        socket.emit("join-room", state.meetingId);
+      const targetRoomId = searchRoomId || state.meetingId;
+      if (targetRoomId) {
+        console.log(`[Socket.IO Client] Emitting join-room for shared meeting room context: ${targetRoomId}`);
+        socket.emit("join-room", targetRoomId);
       }
     });
 
@@ -130,7 +153,7 @@ interface MeetingState {
 }
 
 export const useMeetingStore = create<MeetingState>((set) => ({
-  joined: false,
+  joined: defaultJoined,
   micOn: false,
   videoOn: false,
   currentTopic: "关于下一代幼儿教育数字化基础设施的规划",
@@ -145,12 +168,12 @@ export const useMeetingStore = create<MeetingState>((set) => ({
     "2. 组织注意力模型算法验证",
     "3. 筹划数字化课室首批网络部署"
   ],
-  userName: "我",
-  userRole: "大地教研代表",
-  meetingId: "10086",
+  userName: defaultUserName,
+  userRole: defaultUserRole,
+  meetingId: defaultMeetingId,
 
   // Defaults
-  userRoleType: "creator",
+  userRoleType: defaultUserRoleType,
   agendas: [
     {
       id: "IceBreaking",
@@ -181,7 +204,22 @@ export const useMeetingStore = create<MeetingState>((set) => ({
     { userId: 'daid_it', userName: '大地督导 (Host)', userRole: 'host', isMuted: false, joinTime: Math.floor(Date.now() / 1000) - 300 },
   ],
 
-  setJoined: (joined) => set({ joined }),
+  setJoined: (joined) => set((state) => {
+    if (typeof window !== "undefined") {
+      try {
+        const existing = JSON.parse(localStorage.getItem("dadimeeting_context") || "{}");
+        localStorage.setItem("dadimeeting_context", JSON.stringify({
+          ...existing,
+          joined,
+          meetingId: state.meetingId,
+          userName: state.userName,
+          userRole: state.userRole,
+          userRoleType: state.userRoleType
+        }));
+      } catch (e) {}
+    }
+    return { joined };
+  }),
   toggleMic: () => set((state) => ({ micOn: !state.micOn })),
   setMicOn: (on) => set({ micOn: on }),
   toggleVideo: () => set((state) => ({ videoOn: !state.videoOn })),
@@ -247,6 +285,18 @@ export const useMeetingStore = create<MeetingState>((set) => ({
     const existingParticipants = state.tencentParticipants || [];
     const filtered = existingParticipants.filter(p => p.userName !== actualName);
     const updatedParticipants = [...filtered, newParticipant];
+
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("dadimeeting_context", JSON.stringify({
+          joined: true,
+          userName: actualName,
+          userRole: actualRole,
+          meetingId: activeRoomId,
+          userRoleType: actualRoleType
+        }));
+      } catch (e) {}
+    }
 
     return {
       userName: actualName,

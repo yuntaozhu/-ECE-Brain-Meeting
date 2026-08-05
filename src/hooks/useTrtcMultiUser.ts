@@ -166,8 +166,10 @@ export function useTrtcMultiUser() {
       try {
         setTrtcStatusText("Initializing Signature...");
         
+        const searchRoomId = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("roomId") : null;
         const userIdToUse = userName ? `user_${encodeURIComponent(userName)}` : `ece_brain_${Math.floor(Math.random() * 10000)}`;
-        const numericRoomId = parseInt(meetingId || "10086", 10) || 10086;
+        const numericRoomId = parseInt(searchRoomId || meetingId || "10086", 10) || 10086;
+        console.log(`[TRTC Signaling] Joining TRTC room context with roomId: ${numericRoomId} (SearchParam: ${searchRoomId}, StoreMeetingId: ${meetingId}), User: ${userIdToUse}`);
 
         // 1. Fetch dynamic UserSig from local fullstack backend to safeguard keys
         const response = await fetch("/api/trtc/usersig", {
@@ -252,11 +254,11 @@ export function useTrtcMultiUser() {
           } catch (e) {}
 
           // 3. Register vital TRTC Event Track Listeners
-          client.on("peer-join", (evt: any) => {
+          const handleRemoteUserJoin = (evt: any) => {
             const peerId = evt.userId;
-            console.log(`[TRTC Event] Remote Participant Joined: ${peerId}`);
-            addTranscriptLine("系统提示", `👥 远程参会者已接入 TRTC 频道: ${peerId}`);
-            trtcAudioMonitor.recordEvent('peer-join', `远程参会者已接入: ${peerId}`);
+            console.log(`[TRTC onRemoteUserJoinRoom / peer-join] Remote Participant Joined room context: ${peerId}`);
+            addTranscriptLine("系统提示", `👥 [TRTC onRemoteUserJoinRoom] 远程参会者已接入频道: ${peerId}`);
+            trtcAudioMonitor.recordEvent('peer-join', `[onRemoteUserJoinRoom] 远程参会者已接入: ${peerId}`);
             trtcAudioMonitor.updateChannel(peerId, {
               id: peerId,
               name: `TRTC 参会者 (${peerId.substring(0, 6)})`,
@@ -279,7 +281,12 @@ export function useTrtcMultiUser() {
                 isRealTrtcUser: true
               }];
             });
-          });
+          };
+
+          client.on("peer-join", handleRemoteUserJoin);
+          if (typeof client.on === "function") {
+            client.on("onRemoteUserJoinRoom", handleRemoteUserJoin);
+          }
 
           client.on("peer-leave", (evt: any) => {
             const peerId = evt.userId;
@@ -289,18 +296,25 @@ export function useTrtcMultiUser() {
             setRemoteUsers(prev => prev.filter(u => u.id !== peerId));
           });
 
-          client.on("stream-added", async (evt: any) => {
+          const handleStreamAdded = async (evt: any) => {
             const remoteStream = evt.stream;
             const peerId = remoteStream.getUserId();
-            console.log(`[TRTC Stream-Added] New Remote Stream from: ${peerId}`);
-            trtcAudioMonitor.recordEvent('stream-published', `发现新远程音频流: ${peerId}`);
+            console.log(`[TRTC onUserAudioAvailable / stream-added] Audio/Stream available from: ${peerId}`);
+            trtcAudioMonitor.recordEvent('stream-published', `[onUserAudioAvailable] 发现新远程音频流 / 音频可用: ${peerId}`);
             setTrtcStatusText("Subscribing TRTC Stream...");
             try {
               await client.subscribe(remoteStream);
+              console.log(`[TRTC Re-Sync] Successfully subscribed to remote stream for peer: ${peerId}`);
             } catch (streamErr) {
               console.error("Failed to subscribe to remote stream:", streamErr);
             }
-          });
+          };
+
+          client.on("stream-added", handleStreamAdded);
+          if (typeof client.on === "function") {
+            client.on("onUserAudioAvailable", handleStreamAdded);
+            client.on("audio-available", handleStreamAdded);
+          }
 
           client.on("stream-subscribed", (evt: any) => {
             const remoteStream = evt.stream;

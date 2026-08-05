@@ -162,7 +162,7 @@ export function AudioOrchestrator({ audioStream, ttsText }: AudioOrchestratorPro
     }
   }, [ttsText, audioStream, pushAudioToTrtcStream]);
 
-  // Listen to Socket.IO A2A events: PLAY_AUDIO, ROUTE_AUDIO_TRTC
+  // Listen to Socket.IO A2A events & window.__trtcClient events
   useEffect(() => {
     const socket = io("/ws/meeting", {
       query: { roomId: meetingId || "10086", userName: userName || "Auditor", userRole: "participant" }
@@ -191,8 +191,33 @@ export function AudioOrchestrator({ audioStream, ttsText }: AudioOrchestratorPro
       }
     });
 
+    // Observe window.__trtcClient for onRemoteUserJoinRoom and onUserAudioAvailable
+    const trtcCheckInterval = setInterval(() => {
+      const client = (window as any).__trtcClient;
+      if (client && !client.__orchestratorListenersBound) {
+        client.__orchestratorListenersBound = true;
+        console.log("[AudioOrchestrator] Binding TRTC client event listeners for onRemoteUserJoinRoom & onUserAudioAvailable...");
+
+        const handleRemoteJoin = (evt: any) => {
+          console.log("[AudioOrchestrator TRTC Event] onRemoteUserJoinRoom triggered:", evt);
+          trtcAudioMonitor.recordEvent("peer-join", `[onRemoteUserJoinRoom] AudioOrchestrator detected peer join: ${evt?.userId}`);
+        };
+
+        const handleAudioAvailable = (evt: any) => {
+          console.log("[AudioOrchestrator TRTC Event] onUserAudioAvailable triggered (Re-syncing stream):", evt);
+          trtcAudioMonitor.recordEvent("stream-published", `[onUserAudioAvailable] AudioOrchestrator detected audio available for peer: ${evt?.stream?.getUserId?.()}`);
+        };
+
+        client.on("peer-join", handleRemoteJoin);
+        client.on("onRemoteUserJoinRoom", handleRemoteJoin);
+        client.on("stream-added", handleAudioAvailable);
+        client.on("onUserAudioAvailable", handleAudioAvailable);
+      }
+    }, 2000);
+
     return () => {
       socket.disconnect();
+      clearInterval(trtcCheckInterval);
     };
   }, [meetingId, userName, pushAudioToTrtcStream]);
 
