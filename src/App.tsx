@@ -14,7 +14,7 @@ import { useGeminiLive } from "./hooks/useGeminiLive";
 import { useRole } from "./hooks/useRole";
 
 export default function App() {
-  const { joined, userRoleType, userName, userRole } = useMeetingStore();
+  const { joined, userRoleType, userName, userRole, meetingId, tencentMeetingInfo } = useMeetingStore();
   const { isConnected, connectStream, disconnectStream } = useGeminiLive();
   const { isCreator, isAttendee } = useRole();
   const [copied, setCopied] = useState(false);
@@ -30,10 +30,11 @@ export default function App() {
     return "setup";
   });
 
-  // Get current meeting URL dynamically with active window location
+  // Get current meeting URL dynamically with active window location & meeting room ID parameters
+  const activeRoomId = tencentMeetingInfo?.meetingCode || meetingId || "10086";
   const meetingUrl = typeof window !== "undefined"
-    ? window.location.href
-    : "http://localhost:3000/?role=attendee&roomId=10086";
+    ? `${window.location.origin}/?role=attendee&roomId=${activeRoomId}`
+    : `https://dadimeeting.minervaedu.app/?role=attendee&roomId=${activeRoomId}`;
 
   const handleCopyLink = () => {
     if (typeof navigator !== "undefined" && navigator.clipboard) {

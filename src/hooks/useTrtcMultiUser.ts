@@ -186,7 +186,14 @@ export function useTrtcMultiUser() {
         const userSig = data.userSig;
         const userId = data.userId || userIdToUse;
 
-        const isRealTrtcConfigured = Boolean(!data.isPlaceholderKey && sdkAppId && sdkAppId !== 1400112233 && sdkAppId !== 1400000000);
+        const isRealTrtcConfigured = Boolean(
+          !data.isPlaceholderKey && 
+          userSig && 
+          !userSig.startsWith("mock_sig_") &&
+          sdkAppId && 
+          sdkAppId !== 1400112233 && 
+          sdkAppId !== 1400000000
+        );
 
         console.log(`[TRTC Client] Initializing session with AppId: ${sdkAppId}, UserId: ${userId}, RoomId: ${numericRoomId}, RealConfigured: ${isRealTrtcConfigured}`);
         setTrtcStatusText(`Connecting TRTC (${sdkAppId})...`);
