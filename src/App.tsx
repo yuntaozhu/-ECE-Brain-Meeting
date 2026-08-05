@@ -30,12 +30,10 @@ export default function App() {
     return "setup";
   });
 
-  // Get current meeting URL dynamically with production domain
+  // Get current meeting URL dynamically with active window location
   const meetingUrl = typeof window !== "undefined"
-    ? (window.location.hostname.includes("dadimeeting.minervaedu.app")
-        ? window.location.href
-        : `https://dadimeeting.minervaedu.app${window.location.search || '?role=attendee&roomId=10086'}`)
-    : "https://dadimeeting.minervaedu.app?role=attendee&roomId=10086";
+    ? window.location.href
+    : "http://localhost:3000/?role=attendee&roomId=10086";
 
   const handleCopyLink = () => {
     if (typeof navigator !== "undefined" && navigator.clipboard) {

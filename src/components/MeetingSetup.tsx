@@ -267,7 +267,7 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
     let tencentData = null;
 
     if (tencentSyncToggle) {
-      const currentOrigin = typeof window !== "undefined" ? window.location.origin : "https://dadimeeting.minervaedu.app";
+      const currentOrigin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
 
       if (customTencentMeetingId.trim()) {
         const customCode = customTencentMeetingId.trim().replace(/\s+/g, '');
@@ -362,7 +362,7 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
     const activeRoomId = tencentData ? tencentData.meetingCode : meetingRoomId;
 
     // Generate link for standard attendee with current active domain
-    const origin = typeof window !== "undefined" ? window.location.origin : "https://dadimeeting.minervaedu.app";
+    const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
     const invite = `${origin}/?role=attendee&roomId=${activeRoomId}`;
     setInviteUrl(invite);
     
