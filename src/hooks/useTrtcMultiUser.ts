@@ -366,11 +366,11 @@ export function useTrtcMultiUser() {
             addTranscriptLine("系统提示", `🎯 已成功建立 TRTC 研讨音视频通道：Room ${numericRoomId}`);
           }
         } else {
-          console.log("[TRTC Client] Operating in high-fidelity TRTC audio tunnel mode.");
+          console.log("[TRTC Client] Phase-1 text-sync mode (no live TRTC media on Vercel).");
           isJoinedRef.current = true;
-          setTrtcStatusText(`TRTC Active ● Room ${numericRoomId}`);
-          telemetry.recordConnectionState('trtcState', 'CONNECTED', { endpoint: `TRTC-Sandbox-Room-${numericRoomId}` });
-          addTranscriptLine("系统提示", `🎯 已成功建立 TRTC 研讨音视频通道：Room ${numericRoomId}`);
+          setTrtcStatusText(`Phase-1 Text Sync · Room ${numericRoomId}`);
+          telemetry.recordConnectionState('trtcState', 'CONNECTED', { endpoint: `Phase1-Text-Room-${numericRoomId}` });
+          addTranscriptLine("系统提示", `📋 Phase-1 文本研讨模式已启用：Room ${numericRoomId}。多终端靠分享链接 + HTTP Poll 同步；真人麦克风互通见后续火山 RTC 阶段。`);
         }
 
         if (isCancelled) return;

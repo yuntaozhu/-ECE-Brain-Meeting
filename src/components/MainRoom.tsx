@@ -81,55 +81,110 @@ export default function MainRoom() {
     return () => clearInterval(interval);
   }, [isTencentSyncEnabled, tencentMeetingInfo, setTencentParticipants]);
 
-  // Cross-device meeting state synchronization via server API (Polling server state)
+  // Cross-device sync via /api/live/poll (Phase-1 Vercel-friendly)
   useEffect(() => {
-    const activeId = meetingId || lobbyRoomId || '10086';
-    if (!activeId) return;
+    const activeId = meetingId || lobbyRoomId || "10086";
+    if (!activeId || !joined) return;
 
-    const fetchServerState = async () => {
+    let sinceSeq = 0;
+    let cancelled = false;
+    let silencePosted = false;
+
+    const applyServerState = (serverState: any) => {
+      if (!serverState) return;
+      const currentState = useMeetingStore.getState();
+      const patch: any = {};
+
+      if (serverState.currentTopic && serverState.currentTopic !== currentState.currentTopic) {
+        patch.currentTopic = serverState.currentTopic;
+      }
+      if (serverState.agendaStage && serverState.agendaStage !== currentState.agendaStage) {
+        patch.agendaStage = serverState.agendaStage;
+      }
+      if (Array.isArray(serverState.agendas) && serverState.agendas.length) {
+        patch.agendas = serverState.agendas;
+      }
+      if (Array.isArray(serverState.latestToDos)) {
+        patch.latestToDos = serverState.latestToDos;
+      }
+      if (Array.isArray(serverState.tencentParticipants)) {
+        patch.tencentParticipants = serverState.tencentParticipants;
+      }
+      if (serverState.mountedFiles) {
+        patch.mountedFiles = serverState.mountedFiles;
+      }
+      if (serverState.meetingStarted !== undefined && serverState.meetingStarted !== currentState.meetingStarted) {
+        patch.meetingStarted = serverState.meetingStarted;
+      }
+      if (serverState.transcript && Array.isArray(serverState.transcript)) {
+        const currentList = currentState.transcript || [];
+        const map = new Map<string, any>();
+        for (const item of currentList) {
+          if (!item) continue;
+          const spk = item.speaker || (item as any).sender || "参会者";
+          const txt = (item.text || "").trim();
+          if (txt) map.set(`${spk}_${txt}`, { ...item, speaker: spk, text: txt });
+        }
+        let added = false;
+        for (const item of serverState.transcript) {
+          if (!item) continue;
+          const spk = item.speaker || item.sender || "参会者";
+          const txt = (item.text || "").trim();
+          if (txt && !map.has(`${spk}_${txt}`)) {
+            map.set(`${spk}_${txt}`, { ...item, speaker: spk, text: txt });
+            added = true;
+            if (String(spk).includes("AI") || String(spk).includes("主席")) {
+              import("../lib/audioSpeech").then(({ speakText, resumeAudioContextAndSpeech }) => {
+                resumeAudioContextAndSpeech();
+                speakText(txt, { pitch: 0.98, rate: 1.05 });
+              }).catch(() => {});
+            }
+          }
+        }
+        if (added || map.size !== currentList.length) {
+          patch.transcript = Array.from(map.values());
+          logger.log("INFO", "MeetingState", `多设备同步: transcript ${map.size} 条`, {
+            roomId: activeId,
+            total: map.size
+          });
+        }
+      }
+      if (Object.keys(patch).length) {
+        useMeetingStore.setState(patch);
+      }
+    };
+
+    const pollOnce = async () => {
       try {
-        const res = await fetch(`/api/meeting/state/${activeId}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.success && data.state) {
-            const serverState = data.state;
-            const currentState = useMeetingStore.getState();
-            if (serverState.currentTopic && serverState.currentTopic !== currentState.currentTopic) {
-              useMeetingStore.setState({ currentTopic: serverState.currentTopic });
-            }
-            if (serverState.agendaStage && serverState.agendaStage !== currentState.agendaStage) {
-              useMeetingStore.setState({ agendaStage: serverState.agendaStage });
-            }
-            if (serverState.transcript && Array.isArray(serverState.transcript)) {
-              const currentList = currentState.transcript || [];
-              const map = new Map<string, any>();
-              
-              for (const item of currentList) {
-                if (!item) continue;
-                const spk = item.speaker || (item as any).sender || "参会者";
-                const txt = (item.text || "").trim();
-                if (txt) map.set(`${spk}_${txt}`, { ...item, speaker: spk, text: txt });
-              }
-              for (const item of serverState.transcript) {
-                if (!item) continue;
-                const spk = item.speaker || item.sender || "参会者";
-                const txt = (item.text || "").trim();
-                if (txt && !map.has(`${spk}_${txt}`)) {
-                  map.set(`${spk}_${txt}`, { ...item, speaker: spk, text: txt });
-                }
-              }
-              const mergedList = Array.from(map.values());
-              if (mergedList.length !== currentList.length) {
-                useMeetingStore.setState({ transcript: mergedList });
-                logger.log('INFO', 'MeetingState', `多设备同步: 收到最新的会议发言数据 (${mergedList.length} 条)`, { roomId: activeId, total: mergedList.length });
-              }
-            }
-            if (serverState.mountedFiles) {
-              useMeetingStore.setState({ mountedFiles: serverState.mountedFiles });
-            }
-            if (serverState.meetingStarted !== undefined && serverState.meetingStarted !== currentState.meetingStarted) {
-              useMeetingStore.setState({ meetingStarted: serverState.meetingStarted });
-            }
+        const res = await fetch(`/api/live/poll?roomId=${encodeURIComponent(activeId)}&since=${sinceSeq}`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (data.seq) sinceSeq = Math.max(sinceSeq, data.seq);
+        applyServerState(data.state);
+
+        // Silence pacemaker: no human chat for 8s while meeting started
+        const state = useMeetingStore.getState();
+        if (state.meetingStarted && !silencePosted) {
+          const humanLines = (state.transcript || []).filter(
+            (t) => t?.speaker && !String(t.speaker).includes("系统") && !String(t.speaker).includes("AI")
+          );
+          const last = humanLines[humanLines.length - 1];
+          const lastTs = last?.timestamp ? new Date(last.timestamp as any).getTime() : 0;
+          if (lastTs && Date.now() - lastTs > 8000) {
+            silencePosted = true;
+            fetch("/api/ai/intervene", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ roomId: activeId, reason: "silence" })
+            })
+              .then(() => {
+                setTimeout(() => {
+                  silencePosted = false;
+                }, 20000);
+              })
+              .catch(() => {
+                silencePosted = false;
+              });
           }
         }
       } catch (e) {
@@ -137,12 +192,12 @@ export default function MainRoom() {
       }
     };
 
-    // Fetch immediately on mount
-    fetchServerState();
-
-    const syncInterval = setInterval(fetchServerState, 3000);
-
-    return () => clearInterval(syncInterval);
+    pollOnce();
+    const syncInterval = setInterval(pollOnce, 2000);
+    return () => {
+      cancelled = true;
+      clearInterval(syncInterval);
+    };
   }, [joined, meetingId, lobbyRoomId]);
 
   // Push local state changes to server (debounced)
@@ -525,11 +580,11 @@ export default function MainRoom() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
         <div>
           <div className="flex flex-wrap items-center gap-2 mb-1.5">
-            <span className="text-[9px] text-cyan-400 font-mono font-bold border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-              第 4 阶段：多人声纹追踪与实时控场
+            <span className="text-[9px] text-emerald-400 font-mono font-bold border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+              Phase-1：文本同步研讨室（Vercel）
             </span>
-            <Badge className="bg-cyan-500/10 border-cyan-500/20 text-cyan-400 text-[9px] px-2 font-mono">
-              ● TRTC STATUS: {trtcStatusText}
+            <Badge className="bg-emerald-500/10 border-emerald-500/20 text-emerald-400 text-[9px] px-2 font-mono">
+              ● SYNC: HTTP Poll + Redis/Memory · {trtcStatusText}
             </Badge>
 
             {isTencentSyncEnabled && (

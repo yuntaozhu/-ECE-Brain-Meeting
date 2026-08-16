@@ -4,10 +4,26 @@ import http from "http";
 import { Server as SocketIOServer } from "socket.io";
 import { createServer as createViteServer } from "vite";
 import { WebSocketServer } from "ws";
+import dotenv from "dotenv";
+
+dotenv.config();
+
 import { runMeetingAnalysisServer } from "./src/lib/kaibanMeetingEngine.server";
 import tencentMeetingRouter from "./server/routes/tencentMeeting";
 import { setupMeetingWebSocket } from "./server/websocketMeeting";
 import { setupSocketIOServer } from "./server/index";
+import {
+  addRagChunk,
+  getMeetingState,
+  getOrCreateMeetingState,
+  getStoreBackend,
+  listEventsSince,
+  patchMeetingState,
+  saveChatMessageToServerState,
+  searchRag,
+  upsertParticipant
+} from "./server/lib/meetingStore";
+import { embedQuery, hashEmbed, runAiIntervene } from "./server/lib/aiIntervene";
 
 const app = express();
 const server = http.createServer(app);
@@ -17,87 +33,94 @@ const io = new SocketIOServer(server, {
 
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: "2mb" }));
 
-// In-memory RAG Vector Store
-const ragVectorStore = new Map<string, {
-  id: string;
-  roomId: string;
-  fileName: string;
-  text: string;
-  embedding: number[];
-  createdAt: number;
-}>();
+function chunkText(content: string, maxLen = 500): string[] {
+  const text = (content || "").trim();
+  if (!text) return ["大地 ECE-Brain 学术教研资料"];
+  if (text.length <= maxLen) return [text];
+  const parts: string[] = [];
+  for (let i = 0; i < text.length; i += maxLen) {
+    parts.push(text.slice(i, i + maxLen));
+  }
+  return parts.slice(0, 24);
+}
 
-// Phase 1: Pre-meeting RAG Resource Mounting Endpoint (Doubao Embedding)
+// Phase 1: Pre-meeting RAG Resource Mounting (Doubao Embedding, roomId-isolated store)
 app.post("/api/rag/embed-resource", async (req, res) => {
   const { fileName = "教研文件.txt", content = "", roomId = "10086" } = req.body;
-  const doubaoApiKey = process.env.DOUBAO_API_KEY || "ark-20c57eca-6b75-4581-bb78-023f7776df4e-58bd0";
+  const doubaoApiKey = process.env.DOUBAO_API_KEY || process.env.ARK_API_KEY || "";
 
   try {
-    let embedding: number[] = [];
+    const chunks = chunkText(content);
     let isRealDoubao = false;
+    const chunkIds: string[] = [];
 
-    if (doubaoApiKey) {
-      try {
-        const response = await fetch("https://ark.cn-beijing.volces.com/api/v3/embeddings/multimodal", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${doubaoApiKey}`
-          },
-          body: JSON.stringify({
-            model: "doubao-embedding-vision-251215",
-            instructions: "Target_modality: text and video.\nInstruction:Compress the text/video into one word.\nQuery:",
-            input: [{ type: "text", text: content || "大地 ECE-Brain 学术教研资料" }],
-            dimensions: 1024,
-            multi_embedding: { type: "enabled" },
-            sparse_embedding: { type: "enabled" },
-            encoding_format: "float"
-          })
-        });
+    for (let i = 0; i < chunks.length; i++) {
+      const piece = chunks[i];
+      let embedding: number[] = [];
 
-        if (response.ok) {
-          const data = await response.json();
-          const vec = data.data?.[0]?.embedding || data.data?.[0]?.dense_embedding;
-          if (Array.isArray(vec)) {
-            embedding = vec;
-            isRealDoubao = true;
+      if (doubaoApiKey) {
+        try {
+          const response = await fetch("https://ark.cn-beijing.volces.com/api/v3/embeddings/multimodal", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${doubaoApiKey}`
+            },
+            body: JSON.stringify({
+              model: process.env.DOUBAO_EMBED_MODEL || "doubao-embedding-vision-251215",
+              instructions:
+                "Target_modality: text and video.\nInstruction:Compress the text/video into one word.\nQuery:",
+              input: [{ type: "text", text: piece }],
+              dimensions: 1024,
+              multi_embedding: { type: "enabled" },
+              sparse_embedding: { type: "enabled" },
+              encoding_format: "float"
+            })
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            const vec = data.data?.[0]?.embedding || data.data?.[0]?.dense_embedding;
+            if (Array.isArray(vec)) {
+              embedding = vec;
+              isRealDoubao = true;
+            }
           }
+        } catch (err) {
+          console.warn("[RAG] Doubao embedding fetch failed for chunk, using fallback:", err);
         }
-      } catch (err) {
-        console.warn("[RAG] Doubao embedding fetch failed, using fallback vector:", err);
       }
+
+      if (embedding.length === 0) {
+        embedding = hashEmbed(piece);
+      }
+
+      const chunkId = `rag_${roomId}_${Date.now()}_${i}`;
+      await addRagChunk({
+        id: chunkId,
+        roomId: String(roomId),
+        fileName,
+        text: piece,
+        embedding,
+        createdAt: Date.now()
+      });
+      chunkIds.push(chunkId);
     }
 
-    // Fallback vector generation if needed
-    if (embedding.length === 0) {
-      embedding = Array.from({ length: 1024 }, (_, i) => Math.sin(i + content.length));
-    }
-
-    const chunkId = `rag_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    ragVectorStore.set(chunkId, {
-      id: chunkId,
-      roomId,
-      fileName,
-      text: content,
-      embedding,
-      createdAt: Date.now()
-    });
-
-    // Auto-generate structured 3-stage agendas based on knowledge base
     const customAgendas = [
       {
         id: "IceBreaking",
         title: `1. 破冰与《${fileName.slice(0, 10)}》教研规范宣读`,
-        description: "宣布全系统 ECE-Brain 控场纪律，禁止任何节假日采购与行政杂务扯皮，直入学术主题。",
+        description: "宣布 ECE-Brain 控场纪律，禁止节假日采购与行政杂务扯皮，直入学术主题。",
         durationSeconds: 180,
         status: "in_progress"
       },
       {
         id: "MainDiscussion",
         title: `2. 核心教学法与托班注意力算法研讨`,
-        description: `基于《${fileName}》挂载资源，针对幼儿眼球追踪与多媒体平板交互算法进行可行性分析。`,
+        description: `基于《${fileName}》挂载资源，针对幼儿眼球追踪与多媒体交互算法进行可行性分析。`,
         durationSeconds: 300,
         status: "pending"
       },
@@ -110,21 +133,28 @@ app.post("/api/rag/embed-resource", async (req, res) => {
       }
     ];
 
-    // Store in room state
-    const existing = meetingStates.get(roomId) || {};
-    meetingStates.set(roomId, {
-      ...existing,
-      mountedFiles: [...(existing.mountedFiles || []), { name: fileName, chunkId, status: "done" }],
+    const existing = await getOrCreateMeetingState(String(roomId));
+    await patchMeetingState(String(roomId), {
+      mountedFiles: [
+        ...(existing.mountedFiles || []),
+        { name: fileName, chunkIds, status: "done", isRealDoubao }
+      ],
       agendas: customAgendas
     });
 
     res.json({
       success: true,
-      chunkId,
-      dimensions: embedding.length,
+      chunkId: chunkIds[0],
+      chunkIds,
+      chunkCount: chunkIds.length,
+      dimensions: 1024,
       isRealDoubao,
+      fallback: !isRealDoubao,
+      storeBackend: await getStoreBackend(),
       agendas: customAgendas,
-      message: "教研资源成功挂载并完成 1024 维多模态向量化索引"
+      message: isRealDoubao
+        ? "教研资源已按 roomId 隔离挂载并完成 Doubao 向量化"
+        : "教研资源已挂载（向量为本地 fallback，请配置 DOUBAO_API_KEY / ARK_API_KEY）"
     });
   } catch (err: any) {
     console.error("[RAG Error]", err);
@@ -132,30 +162,35 @@ app.post("/api/rag/embed-resource", async (req, res) => {
   }
 });
 
-// Phase 1: Search RAG Knowledge Base Endpoint
-app.post("/api/rag/search-knowledge", (req, res) => {
-  const { query = "", roomId = "10086" } = req.body;
-  const results: any[] = [];
+// Phase 1: Search RAG Knowledge Base (cosine similarity, room-scoped)
+app.post("/api/rag/search-knowledge", async (req, res) => {
+  const { query = "", roomId = "10086", topK = 5 } = req.body;
+  try {
+    const { embedding, isReal } = await embedQuery(String(query || "教研检索"));
+    let results = await searchRag(String(roomId), embedding, Number(topK) || 5);
 
-  ragVectorStore.forEach((value) => {
-    if (value.roomId === roomId || roomId === "all") {
-      results.push({
-        fileName: value.fileName,
-        snippet: value.text.slice(0, 200),
-        similarity: 0.88 + Math.random() * 0.1
-      });
+    if (results.length === 0) {
+      results = [
+        {
+          fileName: "（本房间暂无挂载资料）",
+          snippet: "请先在筹备页上传教研文档，或确认 roomId 与挂载时一致。",
+          similarity: 0,
+          text: ""
+        }
+      ];
     }
-  });
 
-  if (results.length === 0) {
-    results.push({
-      fileName: "托班数字化硬件白皮书.pdf",
-      snippet: "幼儿注意力追踪与护眼多媒体算法配置规范：重点控制屏幕蓝光与双语交互响应时延。",
-      similarity: 0.92
+    res.json({
+      success: true,
+      query,
+      roomId,
+      isRealEmbedding: isReal,
+      storeBackend: await getStoreBackend(),
+      results
     });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
   }
-
-  res.json({ success: true, query, results });
 });
 
 // Socket.IO real-time bidirectional sync
@@ -171,35 +206,23 @@ io.on("connection", (socket) => {
     const { roomId, sender, text } = data;
     if (roomId && text && text.trim()) {
       const cleanText = text.trim();
-      const updatedState = saveChatMessageToServerState(roomId, sender || "参会者", cleanText);
+      await saveChatMessageToServerState(roomId, sender || "参会者", cleanText);
       io.to(roomId).emit("chat-received", { sender: sender || "参会者", text: cleanText, timestamp: Date.now() });
 
-      // Run KaibanJS A2A Engine analysis for AI Host interaction
       setTimeout(async () => {
         try {
-          const state = meetingStates.get(roomId) || updatedState;
-          const recentTranscript = (state.transcript || []).slice(-8).map((t: any) => `${t.speaker}: ${t.text}`).join("\n");
-          const currentAgenda = `议程阶段: ${state.agendaStage || 'IceBreaking'}. 主题: ${state.currentTopic || '关于下一代幼儿教育数字化基础设施的规划'}`;
-
-          const aiResult = await runMeetingAnalysisServer(recentTranscript, currentAgenda);
-
-          let aiResponseText = "";
-          if (aiResult.shouldIntervene && aiResult.interventionText) {
-            aiResponseText = aiResult.interventionText;
-          } else if (cleanText.includes("你好") || cleanText.includes("在吗") || cleanText.includes("收到") || cleanText.includes("测试")) {
-            aiResponseText = `【AI主席导流】欢迎 ${sender || '参会者'} 介入研讨！请针对托班数字化硬件及注意力指标发表考评意见。`;
-          }
-
+          const { text: aiResponseText, state: finalState } = await runAiIntervene({
+            roomId,
+            reason: "chat",
+            sender: sender || "参会者",
+            hint: cleanText
+          });
           if (aiResponseText) {
-            console.log(`[Socket.IO AI Host Interaction] Response for Room ${roomId}: "${aiResponseText}"`);
-            const finalState = saveChatMessageToServerState(roomId, "AI 主席 (大地教研督导)", aiResponseText);
-            
             io.to(roomId).emit("chat-received", {
               sender: "AI 主席 (大地教研督导)",
               text: aiResponseText,
               timestamp: Date.now()
             });
-
             io.to(roomId).emit("ai-intervention", {
               roomId,
               text: aiResponseText,
@@ -220,9 +243,10 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("participant-joined", (data) => {
+  socket.on("participant-joined", async (data) => {
     const { roomId, participant } = data;
     if (roomId && participant) {
+      await upsertParticipant(roomId, participant);
       io.to(roomId).emit("participant-joined", { roomId, participant });
     }
   });
@@ -239,62 +263,19 @@ app.use((req, res, next) => {
 });
 
 // Health check
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok" });
+app.get("/api/health", async (req, res) => {
+  res.json({
+    status: "ok",
+    phase: "phase1-vercel-text-sync",
+    storeBackend: await getStoreBackend()
+  });
 });
 
-// Tencent Meeting API Routes
+// Tencent Meeting API Routes (optional external bridge — not Phase-1 media path)
 app.use("/api/tencent", tencentMeetingRouter);
 
-// In-memory cross-device meeting state store for real-time synchronization between sharing links and devices
-export const meetingStates = new Map<string, any>();
-
-export function mergeTranscripts(existingList: any[] = [], incomingList: any[] = []) {
-  const map = new Map<string, any>();
-  
-  for (const item of existingList) {
-    if (!item) continue;
-    const speaker = item.speaker || item.sender || "参会者";
-    const text = (item.text || "").trim();
-    if (!text) continue;
-    const key = `${speaker}_${text}`;
-    map.set(key, { ...item, speaker, text });
-  }
-  
-  for (const item of incomingList) {
-    if (!item) continue;
-    const speaker = item.speaker || item.sender || "参会者";
-    const text = (item.text || "").trim();
-    if (!text) continue;
-    const key = `${speaker}_${text}`;
-    if (!map.has(key)) {
-      map.set(key, { ...item, speaker, text });
-    }
-  }
-
-  return Array.from(map.values());
-}
-
-export function saveChatMessageToServerState(roomId: string, sender: string, text: string) {
-  const existing = meetingStates.get(roomId) || {
-    currentTopic: "关于下一代幼儿教育数字化基础设施的规划",
-    agendaStage: "IceBreaking",
-    transcript: [],
-    mountedFiles: [],
-    tencentParticipants: [],
-    isMeetingActive: false
-  };
-
-  const newEntry = { speaker: sender, text, timestamp: new Date().toISOString() };
-  const updatedTranscript = mergeTranscripts(existing.transcript || [], [newEntry]);
-  const updated = {
-    ...existing,
-    transcript: updatedTranscript,
-    updatedAt: Date.now()
-  };
-  meetingStates.set(roomId, updated);
-  return updated;
-}
+// Re-export store helpers for legacy WS modules
+export { mergeTranscripts, saveChatMessageToServerState } from "./server/lib/meetingStore";
 
 app.post("/api/meeting/chat", async (req, res) => {
   const { roomId = "10086", sender = "参会者", text = "" } = req.body;
@@ -303,45 +284,36 @@ app.post("/api/meeting/chat", async (req, res) => {
   }
 
   const cleanText = text.trim();
-  const updatedState = saveChatMessageToServerState(roomId, sender, cleanText);
+  const updatedState = await saveChatMessageToServerState(String(roomId), sender, cleanText);
 
-  // Broadcast to all Socket.IO clients in the room
-  io.to(roomId).emit("chat-received", { sender, text: cleanText, timestamp: Date.now() });
+  try {
+    io.to(roomId).emit("chat-received", { sender, text: cleanText, timestamp: Date.now() });
+  } catch (_) {}
 
-  // Respond immediately to HTTP client
-  res.json({ success: true, state: updatedState });
+  res.json({ success: true, state: updatedState, storeBackend: await getStoreBackend() });
 
-  // Asynchronously run KaibanJS A2A Engine analysis to interact with participant
   setTimeout(async () => {
     try {
-      const state = meetingStates.get(roomId) || updatedState;
-      const recentTranscript = (state.transcript || []).slice(-8).map((t: any) => `${t.speaker}: ${t.text}`).join("\n");
-      const currentAgenda = `议程阶段: ${state.agendaStage || 'IceBreaking'}. 主题: ${state.currentTopic || '关于下一代幼儿教育数字化基础设施的规划'}`;
-
-      const aiResult = await runMeetingAnalysisServer(recentTranscript, currentAgenda);
-
-      let aiResponseText = "";
-      if (aiResult.shouldIntervene && aiResult.interventionText) {
-        aiResponseText = aiResult.interventionText;
-      } else if (cleanText.includes("你好") || cleanText.includes("在吗") || cleanText.includes("收到") || cleanText.includes("测试")) {
-        aiResponseText = `【AI主席导流】欢迎 ${sender} 介入研讨！请针对托班数字化硬件及注意力指标发表考评意见。`;
-      }
-
+      const { text: aiResponseText, state: finalState } = await runAiIntervene({
+        roomId: String(roomId),
+        reason: "chat",
+        sender,
+        hint: cleanText
+      });
       if (aiResponseText) {
-        console.log(`[KaibanJS AI Host Interaction] Triggered response for Room ${roomId}: "${aiResponseText}"`);
-        const finalState = saveChatMessageToServerState(roomId, "AI 主席 (大地教研督导)", aiResponseText);
-        
-        io.to(roomId).emit("chat-received", {
-          sender: "AI 主席 (大地教研督导)",
-          text: aiResponseText,
-          timestamp: Date.now()
-        });
-        
-        io.to(roomId).emit("ai-intervention", {
-          roomId,
-          text: aiResponseText,
-          state: finalState
-        });
+        console.log(`[KaibanJS AI Host] Room ${roomId}: "${aiResponseText}"`);
+        try {
+          io.to(roomId).emit("chat-received", {
+            sender: "AI 主席 (大地教研督导)",
+            text: aiResponseText,
+            timestamp: Date.now()
+          });
+          io.to(roomId).emit("ai-intervention", {
+            roomId,
+            text: aiResponseText,
+            state: finalState
+          });
+        } catch (_) {}
       }
     } catch (engineErr) {
       console.warn("[KaibanJS Engine Async Interaction Notice]", engineErr);
@@ -349,34 +321,97 @@ app.post("/api/meeting/chat", async (req, res) => {
   }, 200);
 });
 
-app.get("/api/meeting/state/:roomId", (req, res) => {
+app.get("/api/meeting/state/:roomId", async (req, res) => {
   const { roomId } = req.params;
-  const state = meetingStates.get(roomId) || null;
+  const state = await getMeetingState(roomId);
+  res.json({
+    success: true,
+    state,
+    storeBackend: await getStoreBackend()
+  });
+});
+
+app.post("/api/meeting/state/:roomId", async (req, res) => {
+  const { roomId } = req.params;
+  const incoming = req.body || {};
+  const updated = await patchMeetingState(roomId, incoming);
+  res.json({ success: true, state: updated, storeBackend: await getStoreBackend() });
+});
+
+app.post("/api/meeting/participants/join", async (req, res) => {
+  const { roomId = "10086", participant } = req.body || {};
+  if (!participant?.userName) {
+    return res.status(400).json({ success: false, error: "participant.userName required" });
+  }
+  const state = await upsertParticipant(String(roomId), participant);
+  try {
+    io.to(roomId).emit("participant-joined", { roomId, participant });
+  } catch (_) {}
   res.json({ success: true, state });
 });
 
-app.post("/api/meeting/state/:roomId", (req, res) => {
-  const { roomId } = req.params;
-  const incoming = req.body;
-  const existing = meetingStates.get(roomId) || {
-    currentTopic: "关于下一代幼儿教育数字化基础设施的规划",
-    agendaStage: "IceBreaking",
-    transcript: [],
-    mountedFiles: [],
-    tencentParticipants: [],
-    isMeetingActive: false
-  };
-  const mergedTranscript = mergeTranscripts(existing.transcript || [], incoming.transcript || []);
+app.get("/api/live/poll", async (req, res) => {
+  const roomId = String(req.query.roomId || "10086");
+  const since = Number(req.query.since || 0);
+  const state = await getOrCreateMeetingState(roomId);
+  const events = await listEventsSince(roomId, since);
+  res.json({
+    success: true,
+    roomId,
+    seq: state.seq || 0,
+    events,
+    state,
+    storeBackend: await getStoreBackend()
+  });
+});
 
-  const updated = {
-    ...existing,
-    ...incoming,
-    tencentParticipants: incoming.tencentParticipants || existing.tencentParticipants,
-    transcript: mergedTranscript,
-    updatedAt: Date.now()
-  };
-  meetingStates.set(roomId, updated);
-  res.json({ success: true, state: updated });
+app.post("/api/live/send", async (req, res) => {
+  const { roomId = "10086", type = "chat", sender = "参会者", text = "", payload } = req.body || {};
+  if (type === "chat" && text?.trim()) {
+    const state = await saveChatMessageToServerState(String(roomId), sender, text.trim());
+    return res.json({ success: true, state });
+  }
+  if (type === "participant" && payload) {
+    const state = await upsertParticipant(String(roomId), payload);
+    return res.json({ success: true, state });
+  }
+  const state = await patchMeetingState(String(roomId), payload || {});
+  res.json({ success: true, state });
+});
+
+app.post("/api/ai/intervene", async (req, res) => {
+  const { roomId = "10086", reason = "manual", hint = "", sender } = req.body || {};
+  try {
+    const result = await runAiIntervene({
+      roomId: String(roomId),
+      reason,
+      hint,
+      sender
+    });
+    try {
+      if (result.text) {
+        io.to(roomId).emit("ai-intervention", {
+          roomId,
+          text: result.text,
+          state: result.state
+        });
+        io.to(roomId).emit("chat-received", {
+          sender: "AI 主席 (大地教研督导)",
+          text: result.text,
+          timestamp: Date.now()
+        });
+      }
+    } catch (_) {}
+    res.json({
+      success: true,
+      text: result.text,
+      state: result.state,
+      analysis: result.analysis,
+      storeBackend: await getStoreBackend()
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // Doubao Ark Chat API Endpoint

@@ -255,12 +255,31 @@ export const useMeetingStore = create<MeetingState>((set) => ({
     const isAttendeeQuery = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("role") === "attendee";
     const actualRoleType = roleType || (isAttendeeQuery ? "attendee" : "creator");
     const isAttendee = actualRoleType === "attendee";
-    const actualName = name || (isAttendee ? "杨督导" : "张园长");
+    const actualName = name || (isAttendee ? "参会嘉宾" : "张园长");
     const actualRole = role || (isAttendee ? "省优质名园考评长" : "学前数字融合组长");
     const activeRoomId = roomId || state.meetingId || "10086";
 
+    let stableUserId = "";
+    if (typeof window !== "undefined") {
+      try {
+        const key = `dadimeeting_uid_${activeRoomId}`;
+        stableUserId = localStorage.getItem(key) || "";
+        if (!stableUserId) {
+          stableUserId =
+            typeof crypto !== "undefined" && crypto.randomUUID
+              ? `user_${crypto.randomUUID()}`
+              : `user_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+          localStorage.setItem(key, stableUserId);
+        }
+      } catch {
+        stableUserId = `user_${Date.now()}`;
+      }
+    } else {
+      stableUserId = `user_${Date.now()}`;
+    }
+
     const newParticipant = {
-      userId: `user_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      userId: stableUserId,
       userName: actualName,
       userRole: actualRole,
       userRoleType: actualRoleType,
@@ -268,13 +287,18 @@ export const useMeetingStore = create<MeetingState>((set) => ({
       joinTime: Math.floor(Date.now() / 1000)
     };
 
-    // Sync to backend API immediately
     if (typeof fetch !== "undefined") {
+      fetch(`/api/meeting/participants/join`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomId: activeRoomId, participant: newParticipant })
+      }).catch((err) => console.warn("Failed to sync participant join:", err));
+
       fetch(`/api/tencent/meetings/${activeRoomId}/participants/join`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newParticipant)
-      }).catch(err => console.warn('Failed to sync participant join to backend:', err));
+      }).catch(() => {});
     }
 
     if (socket && activeRoomId) {
@@ -283,18 +307,24 @@ export const useMeetingStore = create<MeetingState>((set) => ({
     }
 
     const existingParticipants = state.tencentParticipants || [];
-    const filtered = existingParticipants.filter(p => p.userName !== actualName);
+    const filtered = existingParticipants.filter(
+      (p) => p.userId !== stableUserId && p.userName !== actualName
+    );
     const updatedParticipants = [...filtered, newParticipant];
 
     if (typeof window !== "undefined") {
       try {
-        localStorage.setItem("dadimeeting_context", JSON.stringify({
-          joined: true,
-          userName: actualName,
-          userRole: actualRole,
-          meetingId: activeRoomId,
-          userRoleType: actualRoleType
-        }));
+        localStorage.setItem(
+          "dadimeeting_context",
+          JSON.stringify({
+            joined: true,
+            userName: actualName,
+            userRole: actualRole,
+            meetingId: activeRoomId,
+            userRoleType: actualRoleType,
+            userId: stableUserId
+          })
+        );
       } catch (e) {}
     }
 
@@ -307,7 +337,11 @@ export const useMeetingStore = create<MeetingState>((set) => ({
       tencentParticipants: updatedParticipants,
       transcript: [
         ...state.transcript,
-        { speaker: "系统提示", text: `🎯 参会者 ${actualName}(职务：${actualRole}) 以【${isAttendee ? "普通参会嘉宾 (Attendee)" : "会议发起高管 (Creator/Host)"}】身份成功加入研讨通道。`, timestamp: new Date() }
+        {
+          speaker: "系统提示",
+          text: `🎯 参会者 ${actualName}(职务：${actualRole}) 以【${isAttendee ? "普通参会嘉宾 (Attendee)" : "会议发起高管 (Creator/Host)"}】身份加入 Phase-1 文本研讨室（roomId=${activeRoomId}）。`,
+          timestamp: new Date()
+        }
       ]
     };
   }),

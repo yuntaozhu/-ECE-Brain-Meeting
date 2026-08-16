@@ -108,7 +108,7 @@ export function useGeminiLive() {
 
       ws.onmessage = (event) => {
         const msg = JSON.parse(event.data);
-        
+
         if (msg.audio) {
           telemetry.recordAudioBuffer({ chunksReceivedDelta: 1 });
           playAudioChunk(msg.audio);
@@ -120,10 +120,20 @@ export function useGeminiLive() {
           stopPlayback();
         }
 
-        // Handle real-time text narration
+        if (msg.asr) {
+          // Partial/final user ASR from Seeduplex — final lines go to transcript
+          if (msg.final) {
+            addTranscriptLine(msg.speaker || "我", msg.asr);
+          }
+        }
+
+        // Handle real-time text narration (avoid double TTS when Seeduplex already streams audio)
         if (msg.text && msg.speaker) {
           addTranscriptLine(msg.speaker, msg.text);
-          speakText(msg.text);
+          if (!msg.duplexAudioExpected && !String(msg.speaker).includes("Seeduplex") && !String(msg.speaker).includes("系统")) {
+            // Text-only fallback path still uses browser TTS
+            if (!msg.audio) speakText(msg.text);
+          }
         }
       };
 
@@ -215,6 +225,9 @@ export function useGeminiLive() {
            if (rms > 0.06) { // Voice energy threshold
               console.log("VAD Voice Detected (RMS: " + rms.toFixed(3) + ") during speech! Barging-in.");
               stopPlayback(); // stop immediately
+              if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({ cancel: true }));
+              }
            }
         }
 

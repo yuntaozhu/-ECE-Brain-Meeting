@@ -1,5 +1,5 @@
 import { Server as SocketIOServer, Socket } from "socket.io";
-import { saveChatMessageToServerState } from "../server";
+import { saveChatMessageToServerState } from "./lib/meetingStore";
 
 export interface ChatMessagePayload {
   type: "chat";
@@ -97,14 +97,14 @@ export function setupSocketIOServer(io: SocketIOServer) {
     });
 
     // Event: chat / chat_message - Real-time chat for all participants regardless of role
-    socket.on("chat", (data: any) => {
+    socket.on("chat", async (data: any) => {
       const participant = activeParticipants.get(socket.id);
       const roomId = data.roomId || participant?.roomId || queryRoomId;
       const sender = data.sender || participant?.userName || queryUserName;
       const text = data.text || data.message || "";
 
       if (text) {
-        saveChatMessageToServerState(roomId, sender, text);
+        await saveChatMessageToServerState(roomId, sender, text);
       }
 
       const payload: ChatMessagePayload = {
@@ -121,14 +121,14 @@ export function setupSocketIOServer(io: SocketIOServer) {
       meetingNs.to(roomId).emit("chat_message", payload);
     });
 
-    socket.on("chat_message", (data: any) => {
+    socket.on("chat_message", async (data: any) => {
       const participant = activeParticipants.get(socket.id);
       const roomId = data.roomId || participant?.roomId || queryRoomId;
       const sender = data.sender || participant?.userName || queryUserName;
       const text = data.text || data.message || "";
 
       if (text) {
-        saveChatMessageToServerState(roomId, sender, text);
+        await saveChatMessageToServerState(roomId, sender, text);
       }
 
       const payload: ChatMessagePayload = {

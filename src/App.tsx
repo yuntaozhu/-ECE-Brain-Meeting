@@ -20,6 +20,8 @@ export default function App() {
   const { isCreator, isAttendee } = useRole();
   const [copied, setCopied] = useState(false);
   const [showQrCodeModal, setShowQrCodeModal] = useState(false);
+  const [attendeeNameDraft, setAttendeeNameDraft] = useState("");
+  const [needsAttendeeName, setNeedsAttendeeName] = useState(false);
 
   // Local state router: Creator gets setup page; Attendee goes straight to login lobby
   const [activeView, setActiveView] = useState<'setup' | 'meeting'>(() => {
@@ -32,18 +34,45 @@ export default function App() {
     return "setup";
   });
 
-  // Auto-join meeting on mount if opened via share link with roomId
+  // Share-link attendees: ask for nickname before join (stable multi-terminal identity)
   useEffect(() => {
-    if (typeof window !== "undefined" && !joined) {
-      const searchParams = new URLSearchParams(window.location.search);
-      const role = searchParams.get("role");
-      const roomId = searchParams.get("roomId");
-      if (role === "attendee" || roomId) {
-        const targetRoomId = roomId || "10086";
-        joinMeeting("杨督导", "省优质名园考评长", targetRoomId, "attendee");
+    if (typeof window === "undefined" || joined) return;
+    const searchParams = new URLSearchParams(window.location.search);
+    const role = searchParams.get("role");
+    const roomId = searchParams.get("roomId");
+    if (!(role === "attendee" || roomId)) return;
+
+    const savedName = (() => {
+      try {
+        const ctx = localStorage.getItem("dadimeeting_context");
+        if (ctx) {
+          const parsed = JSON.parse(ctx);
+          if (parsed?.userName && parsed.meetingId === (roomId || "10086")) return parsed.userName;
+        }
+        return localStorage.getItem(`dadimeeting_display_name_${roomId || "10086"}`) || "";
+      } catch {
+        return "";
       }
+    })();
+
+    if (savedName) {
+      joinMeeting(savedName, "省优质名园考评长", roomId || "10086", "attendee");
+    } else {
+      setNeedsAttendeeName(true);
+      setAttendeeNameDraft("");
     }
   }, [joined, joinMeeting]);
+
+  const confirmAttendeeJoin = () => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const roomId = searchParams.get("roomId") || "10086";
+    const name = (attendeeNameDraft || "").trim() || `嘉宾${Math.floor(Math.random() * 900 + 100)}`;
+    try {
+      localStorage.setItem(`dadimeeting_display_name_${roomId}`, name);
+    } catch (_) {}
+    setNeedsAttendeeName(false);
+    joinMeeting(name, "省优质名园考评长", roomId, "attendee");
+  };
 
   // Get current meeting URL dynamically with active window location & meeting room ID parameters
   const activeRoomId = tencentMeetingInfo?.meetingCode || meetingId || "10086";
@@ -77,6 +106,39 @@ export default function App() {
         <MeetingSetup onSetupComplete={() => setActiveView("meeting")} />
         <NetworkInspector />
       </>
+    );
+  }
+
+  if (needsAttendeeName && !joined) {
+    return (
+      <div className="min-h-screen bg-[#05070A] flex items-center justify-center px-4">
+        <div className="w-full max-w-md border border-white/10 bg-black/70 rounded-2xl p-6 space-y-4">
+          <div className="space-y-1">
+            <p className="text-[10px] uppercase tracking-widest text-cyan-400 font-mono">分享链接入会</p>
+            <h2 className="text-xl text-white font-light">请填写您的显示名称</h2>
+            <p className="text-xs text-slate-400">
+              Phase-1 文本研讨室：多终端通过同一 roomId 同步聊天、议程与 AI 控场（非 RTC 音视频互通）。
+            </p>
+          </div>
+          <input
+            className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-white outline-none focus:border-cyan-500/50"
+            placeholder="例如：李园长"
+            value={attendeeNameDraft}
+            onChange={(e) => setAttendeeNameDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") confirmAttendeeJoin();
+            }}
+            autoFocus
+          />
+          <button
+            type="button"
+            onClick={confirmAttendeeJoin}
+            className="w-full rounded-lg bg-cyan-500/90 hover:bg-cyan-400 text-black text-sm font-semibold py-2.5"
+          >
+            进入研讨室
+          </button>
+        </div>
+      </div>
     );
   }
 

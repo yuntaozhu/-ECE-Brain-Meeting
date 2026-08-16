@@ -379,8 +379,20 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
   };
 
   const handleEnterLobby = () => {
-    // Join as meeting creator
-    joinMeeting("张园长", "学前数字融合组长", meetingRoomId, "creator");
+    // Join as meeting creator and seed shared room state for other terminals
+    const roomId = meetingRoomId || "10086";
+    joinMeeting("张园长", "学前数字融合组长", roomId, "creator");
+    fetch(`/api/meeting/state/${encodeURIComponent(roomId)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        currentTopic: topicInput.trim() || "教研研讨",
+        agendas: agendaItems,
+        agendaStage: "IceBreaking",
+        mountedFiles: uploadedFiles.map((f) => ({ name: f.name, status: f.status })),
+        phaseMode: "phase1-text-sync"
+      })
+    }).catch(() => {});
     onSetupComplete();
   };
 

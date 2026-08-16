@@ -42,12 +42,20 @@ export function useAgendaDriver() {
     let triggerPrompt = "";
 
     if (reason === "silence") {
-      addTranscriptLine("系统提示 (冷场干预)", "🎙️ 空白停顿满 8 秒！心脏起搏器已向 WebSocket 执行静默刺激，强制 AI 主持人进行话题推进...");
+      addTranscriptLine("系统提示 (冷场干预)", "🎙️ 空白停顿满 8 秒！心脏起搏器已向服务端执行静默刺激，强制 AI 主持人进行话题推进...");
       triggerPrompt = `[System Event: 目前出现解疑冷场，请总结上述结论，并使用严谨学术语气点名李园长，询问他对硬件部署网关有什么顾虑。并且在此阶段，若觉得本项讨论足够充分，请以特定的断代语句词缀结束发言以激活下一个看板环节（必须包含特定短语：🗣️ [ACTION: AGENDA_NEXT]）。]`;
     } else {
       addTranscriptLine("系统提示 (议程轮流)", "📊 本议题预设时间已耗尽！心脏起搏器刺激 AI 主导强行过渡会议阶段并总结...");
       triggerPrompt = `[System Event: 时间已耗尽，请主动作一次简短深度学术总结，随后在发言末尾明确说出指令代码 [ACTION: AGENDA_NEXT]，以此引导全体进入最后的收官环节。]`;
     }
+
+    // Phase-1: server-side Kaiban AI intervene (works on Vercel via Redis/memory store)
+    const roomId = useMeetingStore.getState().meetingId || "10086";
+    fetch("/api/ai/intervene", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ roomId, reason, hint: triggerPrompt })
+    }).catch((err) => console.warn("[AgendaDriver] AI intervene notice:", err));
 
     if (isConnected) {
       console.log(`[Pacemaker] Sending ${reason} triggers to Gemini WS.`);
@@ -124,28 +132,35 @@ export function useAgendaDriver() {
       "系统提示 (开场启动)", 
       `🚀 心脏起搏器极速干预！已智能研判参会人列表，锁定了首发言人：【${speakerName}】(${speakerRole})。下达精准耳返指令强推 AI 主体开始学术控场...`
     );
+
+    const roomId = useMeetingStore.getState().meetingId || "10086";
+    useMeetingStore.getState().setMeetingStarted(true);
+    fetch(`/api/meeting/state/${encodeURIComponent(roomId)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        meetingStarted: true,
+        isMeetingActive: true,
+        currentTopic: useMeetingStore.getState().currentTopic,
+        agendaStage: useMeetingStore.getState().agendaStage,
+        agendas: useMeetingStore.getState().agendas
+      })
+    }).catch(() => {});
+
+    fetch("/api/ai/intervene", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        roomId,
+        reason: "manual",
+        hint: openingPrompt,
+        sender: speakerName
+      })
+    }).catch((err) => console.warn("[Pacemaker] AI opening intervene notice:", err));
     
     if (isConnected) {
       console.log(`[Pacemaker] Sending dynamic targeted Opening Trigger for ${speakerName} silently to Gemini WS.`);
       sendControlText(openingPrompt);
-    } else {
-      console.warn("[Pacemaker] WS not connected. Executing HTTP AI opening speech + voice synthesis.");
-      fetch("/api/doubao/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: `请发表会议开场白，宣读${agendas.length}个议程，并明确请【${speakerName}】(${speakerRole})就第一个议题‘${firstAgendaTitle}’开始发言。`,
-          systemInstruction: "你现在是‘大地 ECE-Brain 智慧教研室’具有绝对威严的主持主席（大地数字教研总督导）。请以大气庄重的语气简短开场（120字以内）。"
-        })
-      }).then(res => res.json()).then(data => {
-        const text = data.reply || `尊敬的各位园长与代表，欢迎出席大地 ECE-Brain 智慧教研立项研讨会！本次会议包含 ${agendas.length} 项议程。下面有请【${speakerName}】(${speakerRole})就‘${firstAgendaTitle}’发表首轮看法！`;
-        addTranscriptLine("AI 会议主席 (豆包)", text);
-        speakText(text, { rate: 1.1, pitch: 0.95 });
-      }).catch(() => {
-        const text = `尊敬的各位园长与代表，欢迎出席大地 ECE-Brain 智慧教研立项研讨会！下面有请【${speakerName}】(${speakerRole})就‘${firstAgendaTitle}’发表首轮看法！`;
-        addTranscriptLine("AI 会议主席 (豆包)", text);
-        speakText(text, { rate: 1.1, pitch: 0.95 });
-      });
     }
 
     setIsMeetingActive(true);
