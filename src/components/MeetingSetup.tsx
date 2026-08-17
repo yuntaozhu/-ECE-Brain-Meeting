@@ -408,16 +408,21 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
       <div className="w-full max-w-3xl space-y-8">
         
         {/* Superior Branding logo banner */}
-        <div className="text-center space-y-2">
+        <div className="text-center space-y-3">
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-cyan-500/10 border border-cyan-500/20 rounded-full text-[10px] tracking-widest text-cyan-400 font-bold font-mono">
-            💡 大地 ECE-BRAIN 筹备后台
+            Phase-1 · 本站 AI 文本研讨室
           </div>
           <h1 className="text-3xl font-extralight tracking-tight text-white sm:text-4xl">
-            会前教研资源挂载与 RAG 大纲设计
+            挂载 RAG · 生成分享链接 · AI 控场开会
           </h1>
-          <p className="text-xs text-slate-400 max-w-md mx-auto">
-            在研讨会开始前，定制学术路线图并向量化挂载教研资料。AI 主席与秘书团队将深度吸收该知识库并强硬控场执行。
+          <p className="text-xs text-slate-400 max-w-lg mx-auto leading-relaxed">
+            默认流程：配置主题与议程 → 上传教研资料做向量检索 → 复制本站分享链接给各终端。腾讯会议仅为可选外链，不作为本站实时会议主通道。
           </p>
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+            <Badge className="bg-cyan-500/15 text-cyan-300 border-cyan-500/30 text-[10px] px-2.5 py-1">① 本站分享链接</Badge>
+            <Badge className="bg-emerald-500/15 text-emerald-300 border-emerald-500/30 text-[10px] px-2.5 py-1">② RAG 知识库</Badge>
+            <Badge className="bg-violet-500/15 text-violet-300 border-violet-500/30 text-[10px] px-2.5 py-1">③ AI 文本控场</Badge>
+          </div>
         </div>
 
         {!setupFinished ? (
@@ -911,17 +916,38 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
               </p>
 
               {/* Invitation panel */}
-              <div className="mt-6 p-4 rounded-xl border border-white/10 bg-white/5 space-y-4 max-w-xl mx-auto">
+              <div className="mt-6 p-4 rounded-xl border border-white/10 bg-white/5 space-y-4 max-w-xl mx-auto flex flex-col">
                 
-                {/* Tencent Meeting Details Box if active */}
+                <div className="text-left space-y-1.5 order-1">
+                  <span className="text-[9px] font-mono uppercase text-cyan-400 tracking-wider block">本站 AI 研讨室分享链接（Phase-1 文本同步）</span>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-black/50 border border-cyan-500/20 rounded-lg px-3 py-2 text-xs font-mono text-cyan-300 select-all truncate">
+                      {inviteUrl}
+                    </div>
+                    <Button 
+                      onClick={handleCopyInviteLink}
+                      variant="outline"
+                      className={`h-9 font-bold text-[10px] tracking-wider uppercase cursor-pointer ${
+                        copied 
+                          ? "bg-emerald-500 hover:bg-emerald-600 text-black border-emerald-400" 
+                          : "border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
+                      }`}
+                    >
+                      {copied ? <Check className="w-3.5 h-3.5 mr-1" /> : <Copy className="w-3.5 h-3.5 mr-1" />}
+                      {copied ? "已复制" : "复制邀请卡片"}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Optional Tencent Meeting external invite — secondary to the site share link */}
                 {tencentMeetingResult && (
-                  <div className="p-3.5 bg-gradient-to-r from-blue-950/60 to-cyan-950/40 border border-cyan-500/40 rounded-xl text-left space-y-2.5">
+                  <div className="p-3.5 bg-gradient-to-r from-slate-950/80 to-blue-950/30 border border-white/10 rounded-xl text-left space-y-2.5 order-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Video className="w-4 h-4 text-cyan-400" />
-                        <span className="text-xs font-bold text-white">腾讯会议已同步创建</span>
+                        <Video className="w-4 h-4 text-slate-300" />
+                        <span className="text-xs font-bold text-white">可选外链：腾讯会议邀请</span>
                       </div>
-                      <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[9px]">API 成功拉起</Badge>
+                      <Badge className="bg-slate-500/20 text-slate-300 border-slate-400/30 text-[9px]">非本站主通道</Badge>
                     </div>
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono pt-1">
@@ -940,40 +966,19 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
                         </a>
                       </div>
                       <div className="bg-black/60 p-2 rounded-lg border border-white/10 truncate">
-                        <span className="text-[9px] text-slate-400 block uppercase">直达研讨大本营 URL</span>
+                        <span className="text-[9px] text-slate-400 block uppercase">外链 URL</span>
                         <a href={tencentMeetingResult.joinUrl} target="_blank" rel="noreferrer" className="text-blue-400 hover:underline text-[11px] truncate block font-bold">
                           {tencentMeetingResult.joinUrl}
                         </a>
                       </div>
                     </div>
-                    <div className="text-[10px] text-emerald-300/90 bg-emerald-500/10 border border-emerald-500/20 p-2 rounded-lg leading-relaxed font-sans mt-2">
-                      🟢 <strong>官方凭证已生效：</strong> 已成功启用企业凭证（CorpId: 557124324，AppId: 32840153264）。腾讯会议接口已正式接入大地 ECE-Brain 学术研讨系统。
+                    <div className="text-[10px] text-slate-400 bg-white/5 border border-white/10 p-2 rounded-lg leading-relaxed font-sans mt-2">
+                      此链接仅用于腾讯会议客户端用户。本站 AI 研讨、RAG 与议程控场仍以 ECE-Brain 分享链接为准。
                     </div>
                   </div>
                 )}
 
-                <div className="text-left space-y-1.5">
-                  <span className="text-[9px] font-mono uppercase text-cyan-400 tracking-wider block">本站 AI 研讨室分享链接（Phase-1 文本同步）</span>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 bg-black/50 border border-white/5 rounded-lg px-3 py-2 text-xs font-mono text-cyan-400 select-all truncate">
-                      {inviteUrl}
-                    </div>
-                    <Button 
-                      onClick={handleCopyInviteLink}
-                      variant="outline"
-                      className={`h-9 font-bold text-[10px] tracking-wider uppercase cursor-pointer ${
-                        copied 
-                          ? "bg-emerald-500 hover:bg-emerald-600 text-black border-emerald-400" 
-                          : "border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
-                      }`}
-                    >
-                      {copied ? <Check className="w-3.5 h-3.5 mr-1" /> : <Copy className="w-3.5 h-3.5 mr-1" />}
-                      {copied ? "已复制" : "复制邀请卡片"}
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="p-3 bg-cyan-950/20 border border-cyan-500/20 rounded-lg text-left flex gap-3">
+                <div className="p-3 bg-cyan-950/20 border border-cyan-500/20 rounded-lg text-left flex gap-3 order-3">
                   <AlertCircle className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" />
                   <div>
                     <span className="text-xs font-bold text-white block">进入说明：</span>
