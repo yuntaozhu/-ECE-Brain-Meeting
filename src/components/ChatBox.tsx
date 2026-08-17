@@ -4,14 +4,27 @@ import { MessageSquare, Mic, Radio, Volume2 } from "lucide-react";
 import { logger } from "../lib/logger";
 import { telemetry } from "../lib/telemetry";
 import { useMeetingStore } from "../store";
-import { resumeAudioContextAndSpeech } from "../lib/audioSpeech";
+import { resumeAudioContextAndSpeech, speakText } from "../lib/audioSpeech";
 import { detectRealtimeMode, sendMeetingChat } from "../lib/realtimeChannel";
 
 interface ChatBoxProps {
   roomId: string;
   userName: string;
-  onSendMessage: (text: string) => void;
+  onSendMessage?: (text: string) => void;
   onReceiveMessage?: (sender: string, text: string) => void;
+}
+
+/** Avoid double-TTS when poll later sees the same AI line */
+const spokenAiTexts = new Set<string>();
+
+export function markAiTextSpoken(text: string) {
+  const key = (text || "").trim().slice(0, 120);
+  if (key) spokenAiTexts.add(key);
+}
+
+export function wasAiTextSpoken(text: string) {
+  const key = (text || "").trim().slice(0, 120);
+  return Boolean(key && spokenAiTexts.has(key));
 }
 
 export const ChatBox: React.FC<ChatBoxProps> = ({
@@ -56,18 +69,26 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
           if (data.state?.transcript && Array.isArray(data.state.transcript)) {
             useMeetingStore.setState({ transcript: data.state.transcript });
           }
-          logger.log(
-            "INFO",
-            "AIHost",
-            data.ai?.generated ? "AI 主席回复已持久化，等待同步播放" : "AI 主席本轮未生成回复",
-            {
+          if (data.ai?.generated && data.ai?.text) {
+            const aiText = String(data.ai.text).trim();
+            markAiTextSpoken(aiText);
+            resumeAudioContextAndSpeech();
+            speakText(aiText, { pitch: 0.98, rate: 1.05 });
+            useMeetingStore.setState({ aiIntervention: aiText });
+            logger.log("INFO", "AIHost", "AI 主席回复已朗读", {
               roomId,
               msgId,
-              aiGenerated: Boolean(data.ai?.generated),
-              aiTextLength: data.ai?.text?.length || 0,
+              aiTextLength: aiText.length,
               backend: data.storeBackend
-            }
-          );
+            });
+          } else {
+            logger.log("INFO", "AIHost", "AI 主席本轮未生成回复", {
+              roomId,
+              msgId,
+              aiGenerated: false,
+              backend: data.storeBackend
+            });
+          }
         } else {
           telemetry.endLatencyTimer(msgId, "FAILED");
         }
@@ -89,9 +110,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
     logger.log('INFO', 'Chat', `[自动投递语音] 发送发言指令 - [${senderName}]: "${content}"`, { roomId, sender: senderName, text: content, msgId });
 
     persistChatOverHttp(senderName, content, msgId);
-
-    // 3. Local state handler
-    onSendMessage(content);
+    onSendMessage?.(content);
     setTextInput("");
     capturedSpeechRef.current = "";
   };
@@ -206,9 +225,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
     logger.log('INFO', 'Chat', `发送发言指令 - [${senderName}]: "${content}"`, { roomId, sender: senderName, text: content, msgId });
 
     persistChatOverHttp(senderName, content, msgId);
-
-    // 3. Local state handler
-    onSendMessage(content);
+    onSendMessage?.(content);
     setTextInput("");
   };
 

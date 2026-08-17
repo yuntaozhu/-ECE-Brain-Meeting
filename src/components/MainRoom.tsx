@@ -19,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { useRole } from "../hooks/useRole";
 import AgendaKanbanBoard from "./AgendaKanbanBoard";
 import { AttendeesList } from "./AttendeesList";
-import { ChatBox } from "./ChatBox";
+import { ChatBox, wasAiTextSpoken, markAiTextSpoken } from "./ChatBox";
 
 export default function MainRoom() {
   const {
@@ -86,11 +86,9 @@ export default function MainRoom() {
       if (serverState.mountedFiles) {
         patch.mountedFiles = serverState.mountedFiles;
       }
-      if (
-        serverState.meetingStarted !== undefined &&
-        serverState.meetingStarted !== currentState.meetingStarted
-      ) {
-        patch.meetingStarted = serverState.meetingStarted;
+      // One-way latch: never let poll flip a started meeting back to waiting lobby
+      if (serverState.meetingStarted === true && !currentState.meetingStarted) {
+        patch.meetingStarted = true;
       }
       if (serverState.transcript && Array.isArray(serverState.transcript)) {
         const currentList = currentState.transcript || [];
@@ -109,7 +107,11 @@ export default function MainRoom() {
           if (txt && !map.has(`${spk}_${txt}`)) {
             map.set(`${spk}_${txt}`, { ...item, speaker: spk, text: txt });
             added = true;
-            if (String(spk).includes("AI") || String(spk).includes("主席")) {
+            if (
+              (String(spk).includes("AI") || String(spk).includes("主席")) &&
+              !wasAiTextSpoken(txt)
+            ) {
+              markAiTextSpoken(txt);
               import("../lib/audioSpeech")
                 .then(({ speakText, resumeAudioContextAndSpeech }) => {
                   resumeAudioContextAndSpeech();
@@ -379,7 +381,13 @@ export default function MainRoom() {
       <AttendeesList meetingId={activeRoomId} />
 
       <div className="max-w-4xl mx-auto w-full">
-        <ChatBox roomId={activeRoomId} userName={userName} />
+        <ChatBox
+          roomId={activeRoomId}
+          userName={userName}
+          onSendMessage={(text) => {
+            addTranscriptLine(userName || "我", text);
+          }}
+        />
       </div>
     </section>
   );
