@@ -73,9 +73,7 @@ export function AttendeesList({ meetingId: propMeetingId, className = '' }: Atte
       if (storeParticipants && storeParticipants.length > 0) {
         setParticipants(storeParticipants);
       } else {
-        setParticipants(prev => prev.length > 0 ? prev : [
-          { userId: 'daid_it', userName: '大地督导 (Host)', userRole: 'host', isMuted: false },
-        ]);
+        setParticipants([]);
       }
     } finally {
       if (isManual) setLoading(false);
@@ -102,11 +100,9 @@ export function AttendeesList({ meetingId: propMeetingId, className = '' }: Atte
             setNewMemberAlert(`新参会者 ${latest.userName} 已加入！`);
             setTimeout(() => setNewMemberAlert(null), 4000);
           }
-          return list.length ? list : prev;
+          return list;
         });
-        if (list.length) {
-          useMeetingStore.getState().setTencentParticipants(list);
-        }
+        useMeetingStore.getState().setTencentParticipants(list);
         setLastUpdated(new Date());
         setError(null);
       } catch (err: unknown) {
@@ -133,7 +129,7 @@ export function AttendeesList({ meetingId: propMeetingId, className = '' }: Atte
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               {isTencentSyncEnabled ? "腾讯会议外链参会成员" : "本站研讨室参会成员"}
               <Badge variant="outline" className="text-[10px] bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
-                {participants.length} 人在线
+                {participants.length} 人 + AI
               </Badge>
             </h3>
             <p className="text-[11px] text-slate-400">
@@ -171,7 +167,30 @@ export function AttendeesList({ meetingId: propMeetingId, className = '' }: Atte
       )}
 
       <div className="flex flex-col gap-2 max-h-[280px] overflow-y-auto pr-1">
-        {participants.map((p, idx) => {
+        {/* AI chair is always present — not a human roster entry */}
+        <div className="flex items-center justify-between p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+              AI
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-200">AI 主席 (大地教研督导)</span>
+                <Badge className="text-[9px] bg-cyan-500/20 text-cyan-300 border-cyan-500/30 px-1.5 py-0">
+                  智能主持
+                </Badge>
+              </div>
+              <span className="text-[10px] text-slate-400 mt-0.5 block">会议开始后结合知识库主导研讨</span>
+            </div>
+          </div>
+        </div>
+
+        {participants.length === 0 ? (
+          <p className="text-[11px] text-slate-500 text-center py-3 italic">
+            暂无人类参会者。管理员进入后，其他人请通过分享链接加入。
+          </p>
+        ) : (
+          participants.map((p, idx) => {
           const isHost = p.userRoleType === "creator" || p.userRole === "host";
           const isCoHost = p.userRole === "co_host";
           return (
@@ -217,12 +236,13 @@ export function AttendeesList({ meetingId: propMeetingId, className = '' }: Atte
                     : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                 }`}>
                   {p.isMuted ? <MicOff className="w-3 h-3" /> : <Mic className="w-3 h-3" />}
-                  <span>{p.isMuted ? '已静音' : '讲话中'}</span>
+                  <span>{isHost ? "管理员" : "已入会"}</span>
                 </div>
               </div>
             </div>
           );
-        })}
+        })
+        )}
       </div>
 
       <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-white/5">

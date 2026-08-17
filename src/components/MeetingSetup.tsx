@@ -31,7 +31,9 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
   } = useMeetingStore();
 
   const [topicInput, setTopicInput] = useState("关于下一代幼儿教育数字化基础设施的规划");
-  const [meetingRoomId, setMeetingRoomId] = useState("10086");
+  const [meetingRoomId, setMeetingRoomId] = useState(() => `ece_${Date.now().toString(36)}`);
+  const [hostName, setHostName] = useState("管理员");
+  const [hostRole, setHostRole] = useState("会议发起人");
   // Phase-1 defaults to the ECE-Brain room. Tencent Meeting is an optional
   // external invitation bridge, never the primary meeting path.
   const [tencentSyncToggle, setTencentSyncToggle] = useState(false);
@@ -104,7 +106,7 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
     {
       id: "IceBreaking",
       title: "研讨会开场与背景宣读与议程核验",
-      description: "宣读核心议题，核验张园长与各高管声纹在场状态",
+      description: "宣读核心议题，确认管理员与已入会参会者在场",
       durationSeconds: 45
     },
     {
@@ -368,11 +370,46 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
 
     const activeRoomId = tencentData ? tencentData.meetingCode : meetingRoomId;
 
+    // Seed a clean room: no fake attendees, meeting not started
+    const seedPayload = {
+      currentTopic: topicInput.trim() || "教研研讨",
+      agendas: finalAgendas,
+      agendaStage: "IceBreaking",
+      mountedFiles: uploadedFiles.map((f) => ({ name: f.name, size: f.size, status: f.status })),
+      phaseMode: "phase1-text-sync",
+      meetingStarted: false,
+      isMeetingActive: false,
+      tencentParticipants: [],
+      transcript: [
+        {
+          speaker: "系统提示",
+          text: "研讨室已创建。当前仅管理员与 AI 主席在场；请复制分享链接邀请参会者，到齐后由管理员开始会议。",
+          timestamp: new Date().toISOString()
+        }
+      ]
+    };
+    try {
+      await fetch(`/api/meeting/state/${encodeURIComponent(activeRoomId)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(seedPayload)
+      });
+      useMeetingStore.setState({
+        meetingId: activeRoomId,
+        meetingStarted: false,
+        tencentParticipants: [],
+        currentTopic: seedPayload.currentTopic,
+        agendas: finalAgendas,
+        mountedFiles: seedPayload.mountedFiles as any,
+        transcript: seedPayload.transcript as any
+      });
+    } catch (_) {}
+
     // Generate link for standard attendee with current active domain
     const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
     const invite = `${origin}/?role=attendee&roomId=${activeRoomId}`;
     setInviteUrl(invite);
-    
+
     setIsCreatingTencentMeeting(false);
     setSetupFinished(true);
   };
@@ -385,21 +422,35 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
     }
   };
 
-  const handleEnterLobby = () => {
-    // Join as meeting creator and seed shared room state for other terminals
-    const roomId = meetingRoomId || "10086";
-    joinMeeting("张园长", "学前数字融合组长", roomId, "creator");
-    fetch(`/api/meeting/state/${encodeURIComponent(roomId)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        currentTopic: topicInput.trim() || "教研研讨",
-        agendas: agendaItems,
-        agendaStage: "IceBreaking",
-        mountedFiles: uploadedFiles.map((f) => ({ name: f.name, status: f.status })),
-        phaseMode: "phase1-text-sync"
-      })
-    }).catch(() => {});
+  const handleEnterLobby = async () => {
+    const roomId = meetingRoomId || `ece_${Date.now().toString(36)}`;
+    const name = (hostName || "").trim() || "管理员";
+    const role = (hostRole || "").trim() || "会议发起人";
+
+    // Reset room roster then join as the sole admin (AI is host UI, not a roster person)
+    try {
+      await fetch(`/api/meeting/state/${encodeURIComponent(roomId)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentTopic: topicInput.trim() || "教研研讨",
+          agendas: agendaItems,
+          agendaStage: "IceBreaking",
+          mountedFiles: uploadedFiles.map((f) => ({ name: f.name, status: f.status })),
+          phaseMode: "phase1-text-sync",
+          meetingStarted: false,
+          isMeetingActive: false,
+          tencentParticipants: []
+        })
+      });
+    } catch (_) {}
+
+    useMeetingStore.setState({
+      meetingStarted: false,
+      tencentParticipants: [],
+      meetingId: roomId
+    });
+    joinMeeting(name, role, roomId, "creator");
     onSetupComplete();
   };
 
@@ -458,10 +509,36 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
                       value={meetingRoomId}
                       onChange={(e) => setMeetingRoomId(e.target.value)}
                       className="w-full text-xs font-mono bg-white/5 border border-white/10 hover:border-white/20 focus:border-cyan-500/50 focus:bg-white/10 rounded-xl px-4 py-3 text-white outline-none transition-all text-center font-bold tracking-widest text-cyan-400"
-                      placeholder="频道"
+                      placeholder="自动生成"
                     />
                   </div>
                 </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-mono text-slate-400 uppercase">管理员显示名</label>
+                    <input
+                      type="text"
+                      value={hostName}
+                      onChange={(e) => setHostName(e.target.value)}
+                      className="w-full text-xs bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-cyan-500/50"
+                      placeholder="例如：王主任"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-mono text-slate-400 uppercase">管理员职务</label>
+                    <input
+                      type="text"
+                      value={hostRole}
+                      onChange={(e) => setHostRole(e.target.value)}
+                      className="w-full text-xs bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-cyan-500/50"
+                      placeholder="例如：会议发起人"
+                    />
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-500">
+                  首次进入会议室只有您（管理员）与 AI 主席。参会者须通过分享链接自行填写姓名职务后加入。
+                </p>
 
                 {/* Optional external Tencent Meeting bridge. Phase-1 uses this
                     site's roomId and invite link as the default entry point. */}
@@ -912,7 +989,7 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
                 大地 ECE-Brain 学术大本营组建完毕！
               </CardTitle>
               <p className="text-xs text-slate-400 max-w-md mx-auto mt-2 leading-relaxed">
-                会议专属知识库（挂载文件 {uploadedFiles.length} 项）已准备就绪。通过本站分享链接进入同一 roomId，即可同步 RAG、议程、聊天与 AI 主席控场。
+                分享链接已生成（roomId 见下方）。首次进入会议室只有管理员与 AI；其他人须打开分享链接填写姓名职务后加入。到齐后管理员点击「开始会议」，参会者即可研讨。
               </p>
 
               {/* Invitation panel */}
@@ -983,7 +1060,7 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
                   <div>
                     <span className="text-xs font-bold text-white block">进入说明：</span>
                     <p className="text-[10px] text-slate-400 leading-relaxed mt-1">
-                      任何人通过上述链接填写昵称后加入同一研讨室。Phase-1 同步聊天、RAG、议程与 AI 控场；真人 RTC 音视频将在后续阶段接入。
+                      1）管理员先进入等待室（仅您与 AI）；2）复制分享链接发给参会者，对方填写姓名职务后加入；3）确认到齐后点击「开始会议」，分享链接进入的人即可发言研讨。
                     </p>
                   </div>
                 </div>
@@ -995,7 +1072,7 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
                   onClick={handleEnterLobby}
                   className="w-full bg-cyan-500 hover:bg-cyan-400 border border-cyan-400 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)] font-bold tracking-widest uppercase text-xs h-11 transition-all rounded-xl cursor-pointer"
                 >
-                  进入数字研讨大室 (Creator)
+                  进入等待室（管理员）
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </div>

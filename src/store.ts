@@ -23,8 +23,8 @@ const isShareLinkEntry = urlRole === "attendee" || urlRoomId !== null;
 const defaultMeetingId = urlRoomId || (parsedMeetingContext && parsedMeetingContext.meetingId) || "10086";
 // Share links always require explicit form submit — never auto-join from URL or localStorage
 const defaultJoined = !isShareLinkEntry && Boolean(parsedMeetingContext?.joined);
-const defaultUserName = (parsedMeetingContext && parsedMeetingContext.userName) || (urlRole === "attendee" ? "" : "张园长");
-const defaultUserRole = (parsedMeetingContext && parsedMeetingContext.userRole) || (urlRole === "attendee" ? "" : "学前数字融合组长");
+const defaultUserName = (parsedMeetingContext && parsedMeetingContext.userName) || (urlRole === "attendee" ? "" : "管理员");
+const defaultUserRole = (parsedMeetingContext && parsedMeetingContext.userRole) || (urlRole === "attendee" ? "" : "会议发起人");
 const defaultUserRoleType = (parsedMeetingContext && parsedMeetingContext.userRoleType) || (urlRole === "attendee" ? "attendee" : "creator");
 let socket: any = null;
 if (typeof window !== "undefined" && shouldUseNativeWebSocket()) {
@@ -167,7 +167,7 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   videoOn: false,
   currentTopic: "关于下一代幼儿教育数字化基础设施的规划",
   transcript: [
-    { speaker: "系统提示", text: "📡 大地 ECE-Brain 多人语音智能研讨会平台已成功载入。等待参会者加入会议进行学术对话验证...", timestamp: new Date() }
+    { speaker: "系统提示", text: "研讨室待命。创建会议并分享链接后，参会者将逐一加入；到齐后由管理员开始，AI 主席主导研讨。", timestamp: new Date() }
   ],
   aiIntervention: null,
   aiSummary: "",
@@ -209,9 +209,7 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   // Tencent Meeting Integration Default State (Phase-1: off unless user opts in)
   isTencentSyncEnabled: false,
   tencentMeetingInfo: null,
-  tencentParticipants: [
-    { userId: 'daid_it', userName: '大地督导 (Host)', userRole: 'host', isMuted: false, joinTime: Math.floor(Date.now() / 1000) - 300 },
-  ],
+  tencentParticipants: [],
 
   setJoined: (joined) => set((state) => {
     if (typeof window !== "undefined") {
@@ -264,8 +262,8 @@ export const useMeetingStore = create<MeetingState>((set) => ({
     const isAttendeeQuery = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("role") === "attendee";
     const actualRoleType = roleType || (isAttendeeQuery ? "attendee" : "creator");
     const isAttendee = actualRoleType === "attendee";
-    const actualName = name || (isAttendee ? "参会嘉宾" : "张园长");
-    const actualRole = role || (isAttendee ? "省优质名园考评长" : "学前数字融合组长");
+    const actualName = name || (isAttendee ? "参会嘉宾" : "管理员");
+    const actualRole = role || (isAttendee ? "参会者" : "会议发起人");
     const activeRoomId = roomId || state.meetingId || "10086";
 
     let stableUserId = "";
@@ -350,7 +348,9 @@ export const useMeetingStore = create<MeetingState>((set) => ({
         ...state.transcript,
         {
           speaker: "系统提示",
-          text: `🎯 ${actualName}（${actualRole}）已加入等待室 roomId=${activeRoomId}。请等待管理员开始会议，届时 AI 主席将结合知识库主导研讨。`,
+          text: isAttendee
+            ? `🎯 ${actualName}（${actualRole}）已通过分享链接加入等待室 roomId=${activeRoomId}，等待管理员开始会议。`
+            : `🎯 管理员 ${actualName}（${actualRole}）已进入等待室 roomId=${activeRoomId}。当前仅管理员与 AI 主席在场，请分享链接邀请参会者。`,
           timestamp: new Date()
         }
       ]

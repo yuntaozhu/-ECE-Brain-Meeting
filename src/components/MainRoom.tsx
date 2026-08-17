@@ -119,8 +119,8 @@ export default function MainRoom() {
     return "10086";
   });
 
-  const [lobbyName, setLobbyName] = useState("张园长");
-  const [lobbyRole, setLobbyRole] = useState("学前数字融合组长");
+  const [lobbyName, setLobbyName] = useState("管理员");
+  const [lobbyRole, setLobbyRole] = useState("会议发起人");
 
   const activeRoomId = meetingId || lobbyRoomId || "10086";
 
@@ -371,12 +371,14 @@ export default function MainRoom() {
         <div className="max-w-3xl mx-auto w-full space-y-6">
           <div className="text-center space-y-2">
             <Badge className="bg-amber-500/15 text-amber-300 border-amber-500/30">
-              等待室 · 会议尚未开始 · room {activeRoomId}
+              等待室 · 仅管理员与 AI · 等待分享链接入会 · room {activeRoomId}
             </Badge>
             <h2 className="text-xl font-light text-white">{currentTopic}</h2>
             <p className="text-sm text-slate-400">
               您以 <strong className="text-cyan-400">{userName}</strong>（{userRole}）身份已加入。
-              请等待所有参会者到齐后，由管理员点击开始。
+              {canControl
+                ? " 请复制分享链接邀请参会者；确认到齐后点击开始会议，AI 主席将主导研讨。"
+                : " 请等待管理员确认人员到齐并开始会议。开始后即可发言参与。"}
             </p>
           </div>
 
