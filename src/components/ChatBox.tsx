@@ -69,6 +69,12 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
           if (data.state?.transcript && Array.isArray(data.state.transcript)) {
             useMeetingStore.setState({ transcript: data.state.transcript });
           }
+          if (data.state?.meetingStarted) {
+            useMeetingStore.setState({ meetingStarted: true });
+          }
+          if (Array.isArray(data.state?.tencentParticipants)) {
+            useMeetingStore.setState({ tencentParticipants: data.state.tencentParticipants });
+          }
           if (data.ai?.generated && data.ai?.text) {
             const aiText = String(data.ai.text).trim();
             markAiTextSpoken(aiText);
