@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { io } from 'socket.io-client';
 import { AgendaStageType, TranscriptLine, UserRoleType, DynamicAgendaItem, TencentMeetingInfo, TencentParticipant } from './types';
+import { shouldUseNativeWebSocket } from './lib/realtimeChannel';
+import { telemetry } from './lib/telemetry';
 
 // Retrieve saved meeting session context from localStorage if available
 const savedMeetingContext = typeof window !== "undefined" ? localStorage.getItem("dadimeeting_context") : null;
@@ -23,12 +25,12 @@ const defaultUserName = (parsedMeetingContext && parsedMeetingContext.userName) 
 const defaultUserRole = (parsedMeetingContext && parsedMeetingContext.userRole) || (urlRole === "attendee" ? "省优质名园考评长" : "大地教研代表");
 const defaultUserRoleType = (parsedMeetingContext && parsedMeetingContext.userRoleType) || (urlRole === "attendee" ? "attendee" : "creator");
 let socket: any = null;
-if (typeof window !== "undefined") {
+if (typeof window !== "undefined" && shouldUseNativeWebSocket()) {
   try {
     socket = io({
-      reconnectionAttempts: 2,
+      reconnectionAttempts: 0,
       timeout: 3000,
-      transports: ['polling', 'websocket']
+      transports: ['websocket']
     });
     socket.on("connect", () => {
       const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
@@ -100,6 +102,11 @@ if (typeof window !== "undefined") {
   } catch (socketInitErr) {
     console.warn("[Socket.IO] Initialization notice:", socketInitErr);
   }
+} else if (typeof window !== "undefined") {
+  telemetry.recordConnectionState("socketIoState", "DISCONNECTED", {
+    endpoint: "/api/live/poll",
+    error: "Socket.IO disabled on serverless; using HTTP poll"
+  });
 }
 
 interface MeetingState {

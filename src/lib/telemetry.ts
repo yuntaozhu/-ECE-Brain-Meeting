@@ -1,7 +1,7 @@
 import { logger } from "./logger";
 
 export type ConnectionTarget = 'wsMeeting' | 'wsAudioStream' | 'trtcState' | 'socketIoState';
-export type ConnectionStatus = 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED' | 'ERROR' | 'JOINING';
+export type ConnectionStatus = 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED' | 'ERROR' | 'JOINING' | 'POLL';
 
 export interface LatencyRecord {
   id: string;

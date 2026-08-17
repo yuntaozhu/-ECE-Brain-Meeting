@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, Mic, Loader2, Radio, Volume2 } from "lucide-react";
+import { MessageSquare, Mic, Radio, Volume2 } from "lucide-react";
 import { logger } from "../lib/logger";
 import { telemetry } from "../lib/telemetry";
 import { useMeetingStore } from "../store";
 import { resumeAudioContextAndSpeech } from "../lib/audioSpeech";
+import { detectRealtimeMode, sendMeetingChat } from "../lib/realtimeChannel";
 
 interface ChatBoxProps {
   roomId: string;
@@ -16,93 +17,25 @@ interface ChatBoxProps {
 export const ChatBox: React.FC<ChatBoxProps> = ({
   roomId,
   userName,
-  onSendMessage,
-  onReceiveMessage
+  onSendMessage
 }) => {
   const [textInput, setTextInput] = useState("");
   const [isRecordingSpeech, setIsRecordingSpeech] = useState(false);
-  const [wsConnected, setWsConnected] = useState(false);
+  const [syncMode, setSyncMode] = useState<"poll" | "ws">("poll");
   const [audioUnblocked, setAudioUnblocked] = useState(true);
-  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    logger.log('INFO', 'WebSocket', `Initializing WebSocket and HTTP REST sync for room ${roomId}...`, { roomId, userName });
-    
-    // Instantiate real-time WebSocket connection to /ws/meeting
-    if (typeof window !== "undefined") {
-      try {
-        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const wsUrl = `${protocol}//${window.location.host}/ws/meeting?roomId=${encodeURIComponent(roomId)}&userName=${encodeURIComponent(userName || "参会者")}`;
-        const ws = new WebSocket(wsUrl);
-        wsRef.current = ws;
-
-        ws.onopen = () => {
-          setWsConnected(true);
-          telemetry.recordConnectionState('wsMeeting', 'CONNECTED', { endpoint: wsUrl });
-          logger.log('INFO', 'WebSocket', `[WS /ws/meeting] Real-time channel established for room ${roomId}`);
-        };
-
-        ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (data && (data.type === 'chat' || data.type === 'system') && data.text) {
-              const state = useMeetingStore.getState();
-              state.addTranscriptLine(data.sender || "系统", data.text);
-              if (onReceiveMessage) {
-                onReceiveMessage(data.sender || "系统", data.text);
-              }
-            }
-          } catch (e) {
-            console.warn('[WS Chat Parse Notice]', e);
-          }
-        };
-
-        ws.onerror = (err) => {
-          logger.log('WARN', 'WebSocket', `[WS /ws/meeting] Error occurred`, err);
-        };
-
-        ws.onclose = () => {
-          setWsConnected(false);
-          telemetry.recordConnectionState('wsMeeting', 'DISCONNECTED', { endpoint: wsUrl });
-        };
-      } catch (wsInitErr) {
-        console.warn("[WS Chat Init Notice]", wsInitErr);
-      }
-    }
-
-    const pollInterval = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/meeting/state/${roomId}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && data.state && data.state.transcript) {
-            const transcript = data.state.transcript;
-            if (transcript.length > 0) {
-              const store = useMeetingStore.getState();
-              // Sync missing items into store
-              transcript.forEach((t: any) => {
-                if (t && t.speaker && t.text) {
-                  store.addTranscriptLine(t.speaker, t.text);
-                }
-              });
-            }
-          }
-        }
-      } catch (e) {
-        // Silent sync
-      }
-    }, 3000);
-
-    return () => {
-      if (wsRef.current) {
-        try {
-          wsRef.current.close();
-        } catch (e) {}
-      }
-      clearInterval(pollInterval);
-      setWsConnected(false);
-    };
-  }, [roomId, userName, onReceiveMessage]);
+    const mode = detectRealtimeMode();
+    setSyncMode("poll");
+    telemetry.recordConnectionState("wsMeeting", "POLL", {
+      endpoint: `/api/live/poll?roomId=${roomId}`
+    });
+    logger.log("INFO", "Chat", "聊天通道仅走 HTTP（MainRoom /api/live/poll 收消息）", {
+      roomId,
+      userName,
+      hostMode: mode
+    });
+  }, [roomId, userName]);
 
   const capturedSpeechRef = useRef<string>("");
 
@@ -110,6 +43,27 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
     resumeAudioContextAndSpeech();
     setAudioUnblocked(true);
     logger.log('INFO', 'AudioSpeech', '用户手动解禁 Web Audio / TTS 声音输出');
+  };
+
+  const persistChatOverHttp = (senderName: string, content: string, msgId: string) => {
+    const restStart = Date.now();
+    sendMeetingChat({ roomId, sender: senderName, text: content, msgId })
+      .then((data) => {
+        const restLatency = Date.now() - restStart;
+        if (data.success) {
+          logger.log("INFO", "Chat", `HTTP 多端状态持久化成功 (${restLatency}ms)`, { roomId, msgId });
+          telemetry.endLatencyTimer(msgId, "SUCCESS");
+          if (data.state?.transcript && Array.isArray(data.state.transcript)) {
+            useMeetingStore.setState({ transcript: data.state.transcript });
+          }
+        } else {
+          telemetry.endLatencyTimer(msgId, "FAILED");
+        }
+      })
+      .catch((err: any) => {
+        logger.log("WARN", "Chat", `HTTP 持久化失败: ${err?.message || err}`);
+        telemetry.endLatencyTimer(msgId, "FAILED");
+      });
   };
 
   const dispatchSpeechMessage = (textToSubmit: string) => {
@@ -122,44 +76,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
     telemetry.startLatencyTimer(msgId, 'CHAT');
     logger.log('INFO', 'Chat', `[自动投递语音] 发送发言指令 - [${senderName}]: "${content}"`, { roomId, sender: senderName, text: content, msgId });
 
-    // 1. WebSocket Broadcast
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      try {
-        wsRef.current.send(JSON.stringify({
-          type: "chat",
-          sender: senderName,
-          text: content,
-          roomId,
-          msgId
-        }));
-      } catch (wsErr: any) {}
-    }
-
-    // 2. HTTP REST Sync Backup & AI Agent Engine Trigger
-    try {
-      const restStart = Date.now();
-      fetch("/api/meeting/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          roomId,
-          sender: senderName,
-          text: content,
-          msgId
-        })
-      }).then(res => res.json()).then(data => {
-        const restLatency = Date.now() - restStart;
-        if (data.success) {
-          logger.log('INFO', 'Chat', `HTTP REST 端口多端状态持久化成功 (${restLatency}ms)`, { roomId, msgId });
-          telemetry.endLatencyTimer(msgId, 'SUCCESS');
-          if (data.state?.transcript && Array.isArray(data.state.transcript)) {
-            useMeetingStore.setState({ transcript: data.state.transcript });
-          }
-        }
-      }).catch(err => {
-        telemetry.endLatencyTimer(msgId, 'FAILED');
-      });
-    } catch (restErr) {}
+    persistChatOverHttp(senderName, content, msgId);
 
     // 3. Local state handler
     onSendMessage(content);
@@ -276,50 +193,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
     telemetry.startLatencyTimer(msgId, 'CHAT');
     logger.log('INFO', 'Chat', `发送发言指令 - [${senderName}]: "${content}"`, { roomId, sender: senderName, text: content, msgId });
 
-    // 1. WebSocket Broadcast
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      try {
-        wsRef.current.send(JSON.stringify({
-          type: "chat",
-          sender: senderName,
-          text: content,
-          roomId,
-          msgId
-        }));
-        logger.log('INFO', 'WebSocket', `通过 WebSocket 成功将发言推送到广播总线`, { roomId, senderName, content, msgId });
-      } catch (wsErr: any) {
-        logger.log('WARN', 'WebSocket', `WebSocket 推送失败: ${wsErr.message}`, wsErr);
-      }
-    }
-
-    // 2. HTTP REST Sync Backup
-    try {
-      const restStart = Date.now();
-      fetch("/api/meeting/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          roomId,
-          sender: senderName,
-          text: content,
-          msgId
-        })
-      }).then(res => res.json()).then(data => {
-        const restLatency = Date.now() - restStart;
-        if (data.success) {
-          logger.log('INFO', 'Chat', `HTTP REST 端口多端状态持久化成功 (${restLatency}ms)`, { roomId, msgId });
-          telemetry.endLatencyTimer(msgId, 'SUCCESS');
-          if (data.state?.transcript && Array.isArray(data.state.transcript)) {
-            useMeetingStore.setState({ transcript: data.state.transcript });
-          }
-        }
-      }).catch(err => {
-        logger.log('WARN', 'Chat', `HTTP REST 持久化通知: ${err.message}`);
-        telemetry.endLatencyTimer(msgId, 'FAILED');
-      });
-    } catch (restErr) {
-      // Ignore background HTTP fallback
-    }
+    persistChatOverHttp(senderName, content, msgId);
 
     // 3. Local state handler
     onSendMessage(content);
@@ -331,10 +205,10 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 px-1">
         <div className="flex items-center gap-1.5 text-[11px] text-cyan-400 font-mono uppercase tracking-wider font-bold">
           <MessageSquare className="w-3.5 h-3.5 text-cyan-400" />
-          全员 WebSocket 实时消息总线与打字输入
-          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono ${wsConnected ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"}`}>
+          全员 HTTP 同步消息总线与打字输入
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
             <Radio className="w-2.5 h-2.5 animate-pulse" />
-            {wsConnected ? "WebSocket 联通" : "HTTP 多端同步活跃"}
+            {syncMode === "poll" ? "HTTP 同步中" : "本地 WS"}
           </span>
         </div>
         <div className="flex items-center gap-2">

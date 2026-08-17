@@ -6,6 +6,7 @@ import { trtcAudioMonitor } from "../lib/trtcAudioMonitor";
 import { Radio, ShieldCheck, Cpu } from "lucide-react";
 import { io } from "socket.io-client";
 import TRTC from "trtc-js-sdk";
+import { shouldUseNativeWebSocket, isServerlessRealtime } from "../lib/realtimeChannel";
 
 interface AudioOrchestratorProps {
   audioStream?: MediaStream | null;
@@ -15,7 +16,7 @@ interface AudioOrchestratorProps {
 export function AudioOrchestrator({ audioStream, ttsText }: AudioOrchestratorProps) {
   const { meetingId, userName, aiIntervention } = useMeetingStore();
   const [isRouting, setIsRouting] = useState(false);
-  const [routingStatus, setRoutingStatus] = useState<string>("AudioOrchestrator Standby (TRTC Local Track Hook Active)");
+  const [routingStatus, setRoutingStatus] = useState<string>("AudioOrchestrator Standby (Phase-1 HTTP text control)");
   const [lastRoutedText, setLastRoutedText] = useState<string>("");
 
   /**
@@ -71,6 +72,10 @@ export function AudioOrchestrator({ audioStream, ttsText }: AudioOrchestratorPro
    */
   const pushAudioToTrtcStream = useCallback(async (textToPush: string, customStream?: MediaStream | null) => {
     if (!textToPush && !customStream) return;
+    if (isServerlessRealtime()) {
+      setRoutingStatus("Phase-1 HTTP 文本控场（未接入 TRTC 媒体）");
+      return;
+    }
     setIsRouting(true);
     trtcAudioMonitor.setPushingState(true);
     if (textToPush) setLastRoutedText(textToPush);
@@ -162,10 +167,16 @@ export function AudioOrchestrator({ audioStream, ttsText }: AudioOrchestratorPro
     }
   }, [ttsText, audioStream, pushAudioToTrtcStream]);
 
-  // Listen to Socket.IO A2A events & window.__trtcClient events
+  // Listen to Socket.IO A2A events only on persistent Node (not Vercel)
   useEffect(() => {
+    if (!shouldUseNativeWebSocket()) {
+      return;
+    }
+
     const socket = io("/ws/meeting", {
-      query: { roomId: meetingId || "10086", userName: userName || "Auditor", userRole: "participant" }
+      query: { roomId: meetingId || "10086", userName: userName || "Auditor", userRole: "participant" },
+      reconnectionAttempts: 0,
+      transports: ["websocket"]
     });
 
     socket.on("connect", () => {

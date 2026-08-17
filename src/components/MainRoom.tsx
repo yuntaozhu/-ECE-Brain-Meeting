@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useTrtcMultiUser } from "../hooks/useTrtcMultiUser";
 import { useMeetingOrchestrator } from "../hooks/useMeetingOrchestrator";
 import { useAgendaDriver } from "../hooks/useAgendaDriver";
@@ -194,6 +194,9 @@ export default function MainRoom() {
 
     pollOnce();
     const syncInterval = setInterval(pollOnce, 2000);
+    telemetry.recordConnectionState("wsMeeting", "POLL", {
+      endpoint: `/api/live/poll?roomId=${activeId}`
+    });
     return () => {
       cancelled = true;
       clearInterval(syncInterval);
@@ -263,120 +266,6 @@ export default function MainRoom() {
   const [showDebugConsole, setShowDebugConsole] = useState(false);
   const [showApiHealth, setShowApiHealth] = useState(false);
   const [showQrCodeModal, setShowQrCodeModal] = useState(false);
-  const [textInput, setTextInput] = useState("");
-  const [isRecordingSpeech, setIsRecordingSpeech] = useState(false);
-  const [wsConnected, setWsConnected] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
-
-  const toggleSpeechRecognition = () => {
-    if (isRecordingSpeech) {
-      setIsRecordingSpeech(false);
-      return;
-    }
-
-    const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognitionAPI) {
-      setIsRecordingSpeech(true);
-      setTextInput("【语音识别模拟】托班注意力实时追踪算法及多媒体平板配置已就绪。");
-      setTimeout(() => setIsRecordingSpeech(false), 3000);
-      return;
-    }
-
-    try {
-      const recognition = new SpeechRecognitionAPI();
-      recognition.lang = 'zh-CN';
-      recognition.continuous = false;
-      recognition.interimResults = true;
-
-      recognition.onstart = () => {
-        setIsRecordingSpeech(true);
-      };
-
-      recognition.onresult = (event: any) => {
-        let transcriptStr = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcriptStr += event.results[i][0].transcript;
-        }
-        setTextInput(transcriptStr);
-      };
-
-      recognition.onerror = (event: any) => {
-        console.warn("[SpeechRecognition Error]", event.error);
-        setIsRecordingSpeech(false);
-      };
-
-      recognition.onend = () => {
-        setIsRecordingSpeech(false);
-      };
-
-      recognition.start();
-    } catch (e) {
-      console.warn("[SpeechRecognition Init Error]", e);
-      setIsRecordingSpeech(true);
-      setTextInput("【语音识别】大地教研多模态平板注意力算法论证。");
-      setTimeout(() => setIsRecordingSpeech(false), 2000);
-    }
-  };
-
-  // Robust HTTP polling and REST sync for real-time multi-device meeting state
-  useEffect(() => {
-    if (!joined) {
-      setWsConnected(false);
-      return;
-    }
-
-    const activeId = meetingId || lobbyRoomId || '10086';
-    telemetry.recordConnectionState('wsMeeting', 'CONNECTED', { endpoint: `/api/meeting/state/${activeId}` });
-    setWsConnected(true);
-
-    const pollInterval = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/meeting/state/${activeId}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && data.state) {
-            const serverState = data.state;
-            const currentState = useMeetingStore.getState();
-            if (serverState.currentTopic && serverState.currentTopic !== currentState.currentTopic) {
-              useMeetingStore.setState({ currentTopic: serverState.currentTopic });
-            }
-            if (serverState.agendaStage && serverState.agendaStage !== currentState.agendaStage) {
-              useMeetingStore.setState({ agendaStage: serverState.agendaStage });
-            }
-            if (serverState.transcript && Array.isArray(serverState.transcript)) {
-              const currentList = currentState.transcript || [];
-              const map = new Map<string, any>();
-              for (const item of currentList) {
-                if (!item) continue;
-                const spk = item.speaker || (item as any).sender || "参会者";
-                const txt = (item.text || "").trim();
-                if (txt) map.set(`${spk}_${txt}`, { ...item, speaker: spk, text: txt });
-              }
-              for (const item of serverState.transcript) {
-                if (!item) continue;
-                const spk = item.speaker || (item as any).sender || "参会者";
-                const txt = (item.text || "").trim();
-                if (txt && !map.has(`${spk}_${txt}`)) {
-                  map.set(`${spk}_${txt}`, { ...item, speaker: spk, text: txt });
-                }
-              }
-              const mergedList = Array.from(map.values());
-              if (mergedList.length !== currentList.length) {
-                useMeetingStore.setState({ transcript: mergedList });
-              }
-            }
-          }
-        }
-      } catch (e) {
-        // Silent background sync
-      }
-    }, 2000);
-
-    return () => {
-      clearInterval(pollInterval);
-      setWsConnected(false);
-    };
-  }, [joined, meetingId, lobbyRoomId]);
 
   // Lobby form inputs prefilled dynamically from invitation path parameters
   const [lobbyName, setLobbyName] = useState(() => {
@@ -402,29 +291,6 @@ export default function MainRoom() {
   const handleJoin = () => {
     const isGuest = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("role") === "attendee";
     joinMeeting(lobbyName, lobbyRole, lobbyRoomId, isGuest ? "attendee" : "creator");
-  };
-
-  const handleSubmitText = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!textInput.trim()) return;
-
-    // 1. Send via WebSocket broadcast bus if connected, else fallback to local transcript
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: "chat",
-        sender: userName || "参会者",
-        text: textInput.trim()
-      }));
-    } else {
-      addTranscriptLine(userName || "我", textInput.trim());
-    }
-
-    setTextInput("");
-
-    // 2. Trigger KaibanJS evaluations immediately with a brief margin to update state
-    setTimeout(() => {
-      triggerOrchestration();
-    }, 100);
   };
 
   const handleEndMeeting = () => {
@@ -566,7 +432,7 @@ export default function MainRoom() {
                className="w-full mt-4 bg-cyan-500 border border-cyan-400 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)] hover:bg-cyan-400 hover:shadow-[0_0_25px_rgba(6,182,212,0.6)] font-bold uppercase tracking-widest text-[10px] h-10 transition-all rounded-xl" 
                onClick={handleJoin}
              >
-               绑定身份并接入 TRTC 研讨室
+               绑定身份并进入 Phase-1 文本研讨室
              </Button>
           </CardContent>
         </Card>
@@ -584,7 +450,7 @@ export default function MainRoom() {
               Phase-1：文本同步研讨室（Vercel）
             </span>
             <Badge className="bg-emerald-500/10 border-emerald-500/20 text-emerald-400 text-[9px] px-2 font-mono">
-              ● SYNC: HTTP Poll + Redis/Memory · {trtcStatusText}
+              ● Phase-1 · HTTP 同步 · 非 RTC · {trtcStatusText}
             </Badge>
 
             {isTencentSyncEnabled && (
@@ -1022,9 +888,6 @@ export default function MainRoom() {
             setTimeout(() => {
               triggerOrchestration();
             }, 100);
-          }}
-          onReceiveMessage={(sender, text) => {
-            addTranscriptLine(sender, text);
           }}
         />
       </div>

@@ -3,6 +3,7 @@ import { useMeetingStore } from "../store";
 import { logger } from "../lib/logger";
 import { telemetry } from "../lib/telemetry";
 import { speakText } from "../lib/audioSpeech";
+import { isServerlessRealtime, shouldUseNativeWebSocket } from "../lib/realtimeChannel";
 
 export function useGeminiLive() {
   const { micOn, addTranscriptLine, setMicOn } = useMeetingStore();
@@ -80,15 +81,32 @@ export function useGeminiLive() {
     nextStartTimeRef.current = nextStart + audioBuffer.duration;
   };
 
-  // Connect to server proxy websocket stream or HTTP fallback
+  const duplexDisabledRef = useRef(false);
+
+  // Connect to server proxy websocket stream (local Node only) or HTTP text control
   const connectStream = () => {
+    if (duplexDisabledRef.current) {
+      setIsConnected(true);
+      return;
+    }
     if (wsRef.current) return;
+
+    if (isServerlessRealtime() || !shouldUseNativeWebSocket()) {
+      duplexDisabledRef.current = true;
+      setIsConnected(true);
+      telemetry.recordConnectionState("wsAudioStream", "DISCONNECTED", {
+        endpoint: "/api/doubao/chat",
+        error: "Phase-1: duplex WS disabled on serverless; HTTP text control"
+      });
+      logger.log("INFO", "WebSocket", "Phase-1 使用 HTTP 文本控场，不连接 /api/live/stream");
+      return;
+    }
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.host;
     const wsUrl = `${protocol}//${host}/api/live/stream`;
     
-    console.log("Connecting to Doubao & Tencent Meeting Stream Bridge:", wsUrl);
+    logger.log("INFO", "WebSocket", "Connecting to Doubao duplex stream (local Node)", { wsUrl });
     telemetry.recordConnectionState('wsAudioStream', 'CONNECTING', { endpoint: wsUrl });
     
     try {
@@ -96,11 +114,10 @@ export function useGeminiLive() {
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log("Doubao Meeting stream WebSocket opened.");
+        logger.log("INFO", "WebSocket", "Doubao duplex stream opened");
         setIsConnected(true);
         telemetry.recordConnectionState('wsAudioStream', 'CONNECTED', { endpoint: wsUrl });
         
-        // Initialize AudioContext
         if (!audioCtxRef.current) {
            audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
         }
@@ -137,21 +154,32 @@ export function useGeminiLive() {
         }
       };
 
-      ws.onerror = (err: any) => {
-        console.warn("Doubao Meeting WebSocket notice (activating HTTP REST fallback mode)");
-        telemetry.recordConnectionState('wsAudioStream', 'CONNECTED', { endpoint: wsUrl, error: 'Fallback mode active' });
+      ws.onerror = () => {
+        duplexDisabledRef.current = true;
+        logger.log("WARN", "WebSocket", "Duplex WS failed once; using HTTP REST text control");
+        telemetry.recordConnectionState("wsAudioStream", "ERROR", {
+          endpoint: "/api/doubao/chat",
+          error: "Native WS failed; HTTP fallback (no reconnect)"
+        });
         setIsConnected(true);
+        try {
+          ws.close();
+        } catch (_) {}
       };
 
       ws.onclose = () => {
-        console.log("Doubao Meeting stream closed. Active via HTTP REST fallback.");
         wsRef.current = null;
+        duplexDisabledRef.current = true;
         setIsConnected(true);
-        telemetry.recordConnectionState('wsAudioStream', 'DISCONNECTED', { endpoint: wsUrl });
+        telemetry.recordConnectionState("wsAudioStream", "DISCONNECTED", {
+          endpoint: "/api/doubao/chat",
+          error: "Duplex WS closed; HTTP text control"
+        });
         stopPlayback();
       };
     } catch (wsErr: any) {
-      console.warn("WebSocket stream initialization notice, fallback mode active:", wsErr?.message);
+      duplexDisabledRef.current = true;
+      logger.log("WARN", "WebSocket", `WebSocket init failed: ${wsErr?.message || wsErr}`);
       setIsConnected(true);
     }
   };
@@ -167,6 +195,10 @@ export function useGeminiLive() {
 
   // Capture local client microphone sound using Web Audio API
   const startRecording = async () => {
+    if (isServerlessRealtime()) {
+      logger.log("INFO", "Mic", "Phase-1：跳过麦克风 PCM 采集（HTTP 文本研讨）");
+      return;
+    }
     try {
       if (!audioCtxRef.current) {
         audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();

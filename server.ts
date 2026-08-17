@@ -267,7 +267,8 @@ app.get("/api/health", async (req, res) => {
   res.json({
     status: "ok",
     phase: "phase1-vercel-text-sync",
-    storeBackend: await getStoreBackend()
+    storeBackend: await getStoreBackend(),
+    wsEnabled: !process.env.VERCEL
   });
 });
 

@@ -21,16 +21,18 @@ export const TelemetryPanel: React.FC = () => {
   const { connectionStates, audioBuffer, latency } = metrics;
 
   const targetLabels: Record<ConnectionTarget, { name: string; icon: any; desc: string }> = {
-    wsMeeting: { name: "WebSocket 广播总线 (/ws/meeting)", icon: Radio, desc: "全员多端会议状态广播通道" },
-    wsAudioStream: { name: "语音音频流代理 (/api/live/stream)", icon: Cpu, desc: "全双工双向 PCM 音频采样通道" },
-    trtcState: { name: "腾讯云 TRTC 实时网络引擎", icon: Wifi, desc: "高清音视频硬件网卡与声纹同步" },
-    socketIoState: { name: "Socket.IO 多端协同同步", icon: Database, desc: "议程与文件看板轻量持久同步" }
+    wsMeeting: { name: "会议同步通道 (/api/live/poll)", icon: Radio, desc: "Phase-1 HTTP Poll 多端状态同步" },
+    wsAudioStream: { name: "语音音频流代理 (/api/live/stream)", icon: Cpu, desc: "Vercel 禁用；本地 Node 可连 Seeduplex" },
+    trtcState: { name: "腾讯云 TRTC 实时网络引擎", icon: Wifi, desc: "Phase-1 跳过；仅真实密钥时启用" },
+    socketIoState: { name: "Socket.IO 多端协同同步", icon: Database, desc: "Serverless 禁用，改用 HTTP Poll" }
   };
 
   const getStatusBadge = (status: ConnectionStatus) => {
     switch (status) {
       case 'CONNECTED':
         return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> CONNECTED</span>;
+      case 'POLL':
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> HTTP POLL</span>;
       case 'CONNECTING':
         return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1 animate-pulse"><RefreshCw className="w-3 h-3 animate-spin" /> CONNECTING</span>;
       case 'ERROR':
@@ -74,7 +76,7 @@ export const TelemetryPanel: React.FC = () => {
               <div 
                 key={key}
                 className={`p-3.5 rounded-xl border transition-all ${
-                  item.status === 'CONNECTED' 
+                  item.status === 'CONNECTED' || item.status === 'POLL'
                     ? 'bg-emerald-950/10 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.08)]' 
                     : item.status === 'ERROR'
                       ? 'bg-red-950/20 border-red-500/40 shadow-[0_0_15px_rgba(239,68,68,0.15)]'

@@ -360,20 +360,31 @@ export function useTrtcMultiUser() {
             addTranscriptLine("系统提示", `🎯 已成功直连腾讯云 TRTC 研讨室：Room ${numericRoomId} [ AppID: ${sdkAppId} ]`);
           } catch (joinErr: any) {
             console.warn("[TRTC Join Note] Real TRTC channel connection notice:", joinErr?.message || joinErr);
-            isJoinedRef.current = true;
-            setTrtcStatusText(`TRTC Active (Room ${numericRoomId})`);
-            telemetry.recordConnectionState('trtcState', 'CONNECTED', { endpoint: `TRTC-Sandbox-Room-${numericRoomId}` });
-            addTranscriptLine("系统提示", `🎯 已成功建立 TRTC 研讨音视频通道：Room ${numericRoomId}`);
+            isJoinedRef.current = false;
+            setTrtcStatusText(`TRTC join failed (Room ${numericRoomId})`);
+            telemetry.recordConnectionState("trtcState", "ERROR", {
+              endpoint: `TRTC-Room-${numericRoomId}`,
+              error: joinErr?.message || "join failed"
+            });
+            addTranscriptLine("系统提示", `⚠️ TRTC 加入失败，已保持文本研讨：Room ${numericRoomId}`);
           }
         } else {
           console.log("[TRTC Client] Phase-1 text-sync mode (no live TRTC media on Vercel).");
           isJoinedRef.current = true;
           setTrtcStatusText(`Phase-1 Text Sync · Room ${numericRoomId}`);
-          telemetry.recordConnectionState('trtcState', 'CONNECTED', { endpoint: `Phase1-Text-Room-${numericRoomId}` });
+          telemetry.recordConnectionState("trtcState", "DISCONNECTED", {
+            endpoint: `Phase1-Text-Room-${numericRoomId}`,
+            error: "Phase-1 skips TRTC createClient/createStream"
+          });
           addTranscriptLine("系统提示", `📋 Phase-1 文本研讨模式已启用：Room ${numericRoomId}。多终端靠分享链接 + HTTP Poll 同步；真人麦克风互通见后续火山 RTC 阶段。`);
         }
 
         if (isCancelled) return;
+
+        // Phase-1: never call createStream/getUserMedia when TRTC is not really configured
+        if (!isRealTrtcConfigured) {
+          return;
+        }
 
         // 5. Establish local media stream (microphone & camera with audio-only fallback & virtual stream support)
         try {
@@ -448,8 +459,11 @@ export function useTrtcMultiUser() {
       } catch (err: any) {
         console.warn("TRTC client startup note (Sandbox Mode):", err.message || err);
         isJoinedRef.current = true;
-        setTrtcStatusText("TRTC Session Active");
-        telemetry.recordConnectionState('trtcState', 'CONNECTED', { endpoint: 'TRTC-Sandbox' });
+        setTrtcStatusText("Phase-1 Text Sync");
+        telemetry.recordConnectionState("trtcState", "DISCONNECTED", {
+          endpoint: "Phase1-Text-Sync",
+          error: err?.message || "TRTC not configured"
+        });
       } finally {
         isJoiningRef.current = false;
       }
