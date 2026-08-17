@@ -116,6 +116,7 @@ export interface TencentParticipant {
   userId: string;
   userName: string;
   userRole: 'host' | 'co_host' | 'participant' | string;
+  userRoleType?: 'creator' | 'attendee' | string;
   joinTime?: number;
   isMuted?: boolean;
 }

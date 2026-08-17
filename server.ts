@@ -312,8 +312,17 @@ app.post("/api/meeting/chat", async (req, res) => {
       sender,
       textLength: cleanText.length
     });
-    await saveChatMessageToServerState(normalizedRoomId, sender, cleanText);
+    let stateAfterChat = await saveChatMessageToServerState(normalizedRoomId, sender, cleanText);
     phaseLog("chat.persisted", { roomId: normalizedRoomId, sender });
+
+    if (!stateAfterChat.meetingStarted) {
+      return res.json({
+        success: true,
+        state: stateAfterChat,
+        ai: { generated: false },
+        storeBackend: await getStoreBackend()
+      });
+    }
 
     // This must be awaited. Vercel may freeze a Serverless invocation after
     // res.json(), which previously discarded the delayed AI intervention.
@@ -397,6 +406,89 @@ app.post("/api/meeting/participants/join", async (req, res) => {
     io.to(roomId).emit("participant-joined", { roomId, participant });
   } catch (_) {}
   res.json({ success: true, state });
+});
+
+app.post("/api/meeting/start", async (req, res) => {
+  const { roomId = "10086", startedBy = "管理员" } = req.body || {};
+  const normalizedRoomId = String(roomId);
+  const startedAt = Date.now();
+
+  try {
+    let state = await getOrCreateMeetingState(normalizedRoomId);
+    if (state.meetingStarted) {
+      phaseLog("meeting.started", {
+        roomId: normalizedRoomId,
+        startedBy,
+        alreadyStarted: true
+      });
+      return res.json({
+        success: true,
+        state,
+        alreadyStarted: true,
+        storeBackend: await getStoreBackend()
+      });
+    }
+
+    state = await patchMeetingState(normalizedRoomId, {
+      meetingStarted: true,
+      isMeetingActive: true
+    });
+
+    const participants = state.tencentParticipants || [];
+    const agendas = state.agendas || [];
+    const agendaTitles = agendas.map((a: { title?: string }, i: number) => `${i + 1}.${a.title || "议题"}`).join("、");
+    const participantList =
+      participants.map((p: { userName?: string; userRole?: string }) => `${p.userName}(${p.userRole || "参会者"})`).join("、") ||
+      startedBy;
+    const firstAgenda = agendas[0]?.title || "开场与背景宣读";
+
+    const openingHint = `[System Event: 会议正式开始！发起人 ${startedBy} 已点击开始。当前参会者：${participantList}。请立刻主动开口欢迎各位领导出席，宣读今天 ${agendas.length || 3} 个核心议程大纲（${agendaTitles || "见议程看板"}），并结合已加载的知识库资料给出专业背景。随后针对第一个议题【${firstAgenda}】，向最合适的参会者抛出深度探讨问题并点名引导发言。]`;
+
+    const { text: aiText, state: finalState } = await runAiIntervene({
+      roomId: normalizedRoomId,
+      reason: "manual",
+      hint: openingHint,
+      sender: startedBy
+    });
+
+    phaseLog("meeting.started", {
+      roomId: normalizedRoomId,
+      startedBy,
+      participantCount: participants.length,
+      aiGenerated: Boolean(aiText),
+      latencyMs: Date.now() - startedAt
+    });
+
+    try {
+      if (aiText) {
+        io.to(normalizedRoomId).emit("chat-received", {
+          sender: "AI 主席 (大地教研督导)",
+          text: aiText,
+          timestamp: Date.now()
+        });
+        io.to(normalizedRoomId).emit("ai-intervention", {
+          roomId: normalizedRoomId,
+          text: aiText,
+          state: finalState
+        });
+      }
+    } catch (_) {}
+
+    res.json({
+      success: true,
+      state: finalState,
+      ai: { generated: Boolean(aiText), text: aiText || undefined },
+      storeBackend: await getStoreBackend()
+    });
+  } catch (err: any) {
+    phaseError("ai.failed", {
+      roomId: normalizedRoomId,
+      reason: "manual",
+      error: err?.message || String(err),
+      latencyMs: Date.now() - startedAt
+    });
+    res.status(500).json({ success: false, error: err?.message || "Unable to start meeting" });
+  }
 });
 
 app.get("/api/live/poll", async (req, res) => {

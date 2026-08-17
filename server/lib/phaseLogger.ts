@@ -13,7 +13,8 @@ export type PhaseLogEvent =
   | "ai.skipped"
   | "ai.failed"
   | "rag.embedded"
-  | "rag.searched";
+  | "rag.searched"
+  | "meeting.started";
 
 export function phaseLog(event: PhaseLogEvent, fields: Record<string, unknown> = {}) {
   console.log(`[phase1] ${JSON.stringify({ event, ...fields, at: new Date().toISOString() })}`);

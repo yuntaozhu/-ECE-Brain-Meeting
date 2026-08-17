@@ -19,10 +19,12 @@ const initialSearchUrlParams = typeof window !== "undefined" ? new URLSearchPara
 const urlRoomId = initialSearchUrlParams ? initialSearchUrlParams.get("roomId") : null;
 const urlRole = initialSearchUrlParams ? initialSearchUrlParams.get("role") : null;
 
+const isShareLinkEntry = urlRole === "attendee" || urlRoomId !== null;
 const defaultMeetingId = urlRoomId || (parsedMeetingContext && parsedMeetingContext.meetingId) || "10086";
-const defaultJoined = urlRole === "attendee" || urlRoomId !== null || (parsedMeetingContext && parsedMeetingContext.joined) || false;
-const defaultUserName = (parsedMeetingContext && parsedMeetingContext.userName) || (urlRole === "attendee" ? "杨督导" : "我");
-const defaultUserRole = (parsedMeetingContext && parsedMeetingContext.userRole) || (urlRole === "attendee" ? "省优质名园考评长" : "大地教研代表");
+// Share links always require explicit form submit — never auto-join from URL or localStorage
+const defaultJoined = !isShareLinkEntry && Boolean(parsedMeetingContext?.joined);
+const defaultUserName = (parsedMeetingContext && parsedMeetingContext.userName) || (urlRole === "attendee" ? "" : "张园长");
+const defaultUserRole = (parsedMeetingContext && parsedMeetingContext.userRole) || (urlRole === "attendee" ? "" : "学前数字融合组长");
 const defaultUserRoleType = (parsedMeetingContext && parsedMeetingContext.userRoleType) || (urlRole === "attendee" ? "attendee" : "creator");
 let socket: any = null;
 if (typeof window !== "undefined" && shouldUseNativeWebSocket()) {
@@ -348,7 +350,7 @@ export const useMeetingStore = create<MeetingState>((set) => ({
         ...state.transcript,
         {
           speaker: "系统提示",
-          text: `🎯 参会者 ${actualName}(职务：${actualRole}) 以【${isAttendee ? "普通参会嘉宾 (Attendee)" : "会议发起高管 (Creator/Host)"}】身份加入 Phase-1 文本研讨室（roomId=${activeRoomId}）。`,
+          text: `🎯 ${actualName}（${actualRole}）已加入等待室 roomId=${activeRoomId}。请等待管理员开始会议，届时 AI 主席将结合知识库主导研讨。`,
           timestamp: new Date()
         }
       ]

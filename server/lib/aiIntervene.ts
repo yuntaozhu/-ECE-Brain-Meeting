@@ -78,6 +78,17 @@ export async function runAiIntervene(options: {
   const { roomId, reason, sender, hint } = options;
   const startedAt = Date.now();
   const state = await getOrCreateMeetingState(roomId);
+
+  if (!state.meetingStarted && reason !== "manual") {
+    phaseLog("ai.skipped", {
+      roomId,
+      reason,
+      skipReason: "meeting_not_started",
+      latencyMs: Date.now() - startedAt
+    });
+    return { text: "", state, analysis: { shouldIntervene: false } };
+  }
+
   const recentTranscript = (state.transcript || [])
     .slice(-10)
     .map((t: any) => `${t.speaker}: ${t.text}`)

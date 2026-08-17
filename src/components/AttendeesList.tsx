@@ -82,19 +82,45 @@ export function AttendeesList({ meetingId: propMeetingId, className = '' }: Atte
     }
   }, [activeMeetingId]);
 
-  // Tencent is an opt-in external bridge. Phase-1 attendee state comes from
-  // /api/live/poll, so never create a background Tencent polling loop by default.
+  // Phase-1: sync participants from meeting state store
   useEffect(() => {
-    if (!isTencentSyncEnabled) {
-      setParticipants(tencentParticipants || []);
-      return;
-    }
-    fetchParticipants(false);
-    const interval = setInterval(() => {
+    if (isTencentSyncEnabled) {
       fetchParticipants(false);
-    }, 15000);
+      const interval = setInterval(() => fetchParticipants(false), 15000);
+      return () => clearInterval(interval);
+    }
+
+    const syncFromServer = async () => {
+      try {
+        const res = await fetch(`/api/meeting/state/${encodeURIComponent(activeMeetingId)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const list: TencentParticipant[] = data.state?.tencentParticipants || [];
+        setParticipants((prev) => {
+          if (list.length > prev.length && prev.length > 0) {
+            const latest = list[list.length - 1];
+            setNewMemberAlert(`新参会者 ${latest.userName} 已加入！`);
+            setTimeout(() => setNewMemberAlert(null), 4000);
+          }
+          return list.length ? list : prev;
+        });
+        if (list.length) {
+          useMeetingStore.getState().setTencentParticipants(list);
+        }
+        setLastUpdated(new Date());
+        setError(null);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(msg);
+        setParticipants(tencentParticipants || []);
+      }
+    };
+
+    syncFromServer();
+    setParticipants(tencentParticipants || []);
+    const interval = setInterval(syncFromServer, 3000);
     return () => clearInterval(interval);
-  }, [fetchParticipants, isTencentSyncEnabled, tencentParticipants]);
+  }, [fetchParticipants, isTencentSyncEnabled, tencentParticipants, activeMeetingId]);
 
   return (
     <div className={`bg-black/40 border border-white/10 rounded-2xl p-4 backdrop-blur-md flex flex-col gap-3 ${className}`}>
@@ -120,8 +146,8 @@ export function AttendeesList({ meetingId: propMeetingId, className = '' }: Atte
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => isTencentSyncEnabled && fetchParticipants(true)}
-            disabled={loading || !isTencentSyncEnabled}
+            onClick={() => (isTencentSyncEnabled ? fetchParticipants(true) : undefined)}
+            disabled={loading}
             className="h-7 text-xs text-slate-300 hover:text-white hover:bg-white/10 gap-1.5"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-cyan-400' : ''}`} />
@@ -146,8 +172,8 @@ export function AttendeesList({ meetingId: propMeetingId, className = '' }: Atte
 
       <div className="flex flex-col gap-2 max-h-[280px] overflow-y-auto pr-1">
         {participants.map((p, idx) => {
-          const isHost = p.userRole === 'host';
-          const isCoHost = p.userRole === 'co_host';
+          const isHost = p.userRoleType === "creator" || p.userRole === "host";
+          const isCoHost = p.userRole === "co_host";
           return (
             <div
               key={p.userId || idx}
@@ -166,7 +192,7 @@ export function AttendeesList({ meetingId: propMeetingId, className = '' }: Atte
                     <span className="text-xs font-semibold text-slate-200">{p.userName}</span>
                     {isHost && (
                       <Badge className="text-[9px] bg-amber-500/20 text-amber-400 border-amber-500/30 px-1.5 py-0">
-                        <Shield className="w-2.5 h-2.5 mr-0.5 inline" /> 主持人
+                        <Shield className="w-2.5 h-2.5 mr-0.5 inline" /> 管理员
                       </Badge>
                     )}
                     {isCoHost && (
@@ -177,7 +203,9 @@ export function AttendeesList({ meetingId: propMeetingId, className = '' }: Atte
                   </div>
                   <span className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
                     <Clock className="w-3 h-3 text-slate-500" />
-                    {p.joinTime ? new Date(p.joinTime * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '刚刚'} 入会
+                    {p.userRole || "参会者"} ·{" "}
+                    {p.joinTime ? new Date(p.joinTime * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "刚刚"}{" "}
+                    入会
                   </span>
                 </div>
               </div>
@@ -198,7 +226,7 @@ export function AttendeesList({ meetingId: propMeetingId, className = '' }: Atte
       </div>
 
       <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-white/5">
-        <span>腾讯会议 REST API 实时同步中</span>
+        <span>{isTencentSyncEnabled ? "腾讯会议 REST API 同步" : "本站 HTTP 状态同步"}</span>
         <span>上次更新: {lastUpdated.toLocaleTimeString()}</span>
       </div>
     </div>
