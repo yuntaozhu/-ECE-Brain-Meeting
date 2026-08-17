@@ -29,7 +29,13 @@ export async function sendMeetingChat(params: {
   sender: string;
   text: string;
   msgId?: string;
-}): Promise<{ success?: boolean; state?: any; error?: string }> {
+}): Promise<{
+  success?: boolean;
+  state?: any;
+  error?: string;
+  storeBackend?: "upstash" | "memory";
+  ai?: { generated?: boolean; text?: string };
+}> {
   const res = await fetch("/api/meeting/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

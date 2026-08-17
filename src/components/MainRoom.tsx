@@ -155,11 +155,26 @@ export default function MainRoom() {
     };
 
     const pollOnce = async () => {
+      const requestedAt = Date.now();
       try {
         const res = await fetch(`/api/live/poll?roomId=${encodeURIComponent(activeId)}&since=${sinceSeq}`);
-        if (!res.ok || cancelled) return;
+        if (!res.ok || cancelled) {
+          logger.log("WARN", "Phase1Sync", `轮询失败: HTTP ${res.status}`, { roomId: activeId, since: sinceSeq });
+          return;
+        }
         const data = await res.json();
+        const previousSeq = sinceSeq;
         if (data.seq) sinceSeq = Math.max(sinceSeq, data.seq);
+        if (Array.isArray(data.events) && data.events.length > 0) {
+          logger.log("INFO", "Phase1Sync", "收到会议同步事件", {
+            roomId: activeId,
+            previousSeq,
+            seq: sinceSeq,
+            eventTypes: data.events.map((event: any) => event.type),
+            latencyMs: Date.now() - requestedAt,
+            backend: data.storeBackend
+          });
+        }
         applyServerState(data.state);
 
         // Silence pacemaker: no human chat for 8s while meeting started
@@ -187,8 +202,11 @@ export default function MainRoom() {
               });
           }
         }
-      } catch (e) {
-        // Silent fallback
+      } catch (e: any) {
+        logger.log("WARN", "Phase1Sync", `轮询请求异常: ${e?.message || e}`, {
+          roomId: activeId,
+          since: sinceSeq
+        });
       }
     };
 

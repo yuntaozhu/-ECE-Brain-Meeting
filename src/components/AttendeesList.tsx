@@ -13,6 +13,7 @@ interface AttendeesListProps {
 export function AttendeesList({ meetingId: propMeetingId, className = '' }: AttendeesListProps) {
   const storeMeetingId = useMeetingStore((state) => state.meetingId);
   const tencentParticipants = useMeetingStore((state) => state.tencentParticipants);
+  const isTencentSyncEnabled = useMeetingStore((state) => state.isTencentSyncEnabled);
 
   const activeMeetingId = propMeetingId || storeMeetingId || '10086';
 
@@ -81,14 +82,19 @@ export function AttendeesList({ meetingId: propMeetingId, className = '' }: Atte
     }
   }, [activeMeetingId]);
 
-  // Poll for real-time updates every 6 seconds
+  // Tencent is an opt-in external bridge. Phase-1 attendee state comes from
+  // /api/live/poll, so never create a background Tencent polling loop by default.
   useEffect(() => {
+    if (!isTencentSyncEnabled) {
+      setParticipants(tencentParticipants || []);
+      return;
+    }
     fetchParticipants(false);
     const interval = setInterval(() => {
       fetchParticipants(false);
-    }, 6000);
+    }, 15000);
     return () => clearInterval(interval);
-  }, [fetchParticipants]);
+  }, [fetchParticipants, isTencentSyncEnabled, tencentParticipants]);
 
   return (
     <div className={`bg-black/40 border border-white/10 rounded-2xl p-4 backdrop-blur-md flex flex-col gap-3 ${className}`}>
@@ -99,13 +105,13 @@ export function AttendeesList({ meetingId: propMeetingId, className = '' }: Atte
           </div>
           <div>
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-              腾讯会议实时参会成员
+              {isTencentSyncEnabled ? "腾讯会议外链参会成员" : "本站研讨室参会成员"}
               <Badge variant="outline" className="text-[10px] bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
                 {participants.length} 人在线
               </Badge>
             </h3>
             <p className="text-[11px] text-slate-400">
-              Meeting ID: <span className="font-mono text-cyan-300">{activeMeetingId}</span>
+              Room ID: <span className="font-mono text-cyan-300">{activeMeetingId}</span>
             </p>
           </div>
         </div>
@@ -114,8 +120,8 @@ export function AttendeesList({ meetingId: propMeetingId, className = '' }: Atte
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => fetchParticipants(true)}
-            disabled={loading}
+            onClick={() => isTencentSyncEnabled && fetchParticipants(true)}
+            disabled={loading || !isTencentSyncEnabled}
             className="h-7 text-xs text-slate-300 hover:text-white hover:bg-white/10 gap-1.5"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-cyan-400' : ''}`} />

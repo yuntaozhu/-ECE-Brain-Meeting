@@ -24,6 +24,7 @@ import {
   upsertParticipant
 } from "./server/lib/meetingStore";
 import { embedQuery, hashEmbed, runAiIntervene } from "./server/lib/aiIntervene";
+import { phaseError, phaseLog } from "./server/lib/phaseLogger";
 
 const app = express();
 const server = http.createServer(app);
@@ -141,6 +142,12 @@ app.post("/api/rag/embed-resource", async (req, res) => {
       ],
       agendas: customAgendas
     });
+    phaseLog("rag.embedded", {
+      roomId: String(roomId),
+      fileName,
+      chunkCount: chunkIds.length,
+      realEmbedding: isRealDoubao
+    });
 
     res.json({
       success: true,
@@ -187,6 +194,11 @@ app.post("/api/rag/search-knowledge", async (req, res) => {
       isRealEmbedding: isReal,
       storeBackend: await getStoreBackend(),
       results
+    });
+    phaseLog("rag.searched", {
+      roomId: String(roomId),
+      resultCount: results.length,
+      realEmbedding: isReal
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -256,9 +268,15 @@ io.on("connection", (socket) => {
   });
 });
 
-// Request logger for debugging on Vercel and local
+// Phase-1 routes emit structured business logs below. Avoid logging each poll
+// request here: it overwhelms Vercel Runtime Logs without adding diagnostics.
 app.use((req, res, next) => {
-  console.log(`[HTTP] ${req.method} ${req.url} - IP: ${req.ip || req.headers['x-forwarded-for'] || 'unknown'}`);
+  if (
+    !req.path.startsWith("/api/live/poll") &&
+    !req.path.startsWith("/api/meeting/state/")
+  ) {
+    console.log(`[HTTP] ${req.method} ${req.url}`);
+  }
   next();
 });
 
@@ -285,41 +303,60 @@ app.post("/api/meeting/chat", async (req, res) => {
   }
 
   const cleanText = text.trim();
-  const updatedState = await saveChatMessageToServerState(String(roomId), sender, cleanText);
+  const normalizedRoomId = String(roomId);
+  const startedAt = Date.now();
 
   try {
-    io.to(roomId).emit("chat-received", { sender, text: cleanText, timestamp: Date.now() });
-  } catch (_) {}
+    phaseLog("chat.received", {
+      roomId: normalizedRoomId,
+      sender,
+      textLength: cleanText.length
+    });
+    await saveChatMessageToServerState(normalizedRoomId, sender, cleanText);
+    phaseLog("chat.persisted", { roomId: normalizedRoomId, sender });
 
-  res.json({ success: true, state: updatedState, storeBackend: await getStoreBackend() });
-
-  setTimeout(async () => {
-    try {
-      const { text: aiResponseText, state: finalState } = await runAiIntervene({
-        roomId: String(roomId),
-        reason: "chat",
-        sender,
-        hint: cleanText
-      });
-      if (aiResponseText) {
-        console.log(`[KaibanJS AI Host] Room ${roomId}: "${aiResponseText}"`);
-        try {
-          io.to(roomId).emit("chat-received", {
-            sender: "AI 主席 (大地教研督导)",
-            text: aiResponseText,
-            timestamp: Date.now()
-          });
-          io.to(roomId).emit("ai-intervention", {
-            roomId,
-            text: aiResponseText,
-            state: finalState
-          });
-        } catch (_) {}
-      }
-    } catch (engineErr) {
-      console.warn("[KaibanJS Engine Async Interaction Notice]", engineErr);
+    // This must be awaited. Vercel may freeze a Serverless invocation after
+    // res.json(), which previously discarded the delayed AI intervention.
+    const { text: aiResponseText, state: finalState } = await runAiIntervene({
+      roomId: normalizedRoomId,
+      reason: "chat",
+      sender,
+      hint: cleanText
+    });
+    const finalText = aiResponseText || "";
+    if (finalText) {
+      try {
+        io.to(roomId).emit("chat-received", {
+          sender: "AI 主席 (大地教研督导)",
+          text: finalText,
+          timestamp: Date.now()
+        });
+        io.to(roomId).emit("ai-intervention", {
+          roomId,
+          text: finalText,
+          state: finalState
+        });
+      } catch (_) {}
     }
-  }, 200);
+
+    res.json({
+      success: true,
+      state: finalState,
+      ai: {
+        generated: Boolean(finalText),
+        text: finalText || undefined
+      },
+      storeBackend: await getStoreBackend()
+    });
+  } catch (err: any) {
+    phaseError("ai.failed", {
+      roomId: normalizedRoomId,
+      reason: "chat",
+      error: err?.message || String(err),
+      latencyMs: Date.now() - startedAt
+    });
+    res.status(500).json({ success: false, error: "Unable to process chat AI response" });
+  }
 });
 
 app.get("/api/meeting/state/:roomId", async (req, res) => {
@@ -336,6 +373,11 @@ app.post("/api/meeting/state/:roomId", async (req, res) => {
   const { roomId } = req.params;
   const incoming = req.body || {};
   const updated = await patchMeetingState(roomId, incoming);
+  phaseLog("sync.state_patch", {
+    roomId,
+    fields: Object.keys(incoming),
+    seq: updated.seq
+  });
   res.json({ success: true, state: updated, storeBackend: await getStoreBackend() });
 });
 
@@ -345,6 +387,12 @@ app.post("/api/meeting/participants/join", async (req, res) => {
     return res.status(400).json({ success: false, error: "participant.userName required" });
   }
   const state = await upsertParticipant(String(roomId), participant);
+  phaseLog("participant.joined", {
+    roomId: String(roomId),
+    userId: participant.userId,
+    role: participant.userRoleType || participant.userRole,
+    seq: state.seq
+  });
   try {
     io.to(roomId).emit("participant-joined", { roomId, participant });
   } catch (_) {}
@@ -356,6 +404,14 @@ app.get("/api/live/poll", async (req, res) => {
   const since = Number(req.query.since || 0);
   const state = await getOrCreateMeetingState(roomId);
   const events = await listEventsSince(roomId, since);
+  if (events.length > 0) {
+    phaseLog("sync.poll", {
+      roomId,
+      since,
+      seq: state.seq || 0,
+      eventCount: events.length
+    });
+  }
   res.json({
     success: true,
     roomId,

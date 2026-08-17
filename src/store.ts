@@ -301,11 +301,13 @@ export const useMeetingStore = create<MeetingState>((set) => ({
         body: JSON.stringify({ roomId: activeRoomId, participant: newParticipant })
       }).catch((err) => console.warn("Failed to sync participant join:", err));
 
-      fetch(`/api/tencent/meetings/${activeRoomId}/participants/join`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newParticipant)
-      }).catch(() => {});
+      if (state.isTencentSyncEnabled) {
+        fetch(`/api/tencent/meetings/${activeRoomId}/participants/join`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newParticipant)
+        }).catch(() => {});
+      }
     }
 
     if (socket && activeRoomId) {

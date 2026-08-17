@@ -10,6 +10,7 @@ import {
   patchMeetingState,
   type MeetingState
 } from "./meetingStore";
+import { phaseLog } from "./phaseLogger";
 
 function hashEmbed(text: string, dim = 1024): number[] {
   return Array.from({ length: dim }, (_, i) => Math.sin(i + text.length * 0.17 + (text.charCodeAt(i % Math.max(text.length, 1)) || 1)));
@@ -75,6 +76,7 @@ export async function runAiIntervene(options: {
   hint?: string;
 }): Promise<{ text: string; state: MeetingState; analysis: any }> {
   const { roomId, reason, sender, hint } = options;
+  const startedAt = Date.now();
   const state = await getOrCreateMeetingState(roomId);
   const recentTranscript = (state.transcript || [])
     .slice(-10)
@@ -83,6 +85,12 @@ export async function runAiIntervene(options: {
   const currentAgenda = `议程阶段: ${state.agendaStage || "IceBreaking"}. 主题: ${state.currentTopic || "教研研讨"}`;
   const ragQuery = hint || recentTranscript.slice(-200) || state.currentTopic || "托班数字化";
   const ragContext = await buildRagContext(roomId, ragQuery);
+  phaseLog("ai.start", {
+    roomId,
+    reason,
+    transcriptLines: state.transcript?.length || 0,
+    ragContext: Boolean(ragContext)
+  });
 
   const analysis = await runMeetingAnalysisServer(
     `${recentTranscript}\n[干预原因:${reason}] ${hint || ""}\n[知识库]\n${ragContext}`,
@@ -131,6 +139,21 @@ export async function runAiIntervene(options: {
         agendaStage: analysis.nextStageRecommendation
       });
     }
+    phaseLog("ai.completed", {
+      roomId,
+      reason,
+      shouldIntervene: Boolean(analysis.shouldIntervene),
+      replyLength: aiResponseText.length,
+      seq: finalState.seq,
+      latencyMs: Date.now() - startedAt
+    });
+  } else {
+    phaseLog("ai.skipped", {
+      roomId,
+      reason,
+      shouldIntervene: Boolean(analysis.shouldIntervene),
+      latencyMs: Date.now() - startedAt
+    });
   }
 
   return { text: aiResponseText, state: finalState, analysis };

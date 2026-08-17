@@ -56,6 +56,18 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
           if (data.state?.transcript && Array.isArray(data.state.transcript)) {
             useMeetingStore.setState({ transcript: data.state.transcript });
           }
+          logger.log(
+            "INFO",
+            "AIHost",
+            data.ai?.generated ? "AI 主席回复已持久化，等待同步播放" : "AI 主席本轮未生成回复",
+            {
+              roomId,
+              msgId,
+              aiGenerated: Boolean(data.ai?.generated),
+              aiTextLength: data.ai?.text?.length || 0,
+              backend: data.storeBackend
+            }
+          );
         } else {
           telemetry.endLatencyTimer(msgId, "FAILED");
         }
