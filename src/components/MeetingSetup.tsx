@@ -32,7 +32,9 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
 
   const [topicInput, setTopicInput] = useState("关于下一代幼儿教育数字化基础设施的规划");
   const [meetingRoomId, setMeetingRoomId] = useState("10086");
-  const [tencentSyncToggle, setTencentSyncToggle] = useState(true);
+  // Phase-1 defaults to the ECE-Brain room. Tencent Meeting is an optional
+  // external invitation bridge, never the primary meeting path.
+  const [tencentSyncToggle, setTencentSyncToggle] = useState(false);
   const [customTencentMeetingId, setCustomTencentMeetingId] = useState("");
   const [isCreatingTencentMeeting, setIsCreatingTencentMeeting] = useState(false);
   const [tencentMeetingResult, setTencentMeetingResult] = useState<{ meetingCode: string; joinUrl: string; meetingId: string } | null>(null);
@@ -51,6 +53,11 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
   const [isCheckingDiagnostic, setIsCheckingDiagnostic] = useState(true);
 
   useEffect(() => {
+    if (!tencentSyncToggle) {
+      setIsCheckingDiagnostic(false);
+      return;
+    }
+
     async function runDiagnostic() {
       try {
         const res = await fetch('/api/tencent/diagnostic');
@@ -78,7 +85,7 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
       }
     }
     runDiagnostic();
-  }, []);
+  }, [tencentSyncToggle]);
 
   // Advanced Tencent Meeting API parameters (参考 创建会议.md)
   const [meetingType, setMeetingType] = useState<number>(0); // 0: 预约会议, 1: 快速会议
@@ -451,19 +458,20 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
                   </div>
                 </div>
 
-                {/* Tencent Meeting Integration Toggle Card */}
-                <div className="p-3.5 bg-gradient-to-r from-cyan-950/40 via-blue-950/20 to-black rounded-xl border border-cyan-500/30 flex items-center justify-between">
+                {/* Optional external Tencent Meeting bridge. Phase-1 uses this
+                    site's roomId and invite link as the default entry point. */}
+                <div className="p-3.5 bg-gradient-to-r from-slate-950/70 via-blue-950/20 to-black rounded-xl border border-white/10 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-blue-500/20 border border-blue-400/30 text-blue-400 flex items-center justify-center">
+                    <div className="w-9 h-9 rounded-lg bg-slate-500/15 border border-slate-400/20 text-slate-300 flex items-center justify-center">
                       <Video className="w-5 h-5" />
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-white">同步创建腾讯会议 (Tencent Meeting Bridge)</span>
-                        <Badge className="bg-blue-500/20 text-blue-300 border-blue-500/30 text-[9px] px-1.5 py-0.2">REST API RESTful</Badge>
+                        <span className="text-xs font-bold text-white">可选外链：腾讯会议邀请</span>
+                        <Badge className="bg-slate-500/15 text-slate-300 border-slate-400/20 text-[9px] px-1.5 py-0.2">默认关闭</Badge>
                       </div>
                       <p className="text-[10px] text-slate-400 mt-0.5">
-                        开启后将实时调用腾讯 API 分配会议号，实现腾讯会议成员与 ECE-Brain 数字主理人（AI 虚拟主席）双向实时联动。
+                        本站分享链接、RAG 与 AI 文本研讨室是主流程；仅在需要向腾讯会议用户额外发邀请时开启。
                       </p>
                     </div>
                   </div>
@@ -471,7 +479,7 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
                     type="button"
                     onClick={() => setTencentSyncToggle(!tencentSyncToggle)}
                     className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      tencentSyncToggle ? 'bg-cyan-500' : 'bg-slate-700'
+                      tencentSyncToggle ? 'bg-blue-500' : 'bg-slate-700'
                     }`}
                   >
                     <span
@@ -526,8 +534,8 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
                     </div>
                     <div className="p-3.5 bg-black/50 border border-cyan-500/20 rounded-xl space-y-3">
                       <label className="text-[10px] font-mono text-cyan-400 uppercase flex items-center justify-between">
-                        <span>腾讯会议号 (若需在腾讯会议App中免会议号无效，可在此填入您已创建的真实9位会议号)</span>
-                        <span className="text-slate-500 font-normal">留空则自动生成演示模拟号</span>
+                        <span>腾讯会议号（外链可选）</span>
+                        <span className="text-slate-500 font-normal">留空则由腾讯 API 创建</span>
                       </label>
                       <input
                         type="text"
@@ -537,11 +545,11 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
                         placeholder="例如: 802374474 (可选，如留空将自动分配模拟号)"
                       />
                       <div className="text-[10px] text-amber-300/90 bg-amber-950/20 border border-amber-500/30 p-2.5 rounded-lg space-y-1">
-                        <span className="font-bold block text-amber-300">💡 为什么腾讯会议提示“会议已结束”或“会议号无效”？</span>
+                        <span className="font-bold block text-amber-300">💡 此功能不影响本站研讨室</span>
                         <p className="text-slate-400 leading-relaxed">
-                          当未配置腾讯会议官方企业 API 秘钥时，系统会采用演示模拟号（如随机生成 9 位号）。由于该号码并非在腾讯会议官方服务器真实预约，直接在腾讯会议 App 中输入会提示「会议已结束」或「会议号无效」。
+                          若未配置腾讯会议官方企业 API 凭证，可能无法创建真实腾讯会场。
                           <br/>
-                          <strong>正确做法：</strong>如需在腾讯会议 App 中真实连通，请先在腾讯会议 App 中自主创建一个新会议，将真实 9 位会议号填入上方输入框中；或者直接使用本系统内置功能强大的 <strong>【进入数字研讨大室 (Creator)】</strong> 体验完整的 AI 智能主席与多专家协同语音研讨！
+                          <strong>默认做法：</strong>直接生成本站分享链接，所有参会者在 ECE-Brain 内进行 RAG 驱动的 AI 协同研讨。
                         </p>
                       </div>
                     </div>
@@ -881,7 +889,7 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
                 onClick={handleGenerateMeeting}
                 className="w-full bg-cyan-500 hover:bg-cyan-400 border border-cyan-400 text-black shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] font-bold tracking-widest uppercase text-xs h-12 transition-all rounded-xl cursor-pointer"
               >
-                生成本次教研学术专属会场与链接
+                创建本站 AI 研讨室并生成分享链接
                 <ArrowRight className="w-4 h-4 ml-2 inline" />
               </Button>
             </div>
@@ -899,7 +907,7 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
                 大地 ECE-Brain 学术大本营组建完毕！
               </CardTitle>
               <p className="text-xs text-slate-400 max-w-md mx-auto mt-2 leading-relaxed">
-                会议专属知识库（挂载文件 {uploadedFiles.length} 项）在后台服务器加载就绪，大麦克风与 AI 虚拟主席随时监控待发。
+                会议专属知识库（挂载文件 {uploadedFiles.length} 项）已准备就绪。通过本站分享链接进入同一 roomId，即可同步 RAG、议程、聊天与 AI 主席控场。
               </p>
 
               {/* Invitation panel */}
@@ -945,7 +953,7 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
                 )}
 
                 <div className="text-left space-y-1.5">
-                  <span className="text-[9px] font-mono uppercase text-slate-500 tracking-wider block">ECE-Brain 专属嘉宾参会链接 (Role=Attendee Link)</span>
+                  <span className="text-[9px] font-mono uppercase text-cyan-400 tracking-wider block">本站 AI 研讨室分享链接（Phase-1 文本同步）</span>
                   <div className="flex items-center gap-2">
                     <div className="flex-1 bg-black/50 border border-white/5 rounded-lg px-3 py-2 text-xs font-mono text-cyan-400 select-all truncate">
                       {inviteUrl}
@@ -968,9 +976,9 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
                 <div className="p-3 bg-cyan-950/20 border border-cyan-500/20 rounded-lg text-left flex gap-3">
                   <AlertCircle className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" />
                   <div>
-                    <span className="text-xs font-bold text-white block">极客提示 (RBAC 角色鉴权已覆盖):</span>
+                    <span className="text-xs font-bold text-white block">进入说明：</span>
                     <p className="text-[10px] text-slate-400 leading-relaxed mt-1">
-                      任何人通过上述链接加入，将自动锁定为普通参会者；该身份在音频混音中无法触发起搏发音、无法强制切阶段、亦没有关闭会议大本营的管理员控制权。安全管控等级 A+。
+                      任何人通过上述链接填写昵称后加入同一研讨室。Phase-1 同步聊天、RAG、议程与 AI 控场；真人 RTC 音视频将在后续阶段接入。
                     </p>
                   </div>
                 </div>
