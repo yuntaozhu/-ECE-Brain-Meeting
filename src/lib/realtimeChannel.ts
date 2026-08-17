@@ -1,14 +1,19 @@
 /**
- * Phase-1 realtime channel: HTTP poll on Vercel/serverless, native WS only on persistent Node.
+ * E1 realtime channel: HTTP poll on Vercel/serverless frontends;
+ * native WS when the API origin is a persistent Node host (Railway / local).
  */
+
+import { apiUrl, getApiBase, isPersistentApiHost } from "./apiBase";
 
 export type RealtimeMode = "poll" | "ws";
 
+export { apiUrl, getApiBase };
+
 export function isServerlessRealtime(): boolean {
   if (typeof window === "undefined") return false;
+  if (isPersistentApiHost()) return false;
   const host = window.location.hostname || "";
   if (host === "localhost" || host === "127.0.0.1") return false;
-  if (host.includes("railway.app") || host.includes("railway.internal")) return false;
   if (host.includes("vercel.app") || host.includes("dadimeeting") || host.includes("minervaedu")) {
     return true;
   }
@@ -36,7 +41,7 @@ export async function sendMeetingChat(params: {
   storeBackend?: "upstash" | "memory";
   ai?: { generated?: boolean; text?: string };
 }> {
-  const res = await fetch("/api/meeting/chat", {
+  const res = await fetch(apiUrl("/api/meeting/chat"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params)

@@ -5,7 +5,8 @@ import { runMeetingAnalysis } from "../lib/kaibanMeetingEngine";
 import { AgendaStageType } from "../types";
 
 import { speakText } from "../lib/audioSpeech";
-import { shouldUseNativeWebSocket } from "../lib/realtimeChannel";
+import { shouldUseNativeWebSocket, getApiBase } from "../lib/realtimeChannel";
+import { apiUrl } from "../lib/apiBase";
 
 export function useMeetingOrchestrator() {
   const { 
@@ -35,7 +36,7 @@ export function useMeetingOrchestrator() {
   const speakTeacherIntervention = async (text: string) => {
     console.log("[Orchestration Audio] Instructing AI Chairperson to speak out loud:", text);
     try {
-      const res = await fetch("/api/tts", {
+      const res = await fetch(apiUrl("/api/tts"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, speaker: "Puck" })
@@ -84,7 +85,7 @@ export function useMeetingOrchestrator() {
         if (result.latestToDos && result.latestToDos.length > 0) {
           setLatestToDos(result.latestToDos);
           // Sync SecretaryAgent TODOs to Tencent Meeting Docs API
-          fetch("/api/tencent/doc/append", {
+          fetch(apiUrl("/api/tencent/doc/append"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ todos: result.latestToDos })
@@ -114,7 +115,7 @@ export function useMeetingOrchestrator() {
           if (shouldUseNativeWebSocket()) {
             try {
               const { io } = await import("socket.io-client");
-              const sock = io("/ws/meeting", {
+              const sock = io(getApiBase() || "/ws/meeting", {
                 query: { roomId: "10086", userName: "DirectorAgent", userRole: "agent" },
                 reconnectionAttempts: 0,
                 transports: ["websocket"]

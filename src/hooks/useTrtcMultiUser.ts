@@ -3,6 +3,7 @@ import { useMeetingStore } from "../store";
 import { useGeminiLive } from "./useGeminiLive";
 import { speakText } from "../lib/audioSpeech";
 import { telemetry } from "../lib/telemetry";
+import { apiUrl } from "../lib/apiBase";
 import { trtcAudioMonitor } from "../lib/trtcAudioMonitor";
 import TRTC from "trtc-js-sdk";
 
@@ -172,7 +173,7 @@ export function useTrtcMultiUser() {
         console.log(`[TRTC Signaling] Joining TRTC room context with roomId: ${numericRoomId} (SearchParam: ${searchRoomId}, StoreMeetingId: ${meetingId}), User: ${userIdToUse}`);
 
         // 1. Fetch dynamic UserSig from local fullstack backend to safeguard keys
-        const response = await fetch("/api/trtc/usersig", {
+        const response = await fetch(apiUrl("/api/trtc/usersig"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userId: userIdToUse })

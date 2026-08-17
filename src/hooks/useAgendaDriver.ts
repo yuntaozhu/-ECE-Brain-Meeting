@@ -3,6 +3,7 @@ import { useMeetingStore } from "../store";
 import { useGeminiLive } from "./useGeminiLive";
 import { speakText } from "../lib/audioSpeech";
 import { runMeetingAnalysis } from "../lib/kaibanMeetingEngine";
+import { apiUrl } from "../lib/apiBase";
 
 export interface AgendaItem {
   id: string; // 'IceBreaking' | 'MainDiscussion' | 'Conclusion'
@@ -51,7 +52,7 @@ export function useAgendaDriver() {
 
     // Phase-1: server-side Kaiban AI intervene (works on Vercel via Redis/memory store)
     const roomId = useMeetingStore.getState().meetingId || "10086";
-    fetch("/api/ai/intervene", {
+    fetch(apiUrl("/api/ai/intervene"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ roomId, reason, hint: triggerPrompt })
@@ -62,7 +63,7 @@ export function useAgendaDriver() {
       sendControlText(triggerPrompt);
     } else {
       console.warn(`[Pacemaker] WS Disconnected. HTTP AI fallback triggered.`);
-      fetch("/api/doubao/chat", {
+      fetch(apiUrl("/api/doubao/chat"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -135,7 +136,7 @@ export function useAgendaDriver() {
 
     const roomId = useMeetingStore.getState().meetingId || "10086";
     useMeetingStore.getState().setMeetingStarted(true);
-    fetch(`/api/meeting/state/${encodeURIComponent(roomId)}`, {
+    fetch(apiUrl(`/api/meeting/state/${encodeURIComponent(roomId)}`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -147,7 +148,7 @@ export function useAgendaDriver() {
       })
     }).catch(() => {});
 
-    fetch("/api/ai/intervene", {
+    fetch(apiUrl("/api/ai/intervene"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

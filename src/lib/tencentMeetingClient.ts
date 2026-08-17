@@ -6,6 +6,7 @@ import {
 } from '../types';
 import { logger } from './logger';
 import { networkLogger } from './networkLogger';
+import { apiUrl } from './apiBase';
 
 /**
  * Client module for Tencent Meeting API interactions.
@@ -14,7 +15,7 @@ import { networkLogger } from './networkLogger';
 export class TencentMeetingClient {
   private apiBaseUrl: string;
 
-  constructor(baseUrl: string = '/api/tencent') {
+  constructor(baseUrl: string = apiUrl('/api/tencent')) {
     this.apiBaseUrl = baseUrl;
   }
 

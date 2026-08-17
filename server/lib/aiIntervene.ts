@@ -95,18 +95,32 @@ export async function runAiIntervene(options: {
     .join("\n");
   const currentAgenda = `议程阶段: ${state.agendaStage || "IceBreaking"}. 主题: ${state.currentTopic || "教研研讨"}`;
   const ragQuery = hint || recentTranscript.slice(-200) || state.currentTopic || "托班数字化";
-  const ragContext = await buildRagContext(roomId, ragQuery);
+  let ragContext = "";
+  let analysis: any = {
+    shouldIntervene: false,
+    interventionText: "",
+    latestToDos: [],
+    nextStageRecommendation: undefined
+  };
+
+  try {
+    ragContext = await buildRagContext(roomId, ragQuery);
+    analysis = await runMeetingAnalysisServer(
+      `${recentTranscript}\n[干预原因:${reason}] ${hint || ""}\n[知识库]\n${ragContext}`,
+      currentAgenda
+    );
+  } catch (err: any) {
+    // A model or embedding outage must not stop an already-started meeting.
+    // The deterministic response paths below keep the meeting usable.
+    console.warn("[aiIntervene] AI analysis unavailable; using meeting fallback:", err?.message || err);
+  }
+
   phaseLog("ai.start", {
     roomId,
     reason,
     transcriptLines: state.transcript?.length || 0,
     ragContext: Boolean(ragContext)
   });
-
-  const analysis = await runMeetingAnalysisServer(
-    `${recentTranscript}\n[干预原因:${reason}] ${hint || ""}\n[知识库]\n${ragContext}`,
-    currentAgenda
-  );
 
   let aiResponseText = "";
   if (analysis.shouldIntervene && analysis.interventionText) {
@@ -123,11 +137,12 @@ export async function runAiIntervene(options: {
   } else if (reason === "chat") {
     if (analysis.shouldIntervene && analysis.interventionText) {
       aiResponseText = analysis.interventionText;
-    } else if (
-      hint &&
-      (hint.includes("你好") || hint.includes("在吗") || hint.includes("收到") || hint.includes("测试"))
-    ) {
-      aiResponseText = `【AI主席导流】欢迎 ${sender || "参会者"} 介入研讨！请针对托班数字化硬件及注意力指标发表考评意见。`;
+    } else {
+      const activeAgenda =
+        state.agendas?.find((agenda: any) => agenda.id === state.agendaStage)?.title ||
+        state.currentTopic ||
+        "当前议题";
+      aiResponseText = `【AI主席】已收到${sender || "参会者"}的发言。请继续围绕「${activeAgenda}」补充具体依据、风险或可执行建议；也请其他参会者结合知识库资料回应这一观点。`;
     }
   } else if (analysis.interventionText) {
     aiResponseText = analysis.interventionText;

@@ -1,6 +1,7 @@
 /**
- * Phase-1 meeting + RAG store for Vercel.
- * Uses Upstash Redis when configured; falls back to in-memory Maps for local/dev.
+ * Meeting + RAG store.
+ * Production (Vercel / Railway) requires Upstash Redis.
+ * In-memory Maps are local/dev only and must never be the multi-device source of truth.
  */
 
 export interface MeetingState {
@@ -57,6 +58,29 @@ function eventsKey(roomId: string) {
   return `meeting:${roomId}:events`;
 }
 
+export function isProductionRuntime(): boolean {
+  return (
+    process.env.NODE_ENV === "production" ||
+    Boolean(process.env.RAILWAY_ENVIRONMENT) ||
+    Boolean(process.env.VERCEL)
+  );
+}
+
+export function isPersistentRuntime(): boolean {
+  if (process.env.VERCEL) return false;
+  return Boolean(
+    process.env.RAILWAY_ENVIRONMENT ||
+      process.env.RAILWAY_STATIC_URL ||
+      process.env.FORCE_PERSISTENT_SERVER
+  );
+}
+
+export function detectRuntime(): "railway" | "vercel-serverless" | "local" {
+  if (process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_STATIC_URL) return "railway";
+  if (process.env.VERCEL) return "vercel-serverless";
+  return "local";
+}
+
 async function getRedis(): Promise<RedisLike | null> {
   if (redisInitAttempted) return redisClient;
   redisInitAttempted = true;
@@ -77,12 +101,22 @@ async function getRedis(): Promise<RedisLike | null> {
       console.log("[meetingStore] Upstash Redis connected");
       return redisClient;
     } catch (err: any) {
-      console.warn("[meetingStore] Upstash init failed, using memory:", err?.message || err);
+      console.warn("[meetingStore] Upstash init failed:", err?.message || err);
     }
-  } else {
-    console.log("[meetingStore] No Upstash credentials — using in-memory store (ok for local; required for multi-instance Vercel)");
+  } else if (!isProductionRuntime()) {
+    console.log("[meetingStore] No Upstash credentials — using in-memory store (local/dev only)");
   }
   return null;
+}
+
+export async function assertStoreReady(): Promise<void> {
+  if (!isProductionRuntime()) return;
+  const redis = await getRedis();
+  if (!redis) {
+    throw new Error(
+      "Production meeting store requires UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN (or KV_REST_API_*)."
+    );
+  }
 }
 
 function defaultState(): MeetingState {
@@ -128,6 +162,7 @@ export function mergeTranscripts(existingList: any[] = [], incomingList: any[] =
 }
 
 export async function getMeetingState(roomId: string): Promise<MeetingState | null> {
+  await assertStoreReady();
   const redis = await getRedis();
   if (redis) {
     try {
@@ -143,6 +178,7 @@ export async function getMeetingState(roomId: string): Promise<MeetingState | nu
 }
 
 export async function setMeetingState(roomId: string, state: MeetingState): Promise<MeetingState> {
+  await assertStoreReady();
   const next = { ...state, updatedAt: Date.now() };
   const redis = await getRedis();
   if (redis) {
@@ -263,6 +299,7 @@ export async function appendLiveEvent(
 }
 
 export async function listEventsSince(roomId: string, since: number): Promise<LiveEvent[]> {
+  await assertStoreReady();
   const redis = await getRedis();
   if (redis) {
     try {
@@ -279,6 +316,7 @@ export async function listEventsSince(roomId: string, since: number): Promise<Li
 }
 
 export async function addRagChunk(chunk: RagChunk): Promise<void> {
+  await assertStoreReady();
   const redis = await getRedis();
   if (redis) {
     try {
@@ -300,6 +338,7 @@ export async function addRagChunk(chunk: RagChunk): Promise<void> {
 }
 
 export async function listRagChunks(roomId: string): Promise<RagChunk[]> {
+  await assertStoreReady();
   const redis = await getRedis();
   if (redis) {
     try {

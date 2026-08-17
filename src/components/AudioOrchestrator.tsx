@@ -6,7 +6,7 @@ import { trtcAudioMonitor } from "../lib/trtcAudioMonitor";
 import { Radio, ShieldCheck, Cpu } from "lucide-react";
 import { io } from "socket.io-client";
 import TRTC from "trtc-js-sdk";
-import { shouldUseNativeWebSocket, isServerlessRealtime } from "../lib/realtimeChannel";
+import { shouldUseNativeWebSocket, isServerlessRealtime, getApiBase } from "../lib/realtimeChannel";
 
 interface AudioOrchestratorProps {
   audioStream?: MediaStream | null;
@@ -173,7 +173,7 @@ export function AudioOrchestrator({ audioStream, ttsText }: AudioOrchestratorPro
       return;
     }
 
-    const socket = io("/ws/meeting", {
+    const socket = io(getApiBase() || "/ws/meeting", {
       query: { roomId: meetingId || "10086", userName: userName || "Auditor", userRole: "participant" },
       reconnectionAttempts: 0,
       transports: ["websocket"]

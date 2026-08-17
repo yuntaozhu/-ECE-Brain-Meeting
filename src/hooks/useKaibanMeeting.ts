@@ -4,6 +4,7 @@ import { useMeetingStore } from "../store";
 export type AgentStatusType = "Idle" | "Thinking" | "Intervening";
 
 import { speakText } from "../lib/audioSpeech";
+import { apiUrl } from "../lib/apiBase";
 
 export function useKaibanMeeting() {
   const { 
@@ -29,7 +30,7 @@ export function useKaibanMeeting() {
       // Build flattened transcript block from meeting store
       const textLog = transcript.map(t => `${t.speaker}: ${t.text}`).join("\n");
       
-      const res = await fetch("/api/meeting/evaluate", {
+      const res = await fetch(apiUrl("/api/meeting/evaluate"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ transcript: textLog, currentTopic })
@@ -75,7 +76,7 @@ export function useKaibanMeeting() {
   // Utility to synthesize chair intervention text via Gemini TTS endpoint
   const playInterventionTTS = async (text: string) => {
     try {
-      const res = await fetch("/api/tts", {
+      const res = await fetch(apiUrl("/api/tts"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, speaker: "Puck" })

@@ -4,6 +4,7 @@ import { logger } from "../lib/logger";
 import { telemetry } from "../lib/telemetry";
 import { speakText } from "../lib/audioSpeech";
 import { isServerlessRealtime, shouldUseNativeWebSocket } from "../lib/realtimeChannel";
+import { apiUrl, wsUrl } from "../lib/apiBase";
 
 export function useGeminiLive() {
   const { micOn, addTranscriptLine, setMicOn } = useMeetingStore();
@@ -102,21 +103,19 @@ export function useGeminiLive() {
       return;
     }
 
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/api/live/stream`;
+    const wsUrlFull = wsUrl("/api/live/stream");
     
-    logger.log("INFO", "WebSocket", "Connecting to Doubao duplex stream (local Node)", { wsUrl });
-    telemetry.recordConnectionState('wsAudioStream', 'CONNECTING', { endpoint: wsUrl });
+    logger.log("INFO", "WebSocket", "Connecting to Doubao duplex stream (local Node)", { wsUrl: wsUrlFull });
+    telemetry.recordConnectionState('wsAudioStream', 'CONNECTING', { endpoint: wsUrlFull });
     
     try {
-      const ws = new WebSocket(wsUrl);
+      const ws = new WebSocket(wsUrlFull);
       wsRef.current = ws;
 
       ws.onopen = () => {
         logger.log("INFO", "WebSocket", "Doubao duplex stream opened");
         setIsConnected(true);
-        telemetry.recordConnectionState('wsAudioStream', 'CONNECTED', { endpoint: wsUrl });
+        telemetry.recordConnectionState('wsAudioStream', 'CONNECTED', { endpoint: wsUrlFull });
         
         if (!audioCtxRef.current) {
            audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -359,7 +358,7 @@ export function useGeminiLive() {
     // HTTP REST Fallback to Doubao AI Chairperson
     try {
       console.log("Sending control text via Doubao HTTP REST endpoint:", text);
-      const res = await fetch("/api/doubao/chat", {
+      const res = await fetch(apiUrl("/api/doubao/chat"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: text })

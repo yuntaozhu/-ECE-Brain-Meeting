@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useMeetingStore } from "../store";
+import { apiUrl } from "../lib/apiBase";
 import { calculateValidMeetingTimeRange } from "../lib/meetingTimeHelper";
 import { tencentMeetingClient } from "../lib/tencentMeetingClient";
 import { 
@@ -62,7 +63,7 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
 
     async function runDiagnostic() {
       try {
-        const res = await fetch('/api/tencent/diagnostic');
+        const res = await fetch(apiUrl('/api/tencent/diagnostic'));
         const contentType = res.headers.get('content-type') || '';
         const text = await res.text();
         if (!contentType.includes('application/json')) {
@@ -210,7 +211,7 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
       }
 
       try {
-        const response = await fetch("/api/rag/embed-resource", {
+        const response = await fetch(apiUrl("/api/rag/embed-resource"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -389,7 +390,7 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
       ]
     };
     try {
-      await fetch(`/api/meeting/state/${encodeURIComponent(activeRoomId)}`, {
+      await fetch(apiUrl(`/api/meeting/state/${encodeURIComponent(activeRoomId)}`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(seedPayload)
@@ -429,7 +430,7 @@ export default function MeetingSetup({ onSetupComplete }: { onSetupComplete: () 
 
     // Reset room roster then join as the sole admin (AI is host UI, not a roster person)
     try {
-      await fetch(`/api/meeting/state/${encodeURIComponent(roomId)}`, {
+      await fetch(apiUrl(`/api/meeting/state/${encodeURIComponent(roomId)}`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

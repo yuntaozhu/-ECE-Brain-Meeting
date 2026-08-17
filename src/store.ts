@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { io } from 'socket.io-client';
 import { AgendaStageType, TranscriptLine, UserRoleType, DynamicAgendaItem, TencentMeetingInfo, TencentParticipant } from './types';
-import { shouldUseNativeWebSocket } from './lib/realtimeChannel';
+import { shouldUseNativeWebSocket, getApiBase } from './lib/realtimeChannel';
+import { apiUrl } from './lib/apiBase';
 import { telemetry } from './lib/telemetry';
 
 // Retrieve saved meeting session context from localStorage if available
@@ -29,7 +30,7 @@ const defaultUserRoleType = (parsedMeetingContext && parsedMeetingContext.userRo
 let socket: any = null;
 if (typeof window !== "undefined" && shouldUseNativeWebSocket()) {
   try {
-    socket = io({
+    socket = io(getApiBase() || undefined, {
       reconnectionAttempts: 0,
       timeout: 3000,
       transports: ['websocket']
@@ -295,14 +296,14 @@ export const useMeetingStore = create<MeetingState>((set) => ({
     };
 
     if (typeof fetch !== "undefined") {
-      fetch(`/api/meeting/participants/join`, {
+      fetch(apiUrl(`/api/meeting/participants/join`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roomId: activeRoomId, participant: newParticipant })
       }).catch((err) => console.warn("Failed to sync participant join:", err));
 
       if (state.isTencentSyncEnabled) {
-        fetch(`/api/tencent/meetings/${activeRoomId}/participants/join`, {
+        fetch(apiUrl(`/api/tencent/meetings/${activeRoomId}/participants/join`), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(newParticipant)

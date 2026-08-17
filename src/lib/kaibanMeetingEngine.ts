@@ -1,4 +1,5 @@
 import { KaibanAnalysisResult } from "../types";
+import { apiUrl } from "./apiBase";
 
 // ============================================================================
 // TASK 3: KaibanJS Multi-Agent Orchestration Blueprint (KaibanJS Team configuration)
@@ -76,7 +77,7 @@ export const MeetingDirectorTask: KaibanTaskConfig = {
 export async function runMeetingAnalysis(recentTranscript: string, currentAgenda: string): Promise<KaibanAnalysisResult> {
   try {
     // Client-side environment - forward evaluate request seamlessly to Server API route
-    const res = await fetch("/api/meeting/evaluate", {
+    const res = await fetch(apiUrl("/api/meeting/evaluate"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ transcript: recentTranscript, currentTopic: currentAgenda })

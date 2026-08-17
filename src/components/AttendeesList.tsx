@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TencentParticipant } from '../types';
 import { useMeetingStore } from '../store';
+import { apiUrl } from '../lib/apiBase';
 
 interface AttendeesListProps {
   meetingId?: string;
@@ -27,7 +28,7 @@ export function AttendeesList({ meetingId: propMeetingId, className = '' }: Atte
     if (isManual) setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/tencent/meetings/${activeMeetingId}/participants`);
+      const res = await fetch(apiUrl(`/api/tencent/meetings/${activeMeetingId}/participants`));
       const contentType = res.headers.get('content-type') || '';
       const text = await res.text();
       if (!contentType.includes('application/json')) {
@@ -90,7 +91,7 @@ export function AttendeesList({ meetingId: propMeetingId, className = '' }: Atte
 
     const syncFromServer = async () => {
       try {
-        const res = await fetch(`/api/meeting/state/${encodeURIComponent(activeMeetingId)}`);
+        const res = await fetch(apiUrl(`/api/meeting/state/${encodeURIComponent(activeMeetingId)}`));
         if (!res.ok) return;
         const data = await res.json();
         const list: TencentParticipant[] = data.state?.tencentParticipants || [];

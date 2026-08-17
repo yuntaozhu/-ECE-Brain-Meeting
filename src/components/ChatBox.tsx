@@ -51,6 +51,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
   }, [roomId, userName]);
 
   const capturedSpeechRef = useRef<string>("");
+  const recognitionRef = useRef<any>(null);
 
   const handleEnableAudio = () => {
     resumeAudioContextAndSpeech();
@@ -127,6 +128,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
 
     if (isRecordingSpeech) {
       logger.log('INFO', 'ASR', '手动关闭语音识别监听');
+      recognitionRef.current?.stop?.();
       setIsRecordingSpeech(false);
       return;
     }
@@ -147,20 +149,15 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
 
     const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognitionAPI) {
-      logger.log('WARN', 'ASR', '当前浏览器未开启原生 Web Speech API，启用智能多模态转写备用引擎', { browser: navigator.userAgent });
-      setIsRecordingSpeech(true);
-      const fallbackText = "【语音识别】托班互动硬件注意力实时追踪算法及多媒体配置已就绪。";
-      setTextInput(fallbackText);
-      telemetry.recordAudioBuffer({ sampleRate: 16000, rms: 0.18, chunksReceivedDelta: 1 });
-      logger.log('INFO', 'ASR', `备用语音转写完成，转换内容: "${fallbackText}"`);
-      setTimeout(() => {
-        setIsRecordingSpeech(false);
-      }, 2000);
+      logger.log('WARN', 'ASR', '当前浏览器不支持语音识别；请改用文字输入或使用支持 Web Speech API 的浏览器', {
+        browser: navigator.userAgent
+      });
       return;
     }
 
     try {
       const recognition = new SpeechRecognitionAPI();
+      recognitionRef.current = recognition;
       recognition.lang = "zh-CN";
       recognition.continuous = false;
       recognition.interimResults = true;
@@ -183,19 +180,14 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
       };
 
       recognition.onerror = (errEvent: any) => {
-        logger.log('WARN', 'ASR', `语音识别接口报告提示 [${errEvent.error || '未知'}]，自动保持试音补全`, errEvent);
+        logger.log('WARN', 'ASR', `语音识别接口报告提示 [${errEvent.error || '未知'}]，本次发言未发送`, errEvent);
         setIsRecordingSpeech(false);
         telemetry.recordAudioBuffer({ isUnderrun: true });
-        if (!textInput.trim() && !capturedSpeechRef.current.trim()) {
-          const autoFallback = "【语音识别】建议针对托班互动硬件闪烁频率与幼儿视觉疲劳指标设置阻断阀值。";
-          setTextInput(autoFallback);
-          capturedSpeechRef.current = autoFallback;
-          logger.log('INFO', 'ASR', `充填发言文本: "${autoFallback}"`);
-        }
       };
 
       recognition.onend = () => {
         logger.log('INFO', 'ASR', '语音识别录音会话正常结束');
+        recognitionRef.current = null;
         setIsRecordingSpeech(false);
         if (capturedSpeechRef.current && capturedSpeechRef.current.trim()) {
           const speechToSend = capturedSpeechRef.current.trim();
@@ -209,11 +201,8 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
       recognition.start();
     } catch (e: any) {
       logger.log('ERROR', 'ASR', `启动 SpeechRecognition 抛出异常: ${e.message}`, e);
-      setIsRecordingSpeech(true);
-      const textFallback = "【语音识别】大地教研多模态平板注意力算法论证。";
-      setTextInput(textFallback);
-      logger.log('INFO', 'ASR', `降级充填文本: "${textFallback}"`);
-      setTimeout(() => setIsRecordingSpeech(false), 2000);
+      recognitionRef.current = null;
+      setIsRecordingSpeech(false);
     }
   };
 

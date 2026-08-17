@@ -14,9 +14,11 @@ import { setupMeetingWebSocket } from "./server/websocketMeeting";
 import { setupSocketIOServer } from "./server/index";
 import {
   addRagChunk,
+  detectRuntime,
   getMeetingState,
   getOrCreateMeetingState,
   getStoreBackend,
+  isPersistentRuntime,
   listEventsSince,
   patchMeetingState,
   saveChatMessageToServerState,
@@ -29,12 +31,25 @@ import { phaseError, phaseLog } from "./server/lib/phaseLogger";
 const app = express();
 const server = http.createServer(app);
 const io = new SocketIOServer(server, {
-  cors: { origin: "*" }
+  cors: { origin: process.env.FRONTEND_ORIGIN || process.env.APP_URL || "*" }
 });
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
+const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || process.env.APP_URL || "*";
 
 app.use(express.json({ limit: "2mb" }));
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", FRONTEND_ORIGIN);
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+  if (FRONTEND_ORIGIN !== "*") {
+    res.setHeader("Vary", "Origin");
+  }
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+  next();
+});
 
 function chunkText(content: string, maxLen = 500): string[] {
   const text = (content || "").trim();
@@ -280,13 +295,26 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check
-app.get("/api/health", async (req, res) => {
-  res.json({
-    status: "ok",
-    phase: "phase1-vercel-text-sync",
-    storeBackend: await getStoreBackend(),
-    wsEnabled: !process.env.VERCEL
+// Liveness for Railway: process is up even if Redis is not yet configured.
+app.get("/api/healthz", (_req, res) => {
+  res.status(200).json({ status: "ok", phase: "e1-persistent-backend" });
+});
+
+// Readiness: production without Upstash is degraded (E1 contract).
+app.get("/api/health", async (_req, res) => {
+  const storeBackend = await getStoreBackend();
+  const runtime = detectRuntime();
+  const persistent = isPersistentRuntime();
+  const wsEnabled = persistent || (!process.env.VERCEL && runtime === "local");
+  const degraded = runtime !== "local" && storeBackend !== "upstash";
+  res.status(degraded ? 503 : 200).json({
+    status: degraded ? "degraded" : "ok",
+    phase: "e1-persistent-backend",
+    runtime,
+    persistent,
+    storeBackend,
+    storeRequired: runtime !== "local",
+    wsEnabled
   });
 });
 

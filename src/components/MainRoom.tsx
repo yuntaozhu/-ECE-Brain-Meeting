@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useMeetingStore } from "../store";
 import { logger } from "../lib/logger";
+import { apiUrl } from "../lib/apiBase";
 import { telemetry } from "../lib/telemetry";
 import { resumeAudioContextAndSpeech, speakText } from "../lib/audioSpeech";
 import {
@@ -108,6 +109,7 @@ export default function MainRoom() {
 
   const { isCreator, canControl } = useRole();
   const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
 
   const [lobbyRoomId, setLobbyRoomId] = useState(() => {
     if (typeof window !== "undefined") {
@@ -230,7 +232,7 @@ export default function MainRoom() {
     const pollOnce = async () => {
       try {
         const res = await fetch(
-          `/api/live/poll?roomId=${encodeURIComponent(activeRoomId)}&since=${sinceSeq}`
+          apiUrl(`/api/live/poll?roomId=${encodeURIComponent(activeRoomId)}&since=${sinceSeq}`)
         );
         if (!res.ok || cancelled) return;
         const data = await res.json();
@@ -249,7 +251,7 @@ export default function MainRoom() {
           const lastTs = last?.timestamp ? new Date(last.timestamp as Date).getTime() : 0;
           if (lastTs && Date.now() - lastTs > 8000) {
             silencePosted = true;
-            fetch("/api/ai/intervene", {
+            fetch(apiUrl("/api/ai/intervene"), {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ roomId: activeRoomId, reason: "silence" })
@@ -291,26 +293,42 @@ export default function MainRoom() {
   const handleStartMeeting = async () => {
     if (!canControl || starting) return;
     setStarting(true);
+    setStartError(null);
     try {
-      const res = await fetch("/api/meeting/start", {
+      const res = await fetch(apiUrl("/api/meeting/start"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roomId: activeRoomId, startedBy: userName })
       });
       const data = await res.json();
-      if (data.success) {
-        setMeetingStarted(true);
-        if (data.state) {
-          useMeetingStore.setState({
-            meetingStarted: true,
-            transcript: data.state.transcript || transcript
-          });
-        }
-        addTranscriptLine("系统提示", "🚀 管理员已正式开始会议，AI 主席正在结合知识库主导开场。");
-        resumeAudioContextAndSpeech();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || `开始会议失败（HTTP ${res.status}）`);
       }
+
+      const openingText = typeof data.ai?.text === "string" ? data.ai.text.trim() : "";
+      setMeetingStarted(true);
+      useMeetingStore.setState({
+        meetingStarted: true,
+        transcript: data.state?.transcript || transcript,
+        aiIntervention: openingText || null
+      });
+
+      // The start response already contains the opening line. Speak it now instead
+      // of waiting for a later poll, which will treat it as an existing transcript item.
+      if (openingText) {
+        markAiTextSpoken(openingText);
+        resumeAudioContextAndSpeech();
+        speakText(openingText, { pitch: 0.98, rate: 1.05 });
+      }
+
+      logger.log("INFO", "MeetingStart", "会议已开始，AI 开场已返回", {
+        roomId: activeRoomId,
+        openingGenerated: Boolean(openingText)
+      });
     } catch (e) {
-      logger.log("ERROR", "MeetingStart", "开始会议失败", { roomId: activeRoomId });
+      const message = e instanceof Error ? e.message : "开始会议失败，请重试";
+      setStartError(message);
+      logger.log("ERROR", "MeetingStart", message, { roomId: activeRoomId });
     } finally {
       setStarting(false);
     }
@@ -389,6 +407,11 @@ export default function MainRoom() {
           {canControl ? (
             <div className="flex flex-col items-center gap-3 pt-2">
               <p className="text-xs text-slate-500">确认参会者到齐后，点击下方按钮开始 AI 主导会议</p>
+              {startError ? (
+                <p role="alert" className="text-xs text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+                  {startError}
+                </p>
+              ) : null}
               <Button
                 size="lg"
                 disabled={starting}
