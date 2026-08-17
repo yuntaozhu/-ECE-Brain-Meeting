@@ -204,8 +204,8 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   mountedFiles: [],
   meetingStarted: false,
 
-  // Tencent Meeting Integration Default State
-  isTencentSyncEnabled: true,
+  // Tencent Meeting Integration Default State (Phase-1: off unless user opts in)
+  isTencentSyncEnabled: false,
   tencentMeetingInfo: null,
   tencentParticipants: [
     { userId: 'daid_it', userName: '大地督导 (Host)', userRole: 'host', isMuted: false, joinTime: Math.floor(Date.now() / 1000) - 300 },
