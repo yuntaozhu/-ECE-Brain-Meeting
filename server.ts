@@ -51,6 +51,21 @@ app.use((req, res, next) => {
   next();
 });
 
+type ExpressMethod = "get" | "post" | "put" | "patch" | "delete";
+const asyncMethods: ExpressMethod[] = ["get", "post", "put", "patch", "delete"];
+for (const method of asyncMethods) {
+  const original = app[method].bind(app);
+  app[method] = ((path: string, ...handlers: express.RequestHandler[]) => {
+    const wrapped = handlers.map((handler) => {
+      if (typeof handler !== "function" || handler.length > 3) return handler;
+      return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+        Promise.resolve(handler(req, res, next)).catch(next);
+      };
+    });
+    return original(path, ...wrapped);
+  }) as typeof app[method];
+}
+
 function chunkText(content: string, maxLen = 500): string[] {
   const text = (content || "").trim();
   if (!text) return ["大地 ECE-Brain 学术教研资料"];
@@ -775,6 +790,21 @@ async function setupMiddlewares() {
     });
   }
 }
+
+app.use(async (err: any, _req, res, next) => {
+  if (res.headersSent) return next(err);
+  const message = err?.message || String(err);
+  if (message.includes("Production meeting store requires")) {
+    return res.status(503).json({
+      success: false,
+      error: message,
+      phase: "e1-persistent-backend",
+      storeBackend: await getStoreBackend()
+    });
+  }
+  console.error("[HTTP] unhandled error:", message);
+  res.status(500).json({ success: false, error: message || "Internal server error" });
+});
 
 if (!process.env.VERCEL) {
   setupMiddlewares().then(() => {
