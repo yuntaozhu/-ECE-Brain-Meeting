@@ -54,8 +54,8 @@ app.use((req, res, next) => {
 type ExpressMethod = "get" | "post" | "put" | "patch" | "delete";
 const asyncMethods: ExpressMethod[] = ["get", "post", "put", "patch", "delete"];
 for (const method of asyncMethods) {
-  const original = app[method].bind(app);
-  app[method] = ((path: string, ...handlers: express.RequestHandler[]) => {
+  const original = app[method].bind(app) as (...args: any[]) => express.Application;
+  (app as any)[method] = (path: string, ...handlers: express.RequestHandler[]) => {
     const wrapped = handlers.map((handler) => {
       if (typeof handler !== "function" || handler.length > 3) return handler;
       return (req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -63,7 +63,7 @@ for (const method of asyncMethods) {
       };
     });
     return original(path, ...wrapped);
-  }) as typeof app[method];
+  };
 }
 
 function chunkText(content: string, maxLen = 500): string[] {
