@@ -14,6 +14,7 @@ import { setupMeetingWebSocket } from "./server/websocketMeeting";
 import { setupSocketIOServer } from "./server/index";
 import {
   addRagChunk,
+  appendLiveEvent,
   detectRuntime,
   getMeetingState,
   getOrCreateMeetingState,
@@ -27,6 +28,7 @@ import {
 } from "./server/lib/meetingStore";
 import { embedQuery, hashEmbed, runAiIntervene } from "./server/lib/aiIntervene";
 import { phaseError, phaseLog } from "./server/lib/phaseLogger";
+import { issueVolcRtcToken, toVolcRtcRoomId } from "./server/lib/volcRtcToken";
 
 const app = express();
 const server = http.createServer(app);
@@ -691,16 +693,65 @@ app.get("/api/search", async (req, res) => {
   }
 });
 
-// KaibanJS Orchestration endpoint
+// KaibanJS Orchestration endpoint (multi-agent A2A + observable trace)
 app.post("/api/meeting/evaluate", async (req, res) => {
-  const { transcript, currentTopic } = req.body;
-  
+  const { transcript, currentTopic, roomId = "10086" } = req.body || {};
+
   try {
-    const result = await runMeetingAnalysisServer(transcript, currentTopic);
+    const result = await runMeetingAnalysisServer(
+      String(transcript || ""),
+      String(currentTopic || ""),
+      String(roomId)
+    );
+    try {
+      for (const ev of result.a2aTrace || []) {
+        await appendLiveEvent(String(roomId), "a2a_event", ev);
+      }
+    } catch (persistErr: any) {
+      console.warn("[Kaiban A2A] event persist note:", persistErr?.message || persistErr);
+    }
     res.json({ result });
-  } catch(err) {
+  } catch (err) {
     console.error("Meeting evaluate error:", err);
     res.status(500).json({ error: String(err) });
+  }
+});
+
+// E2: Volcengine RTC token (server-side only; never expose AppKey)
+app.post("/api/volc/rtc/token", async (req, res) => {
+  try {
+    const appId = (process.env.VOLC_RTC_APP_ID || "").trim();
+    const appKey = (process.env.VOLC_RTC_APP_KEY || "").trim();
+    const { roomId = "10086", userId = `user_${Date.now()}` } = req.body || {};
+
+    if (!appId || !appKey) {
+      return res.status(503).json({
+        success: false,
+        code: "UNCONFIGURED",
+        error:
+          "未配置 VOLC_RTC_APP_ID / VOLC_RTC_APP_KEY。请在 Railway 填入火山 RTC 控制台凭证后重启。"
+      });
+    }
+
+    const rtcRoomId = toVolcRtcRoomId(String(roomId));
+    const issued = issueVolcRtcToken({
+      appId,
+      appKey,
+      roomId: rtcRoomId,
+      userId: String(userId)
+    });
+
+    res.json({
+      success: true,
+      appId,
+      roomId: String(roomId),
+      rtcRoomId,
+      userId: String(userId),
+      token: issued.token,
+      expireAt: issued.expireAt
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || String(err) });
   }
 });
 

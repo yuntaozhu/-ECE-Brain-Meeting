@@ -1,162 +1,221 @@
-import { KaibanAnalysisResult } from "../types";
+import { KaibanAnalysisResult, AgendaStageType } from "../types";
+import { searchRag } from "../../server/lib/meetingStore";
+import { hashEmbed } from "../../server/lib/aiIntervene";
 
-export async function runMeetingAnalysisServer(recentTranscript: string, currentAgenda: string): Promise<KaibanAnalysisResult> {
-  const doubaoApiKey = process.env.DOUBAO_API_KEY || "ark-20c57eca-6b75-4581-bb78-023f7776df4e-58bd0";
-  const doubaoModel = process.env.DOUBAO_MODEL_ENDPOINT || "doubao-seed-2-1-turbo-260628";
-
-  // KaibanJS A2A Multi-Agent Orchestration Engine powered by Doubao LLM
-  if (doubaoApiKey) {
-    try {
-      console.log(`[KaibanJS A2A Engine] Executing Doubao 4-Agent Orchestration (Director, Host, Secretary, Researcher)...`);
-      const prompt = `
-        You are the KaibanJS A2A Multi-Agent Orchestrator for the Dadi ECE-Brain Intelligent Meeting System.
-        
-        The Agent Team consists of:
-        1. Director Agent (director_agent - 会议总控与议程裁决): Evaluates if the discussion stays strictly on topic or strays into off-topic chatter (e.g. "端午粽子", "采购", "报销", "礼包", "采购预算", "福利礼品"). Determines if an intervention is required or if agenda transition is ready.
-        2. Host Agent (host_agent - AI 虚拟主席 / 大地教研总督导): Executes speech interventions with supreme dignity. Sharp interruption warning to correct off-topic speech or balance participant speaking time.
-        3. Secretary Agent (secretary_agent - 会议纪要与共识整理员): Synthesizes 3 high-impact actionable items for early childhood education (ECE) digital hardware and attention verification algorithms.
-        4. Researcher Agent (researcher_agent - 学术专家代表): References RAG knowledge base for toddler multimedia and classroom pedagogical frameworks.
-
-        Current Agenda Stage/Context: "${currentAgenda}"
-        Recent Multi-User Speech Transcript:
-        "${recentTranscript}"
-
-        Evaluate and respond strictly following these rules:
-        1. "shouldIntervene": set to true if someone talks about off-topic items ("粽子", "采购", "报销", "礼品", "礼盒", "采购预算", "场地与活动") or if someone monopolizes speech.
-        2. "interventionText": if shouldIntervene is true, generate a dignified, high-energy interruption warning from AI Host (大地教研督导) under 35 Chinese characters. E.g. "王董秘，别谈采购了！李园长，请简述您的托班数字化验证立项！".
-        3. "latestToDos": Extract 3 academic TODO items relevant to ECE digital hardware, formatted as ["1. ...", "2. ...", "3. ..."].
-        4. "nextStageRecommendation": If discussion on current topic is complete, suggest next stage ("IceBreaking", "MainDiscussion", "Conclusion"), otherwise null.
-
-        Output strictly raw JSON without markdown codeblocks:
-        {
-          "shouldIntervene": boolean,
-          "interventionText": "string",
-          "latestToDos": ["string"],
-          "nextStageRecommendation": "IceBreaking" | "MainDiscussion" | "Conclusion" | null,
-          "pushAudioStream": boolean,
-          "hostAgentPayload": {
-            "targetAgent": "HostAgent",
-            "audioOrchestratorNotify": boolean,
-            "ttsText": "string"
-          }
-        }
-      `;
-
-      const response = await fetch("https://ark.cn-beijing.volces.com/api/v3/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${doubaoApiKey}`
-        },
-        body: JSON.stringify({
-          model: doubaoModel,
-          messages: [
-            { role: "system", content: "You are the KaibanJS A2A Engine executing multi-agent meeting supervision powered by Doubao LLM." },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.2
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const content = data.choices?.[0]?.message?.content || "{}";
-        const cleanJson = content.replace(/```json/gi, "").replace(/```/gi, "").trim();
-        const parsed = JSON.parse(cleanJson);
-        console.log(`[KaibanJS A2A Engine] Successfully received A2A evaluation from Doubao Ark API`);
-        return {
-          shouldIntervene: Boolean(parsed.shouldIntervene),
-          interventionText: parsed.interventionText || "",
-          latestToDos: Array.isArray(parsed.latestToDos) ? parsed.latestToDos : [],
-          nextStageRecommendation: parsed.nextStageRecommendation || null,
-          pushAudioStream: Boolean(parsed.pushAudioStream || parsed.shouldIntervene),
-          hostAgentPayload: parsed.hostAgentPayload || {
-            targetAgent: "HostAgent",
-            audioOrchestratorNotify: Boolean(parsed.shouldIntervene),
-            ttsText: parsed.interventionText || ""
-          },
-          a2aCommand: Boolean(parsed.shouldIntervene) ? {
-            sender: "DirectorAgent",
-            target: "AudioOrchestrator",
-            action: "ROUTE_AUDIO_TRTC",
-            payload: {
-              interventionText: parsed.interventionText || "",
-              pushAudioStream: true,
-              reason: "OFF_TOPIC_OR_SILENCE_DOUBAO"
-            }
-          } : undefined
-        };
-      } else {
-        console.log(`[KaibanJS A2A Engine] Doubao Ark API response status ${response.status}. Falling back to Doubao A2A Rule Engine.`);
-      }
-    } catch (err: any) {
-      console.log(`[KaibanJS A2A Engine] Doubao request note: ${err?.message || err}`);
-    }
-  }
-
-  // Local Doubao A2A Heuristic Fallback Engine
-  return runLocalHeuristicFallback(recentTranscript, currentAgenda);
+export interface A2AEvent {
+  eventId: string;
+  timestamp: number;
+  sender: string;
+  target: string;
+  action: string;
+  payload: Record<string, unknown>;
 }
 
-function runLocalHeuristicFallback(recentTranscript: string, currentAgenda: string): KaibanAnalysisResult {
-  console.log("Safe Local Heuristic Engine evaluating transcript...");
-  
-  // Heuristic rule 1: detect off-topic topics (端午粽子, 预算, 采购, 报销, 礼盒)
-  const containsOffTopic = 
-    recentTranscript.includes("粽子") || 
-    recentTranscript.includes("预算") || 
-    recentTranscript.includes("采购") || 
-    recentTranscript.includes("报销") || 
-    recentTranscript.includes("场地") || 
-    recentTranscript.includes("礼品") ||
-    recentTranscript.includes("礼盒");
-    
-  let shouldIntervene = false;
-  let interventionText = "";
-  let nextStageRecommendation: any = null;
+export type KaibanAnalysisWithTrace = KaibanAnalysisResult & {
+  a2aTrace: A2AEvent[];
+};
 
-  if (containsOffTopic) {
-    shouldIntervene = true;
-    if (recentTranscript.includes("王董秘") || recentTranscript.includes("李") || recentTranscript.includes("张")) {
-       interventionText = "王董秘，别谈采购预算了！李园长，请讲一下注意力抓取算法硬件规划！";
+function newEvent(
+  sender: string,
+  target: string,
+  action: string,
+  payload: Record<string, unknown> = {}
+): A2AEvent {
+  return {
+    eventId: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    timestamp: Date.now(),
+    sender,
+    target,
+    action,
+    payload
+  };
+}
+
+async function doubaoChat(system: string, user: string): Promise<string | null> {
+  const doubaoApiKey = process.env.DOUBAO_API_KEY || process.env.ARK_API_KEY || "";
+  const doubaoModel =
+    process.env.DOUBAO_CHAT_MODEL ||
+    process.env.DOUBAO_MODEL_ENDPOINT ||
+    "doubao-seed-2-1-turbo-260628";
+  if (!doubaoApiKey) return null;
+
+  const response = await fetch("https://ark.cn-beijing.volces.com/api/v3/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${doubaoApiKey}`
+    },
+    body: JSON.stringify({
+      model: doubaoModel,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user }
+      ],
+      temperature: 0.2
+    })
+  });
+  if (!response.ok) return null;
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || null;
+}
+
+function parseJsonLoose(raw: string): any {
+  const clean = raw.replace(/```json/gi, "").replace(/```/gi, "").trim();
+  return JSON.parse(clean);
+}
+
+function offTopicHeuristic(transcript: string) {
+  return /粽子|预算|采购|报销|场地|礼品|礼盒|福利/.test(transcript);
+}
+
+/**
+ * Real multi-step A2A pipeline (Director → Host → Secretary → Researcher).
+ * Uses separate Doubao calls per agent role; falls back to heuristics.
+ * Exposes a2aTrace so the UI can show Agent collaboration.
+ */
+export async function runMeetingAnalysisServer(
+  recentTranscript: string,
+  currentAgenda: string,
+  roomId = "10086"
+): Promise<KaibanAnalysisWithTrace> {
+  const a2aTrace: A2AEvent[] = [];
+  console.log("[KaibanJS A2A] DirectorAgent starting patrol...");
+
+  // ── 1. DirectorAgent ──────────────────────────────────────────
+  let director = {
+    shouldIntervene: false,
+    reason: "OK",
+    nextStageRecommendation: null as AgendaStageType | null
+  };
+
+  try {
+    const directorRaw = await doubaoChat(
+      "You are DirectorAgent in a KaibanJS A2A team. Output raw JSON only.",
+      `Agenda: ${currentAgenda}\nTranscript:\n${recentTranscript}\n\nDecide if intervention is needed (off-topic: 粽子/采购/报销/礼品; silence monopoly). JSON: {"shouldIntervene":boolean,"reason":"OFF_TOPIC"|"SILENCE"|"OK","nextStageRecommendation":"IceBreaking"|"MainDiscussion"|"Conclusion"|null}`
+    );
+    if (directorRaw) {
+      const parsed = parseJsonLoose(directorRaw);
+      director = {
+        shouldIntervene: Boolean(parsed.shouldIntervene),
+        reason: String(parsed.reason || "OK"),
+        nextStageRecommendation: parsed.nextStageRecommendation || null
+      };
     } else {
-       interventionText = "张总，请我们拉回正题，今天重在讨论托班多媒体和注意力检测，不要闲扯端午节采购预算！";
+      throw new Error("no doubao");
     }
+  } catch {
+    const off = offTopicHeuristic(recentTranscript);
+    const lines = (recentTranscript.match(/\n/g) || []).length;
+    director = {
+      shouldIntervene: off,
+      reason: off ? "OFF_TOPIC" : "OK",
+      nextStageRecommendation:
+        lines > 10 && currentAgenda.includes("IceBreaking")
+          ? "MainDiscussion"
+          : lines > 18 && currentAgenda.includes("MainDiscussion")
+            ? "Conclusion"
+            : null
+    };
   }
 
-  // Heuristic rule 2: stage migration simulation based on accumulated statements
-  const linesCount = (recentTranscript.match(/\n/g) || []).length;
-  if (linesCount > 10 && currentAgenda.includes("IceBreaking")) {
-    nextStageRecommendation = "MainDiscussion";
-  } else if (linesCount > 18 && currentAgenda.includes("MainDiscussion")) {
-    nextStageRecommendation = "Conclusion";
+  a2aTrace.push(
+    newEvent("DirectorAgent", "HostAgent", director.shouldIntervene ? "INTERVENTION_REQUIRED" : "STATUS_OK", {
+      reason: director.reason,
+      nextStageRecommendation: director.nextStageRecommendation
+    })
+  );
+
+  // ── 2. HostAgent (only if Director flags) ─────────────────────
+  let interventionText = "";
+  if (director.shouldIntervene) {
+    try {
+      const hostRaw = await doubaoChat(
+        "You are HostAgent (大地教研总督导). Output ONE Chinese intervention under 35 chars. No quotes.",
+        `Reason: ${director.reason}\nTranscript:\n${recentTranscript}\nIssue a sharp academic redirect.`
+      );
+      interventionText = (hostRaw || "").trim().replace(/^["「]|["」]$/g, "").slice(0, 40);
+    } catch {
+      /* fallback below */
+    }
+    if (!interventionText) {
+      interventionText =
+        director.reason === "OFF_TOPIC"
+          ? "请停止非学术闲聊，立刻回到托班数字化议题！"
+          : "请相关园长继续汇报注意力检测硬件方案！";
+    }
+    a2aTrace.push(
+      newEvent("HostAgent", "AudioOrchestrator", "PLAY_INTERVENTION", {
+        ttsText: interventionText,
+        reason: director.reason
+      })
+    );
   }
 
-  // High-fidelity child education academic TODO lists
-  const defaultToDos = [
-    "1. 李园长收集试点托班儿童的平均视力防护与眼球停留指标",
-    "2. 张校董开始筹备第二代护眼防眩光多媒体显示平板的选型论证",
-    "3. 王董秘全面核减无关行政性礼品费用，转向数字化课堂教改基金"
+  // ── 3. SecretaryAgent ─────────────────────────────────────────
+  let latestToDos = [
+    "1. 汇总试点托班注意力检测硬件选型指标",
+    "2. 核验护眼显示设备与课堂网络部署清单",
+    "3. 将非学术行政议题移出会中研讨范围"
   ];
+  try {
+    const secretRaw = await doubaoChat(
+      "You are SecretaryAgent. Output raw JSON only.",
+      `Transcript:\n${recentTranscript}\nExtract 3 ECE academic TODOs. JSON: {"latestToDos":["1. ...","2. ...","3. ..."]}`
+    );
+    if (secretRaw) {
+      const parsed = parseJsonLoose(secretRaw);
+      if (Array.isArray(parsed.latestToDos) && parsed.latestToDos.length) {
+        latestToDos = parsed.latestToDos.slice(0, 3);
+      }
+    }
+  } catch {
+    /* keep defaults */
+  }
+  a2aTrace.push(
+    newEvent("SecretaryAgent", "TencentDocs", "UPDATE_TODOS", {
+      latestToDos
+    })
+  );
 
-  if (recentTranscript.includes("李") && recentTranscript.includes("粽子")) {
-    shouldIntervene = true;
-    interventionText = "李园长，请注意！探讨偏离至粽子采购，大地教研严查非学术寒暄，请陈述多媒体硬件配置！";
+  // ── 4. ResearcherAgent (RAG hint) ─────────────────────────────
+  let researchSnippet = "";
+  try {
+    const emb = hashEmbed(recentTranscript.slice(-200) || currentAgenda);
+    const hits = await searchRag(roomId, emb, 2);
+    if (hits.length) {
+      researchSnippet = hits.map((h) => h.snippet).join(" | ").slice(0, 240);
+      a2aTrace.push(
+        newEvent("ResearcherAgent", "HostAgent", "RAG_CONTEXT", {
+          hits: hits.length,
+          snippet: researchSnippet
+        })
+      );
+    } else {
+      a2aTrace.push(newEvent("ResearcherAgent", "HostAgent", "RAG_EMPTY", { roomId }));
+    }
+  } catch {
+    a2aTrace.push(newEvent("ResearcherAgent", "HostAgent", "RAG_SKIP", {}));
   }
 
   return {
-    shouldIntervene,
+    shouldIntervene: director.shouldIntervene,
     interventionText,
-    latestToDos: defaultToDos,
-    nextStageRecommendation,
-    a2aCommand: shouldIntervene ? {
-      sender: "DirectorAgent",
-      target: "AudioOrchestrator",
-      action: "ROUTE_AUDIO_TRTC",
-      payload: {
-        interventionText,
-        reason: "OFF_TOPIC_FALLBACK"
-      }
-    } : undefined
+    latestToDos,
+    nextStageRecommendation: director.nextStageRecommendation,
+    pushAudioStream: director.shouldIntervene,
+    hostAgentPayload: {
+      targetAgent: "HostAgent",
+      audioOrchestratorNotify: director.shouldIntervene,
+      ttsText: interventionText
+    },
+    a2aCommand: director.shouldIntervene
+      ? {
+          sender: "DirectorAgent",
+          target: "HostAgent",
+          action: "INTERVENTION_REQUIRED",
+          payload: { interventionText, reason: director.reason, researchSnippet }
+        }
+      : undefined,
+    a2aTrace
   };
 }

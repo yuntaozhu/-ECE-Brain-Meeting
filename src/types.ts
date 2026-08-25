@@ -8,6 +8,15 @@ export interface DynamicAgendaItem {
   durationSeconds: number;
 }
 
+export interface A2AEvent {
+  eventId: string;
+  timestamp: number;
+  sender: string;
+  target: string;
+  action: string;
+  payload?: Record<string, unknown>;
+}
+
 export interface KaibanAnalysisResult {
   shouldIntervene: boolean;
   interventionText: string;
@@ -25,6 +34,8 @@ export interface KaibanAnalysisResult {
     action: string;
     payload: any;
   };
+  /** Observable Agent-to-Agent message trail for UI */
+  a2aTrace?: A2AEvent[];
 }
 
 export interface TranscriptLine {

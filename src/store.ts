@@ -138,6 +138,7 @@ interface MeetingState {
   isTencentSyncEnabled: boolean;
   tencentMeetingInfo: TencentMeetingInfo | null;
   tencentParticipants: TencentParticipant[];
+  a2aTrace: import("./types").A2AEvent[];
   
   setJoined: (joined: boolean) => void;
   toggleMic: () => void;
@@ -158,6 +159,8 @@ interface MeetingState {
   setTencentSyncEnabled: (enabled: boolean) => void;
   setTencentMeetingInfo: (info: TencentMeetingInfo | null) => void;
   setTencentParticipants: (participants: TencentParticipant[]) => void;
+  setA2aTrace: (events: import("./types").A2AEvent[]) => void;
+  appendA2aEvents: (events: import("./types").A2AEvent[]) => void;
 
   joinMeeting: (name: string, role: string, roomId: string, roleType?: UserRoleType) => void;
 }
@@ -211,6 +214,7 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   isTencentSyncEnabled: false,
   tencentMeetingInfo: null,
   tencentParticipants: [],
+  a2aTrace: [],
 
   setJoined: (joined) => set((state) => {
     if (typeof window !== "undefined") {
@@ -258,6 +262,11 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   setTencentSyncEnabled: (enabled) => set({ isTencentSyncEnabled: enabled }),
   setTencentMeetingInfo: (info) => set({ tencentMeetingInfo: info }),
   setTencentParticipants: (participants) => set({ tencentParticipants: participants }),
+  setA2aTrace: (events) => set({ a2aTrace: events || [] }),
+  appendA2aEvents: (events) =>
+    set((state) => ({
+      a2aTrace: [...(state.a2aTrace || []), ...(events || [])].slice(-40)
+    })),
 
   joinMeeting: (name, role, roomId, roleType) => set((state) => {
     const isAttendeeQuery = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("role") === "attendee";

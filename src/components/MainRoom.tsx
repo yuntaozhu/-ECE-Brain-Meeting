@@ -12,7 +12,9 @@ import {
   Clock,
   Shield,
   Volume2,
-  Zap
+  Zap,
+  Mic,
+  MicOff
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,7 +22,9 @@ import { Badge } from "@/components/ui/badge";
 import { useRole } from "../hooks/useRole";
 import AgendaKanbanBoard from "./AgendaKanbanBoard";
 import { AttendeesList } from "./AttendeesList";
+import { ParticipantsStrip } from "./ParticipantsStrip";
 import { ChatBox, wasAiTextSpoken, markAiTextSpoken } from "./ChatBox";
+import { useVolcRtc } from "../hooks/useVolcRtc";
 
 function SharedTranscriptFeed({
   transcript,
@@ -110,6 +114,13 @@ export default function MainRoom() {
   const { isCreator, canControl } = useRole();
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const {
+    status: rtcStatus,
+    error: rtcError,
+    remotePeers,
+    micOn,
+    toggleMic
+  } = useVolcRtc(Boolean(joined && meetingStarted));
 
   const [lobbyRoomId, setLobbyRoomId] = useState(() => {
     if (typeof window !== "undefined") {
@@ -450,15 +461,41 @@ export default function MainRoom() {
   }
 
   return (
-    <section className="flex-1 flex flex-col p-4 md:p-6 overflow-y-auto gap-4">
+    <section className="flex-1 flex flex-col p-4 md:p-6 overflow-y-auto gap-3">
+      <ParticipantsStrip meetingId={activeRoomId} defaultCollapsed />
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 mb-2">
-            会议进行中 · HTTP 多端同步 · room {activeRoomId}
+            会议进行中 ·{" "}
+            {rtcStatus === "connected"
+              ? `火山 RTC 互通 (${remotePeers.length} 远端)`
+              : rtcStatus === "unconfigured"
+                ? "文字同步 · RTC 待配置"
+                : rtcStatus === "connecting"
+                  ? "RTC 入房中…"
+                  : "HTTP 多端同步"}{" "}
+            · room {activeRoomId}
           </Badge>
           <h2 className="text-lg font-light text-white">主题：{currentTopic}</h2>
+          {rtcError ? (
+            <p className="text-[11px] text-amber-300/90 mt-1">{rtcError}</p>
+          ) : null}
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={toggleMic}
+            className={`text-xs ${
+              micOn
+                ? "border-emerald-500/40 text-emerald-300"
+                : "border-red-500/40 text-red-300"
+            }`}
+          >
+            {micOn ? <Mic className="h-3 w-3 mr-1" /> : <MicOff className="h-3 w-3 mr-1" />}
+            {micOn ? "麦克风开" : "麦克风关"}
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -493,7 +530,10 @@ export default function MainRoom() {
             )}
           </div>
           <p className="text-xs text-slate-400">
-            各终端消息经 HTTP 同步；远端发言与 AI 回复会自动朗读。
+            Kaiban A2A 控场 + 文字同步
+            {rtcStatus === "connected"
+              ? "；火山 RTC 已入房，可多方自由发言。"
+              : "。配置 VOLC_RTC_* 后即可多方实时语音。"}
           </p>
           {aiIntervention && aiIntervention !== "PROCEED" && (
             <p className="mt-2 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
@@ -515,7 +555,6 @@ export default function MainRoom() {
         />
       </div>
 
-      <AttendeesList meetingId={activeRoomId} />
       <AgendaKanbanBoard />
     </section>
   );

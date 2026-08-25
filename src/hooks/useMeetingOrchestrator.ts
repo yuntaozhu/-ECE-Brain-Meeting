@@ -21,7 +21,8 @@ export function useMeetingOrchestrator() {
     setAgendaStage,
     latestToDos,
     setLatestToDos,
-    joined
+    joined,
+    meetingId
   } = useMeetingStore();
 
   const { sendControlText, isConnected } = useGeminiLive();
@@ -78,8 +79,17 @@ export function useMeetingOrchestrator() {
       console.log("KaibanJS Orchestrator started evaluating current meeting context...");
       const textLog = transcript.map(t => `${t.speaker}: ${t.text}`).join("\n");
       
-      const result = await runMeetingAnalysis(textLog, `当前议程阶段: ${agendaStage}. 核心主题: ${currentTopic}`);
-      
+      const result = await runMeetingAnalysis(
+        textLog,
+        `当前议程阶段: ${agendaStage}. 核心主题: ${currentTopic}`,
+        meetingId || "10086"
+      );
+
+      if (result?.a2aTrace?.length) {
+        useMeetingStore.getState().appendA2aEvents(result.a2aTrace);
+        console.log("[Kaiban A2A Trace]", result.a2aTrace.map((e) => `${e.sender}→${e.target}:${e.action}`).join(" | "));
+      }
+
       if (result) {
         // 1. Process To-Dos
         if (result.latestToDos && result.latestToDos.length > 0) {
@@ -163,7 +173,7 @@ export function useMeetingOrchestrator() {
         setOrchestratorStatus((p) => p === "Intervening" ? "Idle" : p);
       }, 5000);
     }
-  }, [transcript, agendaStage, currentTopic, analyzing, isConnected, setLatestToDos, setAgendaStage, addTranscriptLine, setAiIntervention, sendControlText]);
+  }, [transcript, agendaStage, currentTopic, analyzing, isConnected, meetingId, setLatestToDos, setAgendaStage, addTranscriptLine, setAiIntervention, sendControlText]);
 
 
   // Timer-VAD and Silence Detection trigger

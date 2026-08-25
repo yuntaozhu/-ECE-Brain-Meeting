@@ -74,13 +74,20 @@ export const MeetingDirectorTask: KaibanTaskConfig = {
   }
 };
 
-export async function runMeetingAnalysis(recentTranscript: string, currentAgenda: string): Promise<KaibanAnalysisResult> {
+export async function runMeetingAnalysis(
+  recentTranscript: string,
+  currentAgenda: string,
+  roomId = "10086"
+): Promise<KaibanAnalysisResult> {
   try {
-    // Client-side environment - forward evaluate request seamlessly to Server API route
     const res = await fetch(apiUrl("/api/meeting/evaluate"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ transcript: recentTranscript, currentTopic: currentAgenda })
+      body: JSON.stringify({
+        transcript: recentTranscript,
+        currentTopic: currentAgenda,
+        roomId
+      })
     });
     if (res.ok) {
       const data = await res.json();
@@ -90,7 +97,6 @@ export async function runMeetingAnalysis(recentTranscript: string, currentAgenda
     console.warn("[KaibanJS Client] Server evaluation notice:", err?.message || err);
   }
 
-  // Graceful heuristic fallback result
   return {
     shouldIntervene: false,
     interventionText: "",
@@ -99,6 +105,7 @@ export async function runMeetingAnalysis(recentTranscript: string, currentAgenda
       "2. 完成对托班注意力评估算法的校准实验",
       "3. 汇总本次会议教研共识并分发给各园区"
     ],
-    nextStageRecommendation: null
+    nextStageRecommendation: null,
+    a2aTrace: []
   };
 }
