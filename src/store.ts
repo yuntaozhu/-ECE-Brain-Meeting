@@ -139,6 +139,8 @@ interface MeetingState {
   tencentMeetingInfo: TencentMeetingInfo | null;
   tencentParticipants: TencentParticipant[];
   a2aTrace: import("./types").A2AEvent[];
+  kaibanAnalyzing: boolean;
+  kaibanStatus: "Idle" | "Thinking" | "Intervening";
   
   setJoined: (joined: boolean) => void;
   toggleMic: () => void;
@@ -161,6 +163,8 @@ interface MeetingState {
   setTencentParticipants: (participants: TencentParticipant[]) => void;
   setA2aTrace: (events: import("./types").A2AEvent[]) => void;
   appendA2aEvents: (events: import("./types").A2AEvent[]) => void;
+  setKaibanAnalyzing: (analyzing: boolean) => void;
+  setKaibanStatus: (status: "Idle" | "Thinking" | "Intervening") => void;
 
   joinMeeting: (name: string, role: string, roomId: string, roleType?: UserRoleType) => void;
 }
@@ -215,6 +219,8 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   tencentMeetingInfo: null,
   tencentParticipants: [],
   a2aTrace: [],
+  kaibanAnalyzing: false,
+  kaibanStatus: "Idle" as const,
 
   setJoined: (joined) => set((state) => {
     if (typeof window !== "undefined") {
@@ -267,6 +273,8 @@ export const useMeetingStore = create<MeetingState>((set) => ({
     set((state) => ({
       a2aTrace: [...(state.a2aTrace || []), ...(events || [])].slice(-40)
     })),
+  setKaibanAnalyzing: (analyzing) => set({ kaibanAnalyzing: analyzing }),
+  setKaibanStatus: (status) => set({ kaibanStatus: status }),
 
   joinMeeting: (name, role, roomId, roleType) => set((state) => {
     const isAttendeeQuery = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("role") === "attendee";
