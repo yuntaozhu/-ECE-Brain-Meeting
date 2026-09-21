@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>ECE-Brain AI 会议控制台</title>
+    <style>
+      :root { color-scheme: dark; }
+      body { margin: 0; font-family: "Segoe UI", sans-serif; background: #0b1020; color: #e8eefc; }
+      header { padding: 14px 18px; border-bottom: 1px solid #24304a; }
+      h1 { margin: 0; font-size: 17px; }
+      p.sub { margin: 4px 0 0; color: #93a4c7; font-size: 12px; }
+      main { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 16px 20px; }
+      section {
+        background: #121a2e; border: 1px solid #24304a; border-radius: 12px; padding: 12px;
+      }
+      h2 { margin: 0 0 8px; font-size: 13px; color: #8ecbff; letter-spacing: 0.04em; }
+      label { display: block; font-size: 11px; color: #93a4c7; margin: 8px 0 4px; }
+      select, input[type="text"], textarea {
+        width: 100%; box-sizing: border-box; background: #0b1020; color: #fff;
+        border: 1px solid #31415f; border-radius: 8px; padding: 8px; font-size: 12px;
+      }
+      textarea { min-height: 90px; resize: vertical; }
+      .row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+      button {
+        border: 0; border-radius: 8px; padding: 9px 12px; font-weight: 700; cursor: pointer; font-size: 12px;
+      }
+      button.primary { background: #22c55e; color: #05210f; }
+      button.accent { background: #06b6d4; color: #042f2e; }
+      button.danger { background: #ef4444; color: #fff; }
+      button.ghost { background: #1e293b; color: #e2e8f0; border: 1px solid #334155; }
+      button:disabled { opacity: 0.45; cursor: not-allowed; }
+      .meter { height: 8px; background: #0b1020; border-radius: 99px; overflow: hidden; margin-top: 6px; }
+      .meter > div { height: 100%; width: 0%; background: linear-gradient(90deg, #22c55e, #facc15, #ef4444); }
+      .status { font-size: 12px; margin-bottom: 6px; }
+      .ok { color: #4ade80; } .warn { color: #fbbf24; } .bad { color: #f87171; }
+      #log, #a2a, #transcript {
+        height: 160px; overflow: auto; background: #070b16; border-radius: 8px;
+        padding: 8px; font-size: 11px; line-height: 1.45; white-space: pre-wrap;
+      }
+      #todos { font-size: 12px; color: #c5d2ea; margin: 0; padding-left: 18px; }
+      .chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+      .chip {
+        font-size: 10px; border: 1px solid #31415f; border-radius: 999px; padding: 3px 8px; color: #93a4c7;
+      }
+      .chip.on { border-color: #22d3ee; color: #67e8f9; background: #083344; }
+      ol.help { margin: 6px 0 0; padding-left: 18px; color: #c5d2ea; font-size: 12px; }
+      li { margin: 3px 0; }
+      .full { grid-column: 1 / -1; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>ECE-Brain AI 会议控制台（腾讯会议 × Ark + Kaiban）</h1>
+      <p class="sub">听会识别 → Kaiban 巡检控场 → 仅干预时 TTS 进会。不是豆包闲聊复读。</p>
+    </header>
+    <main>
+      <section>
+        <h2>密钥与设备</h2>
+        <div id="keyStatus" class="status warn">检查密钥…</div>
+        <div class="chips">
+          <span id="chipArk" class="chip">Ark 控场</span>
+          <span id="chipSpeech" class="chip">语音 ASR/TTS</span>
+          <span id="chipListen" class="chip">听会</span>
+          <span id="chipPatrol" class="chip">自动巡检</span>
+        </div>
+        <label>采集（会议声进 EXE）· 选 CABLE-A Output</label>
+        <select id="inputDevice"></select>
+        <label>播放（AI 声进会议麦）· 选 CABLE-B Input</label>
+        <select id="outputDevice"></select>
+        <label>输入电平</label>
+        <div class="meter"><div id="level"></div></div>
+        <div class="row">
+          <button id="refresh" class="ghost" type="button">刷新设备</button>
+          <button id="beep" class="ghost" type="button">P0 测试音</button>
+          <button id="loop" class="ghost" type="button">P0 回环</button>
+          <button id="loopStop" class="danger" type="button" disabled>停回环</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>控场运行</h2>
+        <div id="status" class="status warn">待命</div>
+        <label>当前议程</label>
+        <input id="agenda" type="text" value="幼教数字化教研：托班硬件与注意力算法" />
+        <label><input id="autoPatrol" type="checkbox" checked /> 自动巡检（静默约 8 秒或新增 ≥3 句）</label>
+        <div class="row">
+          <button id="start" class="primary" type="button">启动听会 + 控场</button>
+          <button id="stop" class="danger" type="button" disabled>停止</button>
+        </div>
+        <div class="row">
+          <button id="patrol" class="accent" type="button" disabled>立即 A2A 巡检</button>
+          <button id="forceSpeak" class="ghost" type="button" disabled>试播 Host 话术</button>
+        </div>
+        <label>手动 Host 话术（可选）</label>
+        <input id="manualText" type="text" placeholder="例如：请停止采购话题，回到硬件立项" />
+      </section>
+
+      <section>
+        <h2>会场转写</h2>
+        <div id="transcript"></div>
+      </section>
+
+      <section>
+        <h2>A2A 事件 / 待办</h2>
+        <div id="a2a"></div>
+        <ol id="todos"></ol>
+      </section>
+
+      <section class="full">
+        <h2>接线说明 · 日志</h2>
+        <ol class="help">
+          <li>安装 VB-Cable（建议两对）。AI 账号：扬声器=CABLE-A Input，麦克风=CABLE-B Output。</li>
+          <li>本程序：采集=CABLE-A Output，播放=CABLE-B Input（不要选 UGREEN / 显示器）。</li>
+          <li>P0 测试音通过后，再「启动听会 + 控场」。偏题/冷场时 Host 才会开口。</li>
+        </ol>
+        <div id="log" style="margin-top:8px;height:120px"></div>
+      </section>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>

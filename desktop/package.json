@@ -1,0 +1,26 @@
+{
+  "name": "ece-brain-meeting-bridge",
+  "private": true,
+  "version": "0.1.0",
+  "description": "腾讯会议 × 豆包：虚拟声卡音频网桥（P0 回环 / P1 全双工）",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --win portable"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "ws": "^8.20.1"
+  },
+  "build": {
+    "appId": "app.minervaedu.ece-brain-bridge",
+    "productName": "ECE-Brain Meeting Bridge",
+    "directories": { "output": "release" },
+    "files": ["main.cjs", "preload.cjs", "renderer/**/*", "package.json"],
+    "win": { "target": ["portable"] }
+  }
+}
