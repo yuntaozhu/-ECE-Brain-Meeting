@@ -2,25 +2,24 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <title>ECE-Brain AI 会议控制台</title>
+    <title>ECE-Brain AI 专家 · 虚拟音频网桥</title>
     <style>
       :root { color-scheme: dark; }
       body { margin: 0; font-family: "Segoe UI", sans-serif; background: #0b1020; color: #e8eefc; }
       header { padding: 14px 18px; border-bottom: 1px solid #24304a; }
       h1 { margin: 0; font-size: 17px; }
-      p.sub { margin: 4px 0 0; color: #93a4c7; font-size: 12px; }
+      p.sub { margin: 4px 0 0; color: #93a4c7; font-size: 12px; line-height: 1.45; }
       main { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 16px 20px; }
       section {
         background: #121a2e; border: 1px solid #24304a; border-radius: 12px; padding: 12px;
       }
       h2 { margin: 0 0 8px; font-size: 13px; color: #8ecbff; letter-spacing: 0.04em; }
       label { display: block; font-size: 11px; color: #93a4c7; margin: 8px 0 4px; }
-      select, input[type="text"], textarea {
+      select, input[type="text"] {
         width: 100%; box-sizing: border-box; background: #0b1020; color: #fff;
         border: 1px solid #31415f; border-radius: 8px; padding: 8px; font-size: 12px;
       }
-      textarea { min-height: 90px; resize: vertical; }
-      .row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+      .row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
       button {
         border: 0; border-radius: 8px; padding: 9px 12px; font-weight: 700; cursor: pointer; font-size: 12px;
       }
@@ -34,7 +33,7 @@
       .status { font-size: 12px; margin-bottom: 6px; }
       .ok { color: #4ade80; } .warn { color: #fbbf24; } .bad { color: #f87171; }
       #log, #a2a, #transcript {
-        height: 160px; overflow: auto; background: #070b16; border-radius: 8px;
+        height: 150px; overflow: auto; background: #070b16; border-radius: 8px;
         padding: 8px; font-size: 11px; line-height: 1.45; white-space: pre-wrap;
       }
       #todos { font-size: 12px; color: #c5d2ea; margin: 0; padding-left: 18px; }
@@ -43,48 +42,92 @@
         font-size: 10px; border: 1px solid #31415f; border-radius: 999px; padding: 3px 8px; color: #93a4c7;
       }
       .chip.on { border-color: #22d3ee; color: #67e8f9; background: #083344; }
+      .chip.good { border-color: #4ade80; color: #86efac; }
+      .chip.bad { border-color: #f87171; color: #fca5a5; }
       ol.help { margin: 6px 0 0; padding-left: 18px; color: #c5d2ea; font-size: 12px; }
       li { margin: 3px 0; }
       .full { grid-column: 1 / -1; }
+      .arch {
+        font-family: ui-monospace, Consolas, monospace; font-size: 11px; line-height: 1.5;
+        background: #070b16; border-radius: 8px; padding: 10px; color: #a5b4d4; white-space: pre;
+        overflow-x: auto;
+      }
+      .check { font-size: 12px; color: #c5d2ea; margin: 4px 0; }
+      .check input { margin-right: 6px; }
+      .badge-virtual {
+        display: inline-block; font-size: 10px; color: #86efac; border: 1px solid #166534;
+        background: #052e16; border-radius: 4px; padding: 1px 6px; margin-left: 6px;
+      }
+      .badge-phys {
+        display: inline-block; font-size: 10px; color: #fca5a5; border: 1px solid #7f1d1d;
+        background: #450a0a; border-radius: 4px; padding: 1px 6px; margin-left: 6px;
+      }
+      #routeHint { font-size: 11px; color: #93a4c7; margin-top: 8px; line-height: 1.4; }
     </style>
   </head>
   <body>
     <header>
-      <h1>ECE-Brain AI 会议控制台（腾讯会议 × Ark + Kaiban）</h1>
-      <p class="sub">听会识别 → Kaiban 巡检控场 → 仅干预时 TTS 进会。不是豆包闲聊复读。</p>
+      <h1>ECE-Brain AI 专家 · 虚拟音频网桥</h1>
+      <p class="sub">
+        <strong>无外接线</strong>：电脑内部用「虚拟音频输出 + 虚拟麦克风」对接腾讯会议。
+        主持人用真麦真箱；AI 账号只用虚拟设备；本 EXE 做 Ark + Kaiban 控场（不闲聊复读）。
+      </p>
     </header>
     <main>
+      <section class="full">
+        <h2>内部虚拟环路（替代硬件 TX）</h2>
+        <div class="arch" id="archBox">加载中…</div>
+      </section>
+
       <section>
-        <h2>密钥与设备</h2>
+        <h2>虚拟设备绑定</h2>
         <div id="keyStatus" class="status warn">检查密钥…</div>
         <div class="chips">
           <span id="chipArk" class="chip">Ark 控场</span>
           <span id="chipSpeech" class="chip">语音 ASR/TTS</span>
+          <span id="chipVirtual" class="chip">虚拟设备</span>
           <span id="chipListen" class="chip">听会</span>
           <span id="chipPatrol" class="chip">自动巡检</span>
         </div>
-        <label>采集（会议声进 EXE）· 选 CABLE-A Output</label>
+        <label class="check"><input id="virtualOnly" type="checkbox" checked /> 列表只显示虚拟设备（推荐）</label>
+        <label class="check"><input id="allowPhysical" type="checkbox" /> 允许绑定物理设备（调试用，正式开会请勿勾选）</label>
+
+        <label>① EXE 采集 ← 虚拟音频输出另一端（会议声进来）
+          <span class="badge-virtual">应对 CABLE-A Output / SysVAD Capture</span>
+        </label>
         <select id="inputDevice"></select>
-        <label>播放（AI 声进会议麦）· 选 CABLE-B Input</label>
+
+        <label>② EXE 播放 → 虚拟麦克风另一端（AI 声进会）
+          <span class="badge-virtual">应对 CABLE-B Input / SysVAD Render</span>
+        </label>
         <select id="outputDevice"></select>
+
+        <div id="routeHint"></div>
         <label>输入电平</label>
         <div class="meter"><div id="level"></div></div>
         <div class="row">
           <button id="refresh" class="ghost" type="button">刷新设备</button>
-          <button id="beep" class="ghost" type="button">P0 测试音</button>
-          <button id="loop" class="ghost" type="button">P0 回环</button>
-          <button id="loopStop" class="danger" type="button" disabled>停回环</button>
+          <button id="beep" class="ghost" type="button">测虚拟麦（测试音）</button>
+          <button id="loop" class="ghost" type="button">测环路</button>
+          <button id="loopStop" class="danger" type="button" disabled>停环路</button>
         </div>
       </section>
 
       <section>
-        <h2>控场运行</h2>
+        <h2>腾讯会议双账号核对</h2>
+        <p class="check">主持人账号：物理麦克风 + 物理音箱（真人开会）</p>
+        <label class="check"><input id="chkHost" type="checkbox" /> 主持人已用真麦真箱</label>
+        <label class="check"><input id="chkAiSpk" type="checkbox" /> AI 账号扬声器 = 虚拟音频输出（如 CABLE-A Input）</label>
+        <label class="check"><input id="chkAiMic" type="checkbox" /> AI 账号麦克风 = 虚拟麦克风（如 CABLE-B Output）</label>
+        <p id="meetingGate" class="status warn" style="margin-top:10px">勾选以上三项并绑定虚拟设备后，才能启动控场。</p>
+
+        <h2 style="margin-top:14px">控场运行</h2>
         <div id="status" class="status warn">待命</div>
         <label>当前议程</label>
         <input id="agenda" type="text" value="幼教数字化教研：托班硬件与注意力算法" />
-        <label><input id="autoPatrol" type="checkbox" checked /> 自动巡检（静默约 8 秒或新增 ≥3 句）</label>
+        <label class="check"><input id="autoPatrol" type="checkbox" checked /> 自动巡检（静默约 8 秒或新增 ≥3 句）</label>
         <div class="row">
-          <button id="start" class="primary" type="button">启动听会 + 控场</button>
+          <button id="start" class="primary" type="button">启动听会 + Kaiban 控场</button>
           <button id="stop" class="danger" type="button" disabled>停止</button>
         </div>
         <div class="row">
@@ -107,13 +150,13 @@
       </section>
 
       <section class="full">
-        <h2>接线说明 · 日志</h2>
+        <h2>说明 · 日志</h2>
         <ol class="help">
-          <li>安装 VB-Cable（建议两对）。AI 账号：扬声器=CABLE-A Input，麦克风=CABLE-B Output。</li>
-          <li>本程序：采集=CABLE-A Output，播放=CABLE-B Input（不要选 UGREEN / 显示器）。</li>
-          <li>P0 测试音通过后，再「启动听会 + 控场」。偏题/冷场时 Host 才会开口。</li>
+          <li>安装 VB-Cable（或基于微软 SysVAD 的虚拟声卡）。无需任何外接线。</li>
+          <li>建议两对虚拟设备：下行（会场→EXE）、上行（EXE→会场），避免回声。</li>
+          <li>测虚拟麦通过后，再启动控场。偏题/冷场时 Host 才经虚拟麦开口。</li>
         </ol>
-        <div id="log" style="margin-top:8px;height:120px"></div>
+        <div id="log" style="margin-top:8px;height:110px"></div>
       </section>
     </main>
     <script src="app.js"></script>

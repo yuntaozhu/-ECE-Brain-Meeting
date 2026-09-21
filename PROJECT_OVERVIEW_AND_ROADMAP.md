@@ -315,7 +315,7 @@ Week 2:  M2 收尾 → M3 字幕 → M4 Kaiban 接线
 | `DADI_AI_MEETING_UPDATE_DEVELOPMENT_PROMPT.md` | v4 权威蓝图              |
 | `KAIBAN_TENCENT_MEETING_INTEGRATION.md`        | Kaiban A2A 与历史腾讯集成思路 |
 | `PROJECT_PROGRESS_SPECS.md`                    | 进度规格（若存在）            |
-| `desktop/`                                     | Windows AI 会议控制台（Ark+Kaiban+虚拟声卡） |
+| `desktop/`                                     | Windows AI 专家：无外接线虚拟麦/虚拟输出 + Ark+Kaiban 控场 |
 | `src/hooks/useVolcRtc.ts`                      | 真人 RTC               |
 | `src/hooks/useMeetingOrchestrator.ts`          | 控场触发                 |
 | `src/lib/kaibanMeetingEngine.server.ts`        | 服务端 A2A              |

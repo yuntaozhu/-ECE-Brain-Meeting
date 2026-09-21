@@ -1,7 +1,6 @@
 /**
- * ECE-Brain desktop — AI 会议控制台
- * P0: VB-Cable 设备 / 回环
- * P1: 听会 ASR + Kaiban(Ark) 控场 + 仅干预时 TTS（禁止纯闲聊）
+ * ECE-Brain desktop — AI 专家 · 纯软件虚拟音频网桥
+ * 无外接线：虚拟音频输出 + 虚拟麦克风 对接腾讯会议；Ark + Kaiban 控场（禁止纯闲聊）
  */
 const { app, BrowserWindow, ipcMain, session } = require("electron");
 const path = require("path");
@@ -219,7 +218,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1100,
     height: 800,
-    title: "ECE-Brain AI 会议控制台",
+    title: "ECE-Brain AI 专家 · 虚拟音频网桥",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,

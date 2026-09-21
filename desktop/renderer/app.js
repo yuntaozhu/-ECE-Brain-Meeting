@@ -1,5 +1,16 @@
+/**
+ * ECE-Brain desktop — 纯软件虚拟音频网桥
+ * 无外接线：虚拟音频输出 + 虚拟麦克风 对接腾讯会议 AI 账号
+ */
 const $ = (id) => document.getElementById(id);
 
+const VIRTUAL_RE =
+  /cable|vb-?audio|voice\s*meeter|virtual|sysvad|vac |vbcable|steam streaming|obs.?virtual|droidcam|nvidia broadcast/i;
+const PHYSICAL_WARN_RE =
+  /ugreen|realtek|nvidia high definition|high definition audio|hdmi|display|headphones|耳机|扬声器 \(|麦克风 \(|usb audio|webcam|camera/i;
+
+let allInputs = [];
+let allOutputs = [];
 let inputStream = null;
 let inCtx = null;
 let analyser = null;
@@ -26,13 +37,37 @@ function setStatus(text, kind) {
   $("status").className = "status " + (kind || "warn");
 }
 
-function setChip(id, on) {
-  $(id).classList.toggle("on", !!on);
+function setChip(id, on, extra) {
+  const el = $(id);
+  el.classList.toggle("on", !!on);
+  if (extra === "good") {
+    el.classList.add("good");
+    el.classList.remove("bad");
+  } else if (extra === "bad") {
+    el.classList.add("bad");
+    el.classList.remove("good");
+  } else if (!on) {
+    el.classList.remove("good", "bad");
+  }
 }
 
-function preferCable(select) {
-  const cable = [...select.options].find((o) => /cable|vb-?audio|virtual/i.test(o.textContent));
-  if (cable) select.value = cable.value;
+function isVirtualLabel(label) {
+  return VIRTUAL_RE.test(label || "");
+}
+
+function looksPhysical(label) {
+  if (isVirtualLabel(label)) return false;
+  return PHYSICAL_WARN_RE.test(label || "") || /default\s*-/i.test(label || "");
+}
+
+function preferVirtual(select, list) {
+  const virtual = list.filter((d) => isVirtualLabel(d.label));
+  if (!virtual.length) return;
+  const a = virtual.find((d) => /cable.?a|a\)/i.test(d.label));
+  const b = virtual.find((d) => /cable.?b|b\)/i.test(d.label));
+  if (select.id === "inputDevice" && a) select.value = a.deviceId;
+  else if (select.id === "outputDevice" && b) select.value = b.deviceId;
+  else select.value = virtual[0].deviceId;
 }
 
 function fill(select, list, empty) {
@@ -49,12 +84,68 @@ function fill(select, list, empty) {
     const opt = document.createElement("option");
     opt.value = d.deviceId;
     const label = d.label || d.deviceId;
-    opt.textContent = label;
-    // Skip ambiguous "Default - ..." when a real Cable exists later; still list all
+    const tag = isVirtualLabel(label) ? " [虚拟]" : looksPhysical(label) ? " [物理-勿选]" : "";
+    opt.textContent = label + tag;
     select.appendChild(opt);
   }
   if ([...select.options].some((o) => o.value === prev)) select.value = prev;
-  else preferCable(select);
+  else preferVirtual(select, list);
+}
+
+function selectedLabel(selectId) {
+  return $(selectId).selectedOptions[0]?.textContent?.replace(/\s*\[.*\]\s*$/, "") || "";
+}
+
+function updateRouteHint() {
+  const inL = selectedLabel("inputDevice");
+  const outL = selectedLabel("outputDevice");
+  const inOk = isVirtualLabel(inL);
+  const outOk = isVirtualLabel(outL);
+  setChip("chipVirtual", inOk && outOk, inOk && outOk ? "good" : "bad");
+
+  $("routeHint").innerHTML =
+    `内部路由：腾讯会议 AI 扬声器(虚拟输出) → <b>${inL || "未选"}</b> → EXE 采集 → Kaiban<br>` +
+    `EXE 播放 → <b>${outL || "未选"}</b> → 腾讯会议 AI 麦克风(虚拟麦) → 全员听到 Host<br>` +
+    (inOk && outOk
+      ? '<span class="ok">已绑定虚拟设备，符合「无外接线」方案。</span>'
+      : '<span class="bad">请改为虚拟设备。物理麦/显示器音频不能用于 AI 环路。</span>');
+
+  updateMeetingGate();
+}
+
+function updateMeetingGate() {
+  const checks =
+    $("chkHost").checked && $("chkAiSpk").checked && $("chkAiMic").checked;
+  const inOk = isVirtualLabel(selectedLabel("inputDevice"));
+  const outOk = isVirtualLabel(selectedLabel("outputDevice"));
+  const allowPhys = $("allowPhysical").checked;
+  const devicesOk = allowPhys || (inOk && outOk);
+
+  const gate = $("meetingGate");
+  if (checks && devicesOk) {
+    gate.textContent = "核对通过：可用虚拟环路启动控场。";
+    gate.className = "status ok";
+    $("start").disabled = listening;
+  } else {
+    const miss = [];
+    if (!$("chkHost").checked) miss.push("主持人真麦真箱");
+    if (!$("chkAiSpk").checked) miss.push("AI 扬声器=虚拟输出");
+    if (!$("chkAiMic").checked) miss.push("AI 麦克风=虚拟麦");
+    if (!devicesOk) miss.push("EXE 两侧选虚拟设备");
+    gate.textContent = "待完成：" + miss.join("；");
+    gate.className = "status warn";
+    if (!listening) $("start").disabled = true;
+  }
+}
+
+function renderArch() {
+  $("archBox").textContent = `
+腾讯会议 · 主持人账号          腾讯会议 · AI 专家账号              本 EXE（AI 大脑）
+真麦克风 / 真音箱              扬声器 → 虚拟音频输出 ───────────→ ① 采集（听会 ASR）
+                              麦克风 ← 虚拟麦克风   ←─────────── ② 播放（仅 Host TTS）
+                                    ↑ 电脑内部数字环路，无外接线 ↑
+驱动：VB-Cable / VoiceMeeter / 微软 SysVAD 类 Virtual Audio Device
+`.trim();
 }
 
 async function ensureLabels() {
@@ -65,9 +156,63 @@ async function ensureLabels() {
 async function refreshDevices() {
   await ensureLabels();
   const devices = await navigator.mediaDevices.enumerateDevices();
-  fill($("inputDevice"), devices.filter((d) => d.kind === "audioinput"), "无输入");
-  fill($("outputDevice"), devices.filter((d) => d.kind === "audiooutput"), "无输出");
-  log("设备已刷新。请确认采集/播放为 VB-Cable，勿选 UGREEN / 显示器。");
+  allInputs = devices.filter((d) => d.kind === "audioinput");
+  allOutputs = devices.filter((d) => d.kind === "audiooutput");
+  applyDeviceFilter();
+  const vIn = allInputs.filter((d) => isVirtualLabel(d.label)).length;
+  const vOut = allOutputs.filter((d) => isVirtualLabel(d.label)).length;
+  log(`设备刷新：输入 ${allInputs.length}（虚拟 ${vIn}），输出 ${allOutputs.length}（虚拟 ${vOut}）。`);
+  if (vIn === 0 || vOut === 0) {
+    log("未检测到虚拟声卡。请安装 VB-Cable 或 SysVAD 类驱动后再刷新。");
+  }
+  try {
+    localStorage.setItem(
+      "ece_bridge_devices",
+      JSON.stringify({
+        input: $("inputDevice").value,
+        output: $("outputDevice").value
+      })
+    );
+  } catch (_) {}
+}
+
+function applyDeviceFilter() {
+  const only = $("virtualOnly").checked;
+  let inputs = allInputs;
+  let outputs = allOutputs;
+  if (only) {
+    inputs = allInputs.filter((d) => isVirtualLabel(d.label));
+    outputs = allOutputs.filter((d) => isVirtualLabel(d.label));
+  }
+  fill(
+    $("inputDevice"),
+    inputs,
+    only ? "无虚拟输入 — 请安装 VB-Cable / SysVAD" : "无输入设备"
+  );
+  fill(
+    $("outputDevice"),
+    outputs,
+    only ? "无虚拟输出 — 请安装 VB-Cable / SysVAD" : "无输出设备"
+  );
+  try {
+    const saved = JSON.parse(localStorage.getItem("ece_bridge_devices") || "{}");
+    if (saved.input && [...$("inputDevice").options].some((o) => o.value === saved.input)) {
+      $("inputDevice").value = saved.input;
+    }
+    if (saved.output && [...$("outputDevice").options].some((o) => o.value === saved.output)) {
+      $("outputDevice").value = saved.output;
+    }
+  } catch (_) {}
+  updateRouteHint();
+}
+
+function assertVirtualOrAllowed(kind, label) {
+  if ($("allowPhysical").checked) return;
+  if (!isVirtualLabel(label)) {
+    throw new Error(
+      `${kind}必须是虚拟设备（当前：${label}）。请安装 VB-Cable/SysVAD，或勾选「允许物理设备」仅作调试。`
+    );
+  }
 }
 
 function stopMeter() {
@@ -79,11 +224,10 @@ function stopMeter() {
 async function openInput() {
   await closeInput();
   const deviceId = $("inputDevice").value;
-  if (!deviceId) throw new Error("未选择采集设备");
-  const label = $("inputDevice").selectedOptions[0]?.textContent || "";
-  if (!/cable|vb-?audio|virtual/i.test(label)) {
-    log("警告：采集设备不像虚拟声卡：" + label);
-  }
+  if (!deviceId) throw new Error("未选择虚拟采集设备");
+  const label = selectedLabel("inputDevice");
+  assertVirtualOrAllowed("采集（虚拟音频输出端）", label);
+
   inputStream = await navigator.mediaDevices.getUserMedia({
     audio: {
       deviceId: { exact: deviceId },
@@ -122,13 +266,11 @@ async function closeInput() {
   }
 }
 
-/** Prefer HTMLAudioElement.setSinkId (more reliable than AudioContext in Electron). */
 async function playBeepToSink() {
   const sinkId = $("outputDevice").value;
-  const outLabel = $("outputDevice").selectedOptions[0]?.textContent || "";
-  if (!/cable|vb-?audio|virtual/i.test(outLabel)) {
-    log("警告：播放设备不像虚拟声卡：" + outLabel);
-  }
+  const outLabel = selectedLabel("outputDevice");
+  assertVirtualOrAllowed("播放（虚拟麦克风端）", outLabel);
+
   const ctx = new OfflineAudioContext(1, 48000 * 0.5, 48000);
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -147,7 +289,7 @@ async function playBeepToSink() {
     try {
       await audio.setSinkId(sinkId);
     } catch (e) {
-      log("setSinkId 失败，将用系统默认输出: " + (e.message || e));
+      log("setSinkId 失败: " + (e.message || e) + " — 请把系统默认播放临时设为虚拟设备再试。");
     }
   }
   await audio.play();
@@ -191,11 +333,13 @@ async function ensurePlayCtx() {
   if (playCtx) return playCtx;
   playCtx = new AudioContext({ sampleRate: 24000 });
   const sink = $("outputDevice").value;
+  const outLabel = selectedLabel("outputDevice");
+  assertVirtualOrAllowed("播放（虚拟麦克风端）", outLabel);
   if (sink && typeof playCtx.setSinkId === "function") {
     try {
       await playCtx.setSinkId(sink);
     } catch (e) {
-      log("AudioContext.setSinkId 失败（可忽略若测试音已走 HTMLAudio）: " + (e.message || e));
+      log("AudioContext.setSinkId: " + (e.message || e));
     }
   }
   nextPlay = 0;
@@ -223,7 +367,8 @@ function playPcm16Base64(b64, sampleRate) {
 }
 
 function renderTranscript() {
-  $("transcript").textContent = transcriptLines.map((l) => `${l.speaker}: ${l.text}`).join("\n") || "（等待会场发言…）";
+  $("transcript").textContent =
+    transcriptLines.map((l) => `${l.speaker}: ${l.text}`).join("\n") || "（等待会场发言经虚拟输出进入…）";
 }
 
 function renderA2a(events) {
@@ -278,7 +423,7 @@ async function runPatrol(reason) {
   renderA2a(r.a2aTrace);
   renderTodos(r.latestToDos);
   if (r.shouldIntervene) {
-    setStatus("Host 干预：" + r.interventionText, "ok");
+    setStatus("Host 经虚拟麦干预：" + r.interventionText, "ok");
     transcriptLines.push({ speaker: "AI 主席", text: r.interventionText });
     renderTranscript();
     log(`[${reason}] 干预 ${r.reason}: ${r.interventionText}`);
@@ -331,12 +476,27 @@ function floatTo16(f32) {
 }
 
 $("refresh").onclick = () => refreshDevices().catch((e) => log(e.message || String(e)));
+$("virtualOnly").onchange = () => applyDeviceFilter();
+$("allowPhysical").onchange = () => updateRouteHint();
+$("inputDevice").onchange = () => {
+  updateRouteHint();
+  try {
+    localStorage.setItem(
+      "ece_bridge_devices",
+      JSON.stringify({ input: $("inputDevice").value, output: $("outputDevice").value })
+    );
+  } catch (_) {}
+};
+$("outputDevice").onchange = () => $("inputDevice").onchange();
+["chkHost", "chkAiSpk", "chkAiMic"].forEach((id) => {
+  $(id).onchange = () => updateMeetingGate();
+});
 
 $("beep").onclick = async () => {
   try {
     await playBeepToSink();
-    setStatus("测试音已发送", "ok");
-    log("测试音已打到所选播放设备。");
+    setStatus("测试音已送入虚拟麦克风链路", "ok");
+    log("若 AI 账号麦克风选对虚拟设备，腾讯会议里应听到哔声。");
   } catch (e) {
     setStatus("测试音失败", "bad");
     log(e.message || String(e));
@@ -345,26 +505,27 @@ $("beep").onclick = async () => {
 
 $("loop").onclick = async () => {
   if (listening) {
-    log("请先停止控场再回环。");
+    log("请先停止控场再测环路。");
     return;
   }
   try {
     await openInput();
     loopCtx = new AudioContext();
     const sink = $("outputDevice").value;
+    assertVirtualOrAllowed("播放", selectedLabel("outputDevice"));
     if (sink && loopCtx.setSinkId) {
       try {
         await loopCtx.setSinkId(sink);
       } catch (e) {
-        log("回环 setSinkId: " + (e.message || e));
+        log("环路 setSinkId: " + (e.message || e));
       }
     }
     loopCtx.createMediaStreamSource(inputStream).connect(loopCtx.destination);
     $("loop").disabled = true;
     $("loopStop").disabled = false;
-    setStatus("P0 回环中（测完请停）", "warn");
+    setStatus("环路测试中（测完请停，避免回授）", "warn");
   } catch (e) {
-    setStatus("回环失败", "bad");
+    setStatus("环路失败", "bad");
     log(e.message || String(e));
   }
 };
@@ -375,23 +536,29 @@ $("loopStop").onclick = async () => {
   await closeInput();
   $("loop").disabled = false;
   $("loopStop").disabled = true;
-  setStatus("回环已停", "ok");
+  setStatus("环路已停", "ok");
+  updateMeetingGate();
 };
 
 $("start").onclick = async () => {
   if (!$("loopStop").disabled) {
-    log("请先停止回环。");
+    log("请先停止环路测试。");
+    return;
+  }
+  updateMeetingGate();
+  if ($("start").disabled) {
+    log("请先完成双账号核对并绑定虚拟设备。");
     return;
   }
   try {
-    setStatus("启动听会通道…", "warn");
+    setStatus("启动虚拟环路听会…", "warn");
     await openInput();
     await ensurePlayCtx();
     unlisten?.();
     unlisten = window.bridge.onEvent((msg) => {
       if (msg.type === "listen-ready") {
         if (msg.ok) {
-          setStatus("听会中 · Kaiban 待命", "ok");
+          setStatus("虚拟环路听会中 · Kaiban 待命", "ok");
           setChip("chipListen", true);
           log("听会通道就绪 " + (msg.sessionId || ""));
         } else {
@@ -416,7 +583,7 @@ $("start").onclick = async () => {
       } else if (msg.type === "tts-audio") {
         playPcm16Base64(msg.audio, 24000);
       } else if (msg.type === "host-speaking") {
-        log("Host 播报: " + msg.text);
+        log("Host→虚拟麦: " + msg.text);
       } else if (msg.type === "error") {
         log("错误: " + msg.message);
       } else if (msg.type === "closed") {
@@ -457,7 +624,6 @@ $("stop").onclick = async () => {
   await closeInput();
   if (playCtx) await playCtx.close().catch(() => {});
   playCtx = null;
-  $("start").disabled = false;
   $("stop").disabled = true;
   $("patrol").disabled = true;
   $("forceSpeak").disabled = true;
@@ -465,6 +631,7 @@ $("stop").onclick = async () => {
   setChip("chipListen", false);
   setChip("chipPatrol", false);
   setStatus("已停止", "ok");
+  updateMeetingGate();
 };
 
 $("patrol").onclick = () => void runPatrol("manual");
@@ -477,11 +644,13 @@ $("forceSpeak").onclick = async () => {
 };
 
 (async () => {
+  renderArch();
   const st = await window.bridge.envStatus();
   setChip("chipArk", st.ark);
   setChip("chipSpeech", st.speech);
-  $("keyStatus").textContent = `Ark 控场: ${st.ark ? "已配置" : "缺失"} · 语音 ASR/TTS: ${st.speech ? "已配置" : "缺失"}`;
+  $("keyStatus").textContent = `Ark 控场: ${st.ark ? "已配置" : "缺失"} · 语音: ${st.speech ? "已配置" : "缺失"} · 模式: 无外接线虚拟环路`;
   $("keyStatus").className = "status " + (st.ark ? "ok" : "bad");
   await refreshDevices().catch((e) => log(e.message || String(e)));
   renderTranscript();
+  updateMeetingGate();
 })();
