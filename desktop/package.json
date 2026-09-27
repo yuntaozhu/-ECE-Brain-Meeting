@@ -5,7 +5,17 @@
   "description": "腾讯会议 × 豆包：虚拟声卡音频网桥（P0 回环 / P1 全双工）",
   "main": "main.cjs",
   "scripts": {
-    "start": "electron .",
+    "start": "chcp 65001>nul & electron .",
+    "rag:index": "node scripts/build-rag-index.cjs",
+    "rag:index:force": "node scripts/build-rag-index.cjs --force",
+    "knowledge:promote": "node scripts/promote-inbox.cjs",
+    "knowledge:promote:faq": "node scripts/promote-inbox.cjs --faq",
+    "knowledge:promote:dry": "node scripts/promote-inbox.cjs --dry",
+    "knowledge:session": "node scripts/promote-session.cjs --latest",
+    "knowledge:session:faq": "node scripts/promote-session.cjs --latest --faq --summary",
+    "knowledge:session:all": "node scripts/promote-session.cjs --all --faq --summary",
+    "knowledge:session:dry": "node scripts/promote-session.cjs --latest --dry",
+    "rag:eval": "node scripts/eval-rag.cjs",
     "pack": "electron-builder --win portable"
   },
   "devDependencies": {
@@ -14,13 +24,27 @@
   },
   "dependencies": {
     "dotenv": "^17.2.3",
+    "iconv-lite": "^0.7.3",
     "ws": "^8.20.1"
   },
   "build": {
     "appId": "app.minervaedu.ece-brain-bridge",
     "productName": "ECE-Brain Meeting Bridge",
-    "directories": { "output": "release" },
-    "files": ["main.cjs", "preload.cjs", "renderer/**/*", "package.json"],
-    "win": { "target": ["portable"] }
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "lib/**/*",
+      "knowledge/**/*",
+      "renderer/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ]
+    }
   }
 }

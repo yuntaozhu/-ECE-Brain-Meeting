@@ -1,5 +1,7 @@
 node_modules/
 desktop/release/
+desktop/logs/
+desktop/knowledge/.rag-index.json
 build/
 dist/
 coverage/

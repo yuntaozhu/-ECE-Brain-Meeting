@@ -87,8 +87,14 @@
           <span id="chipSpeech" class="chip">语音 ASR/TTS</span>
           <span id="chipVirtual" class="chip">虚拟设备</span>
           <span id="chipListen" class="chip">听会</span>
+          <span id="chipMeetingAudio" class="chip">会场声</span>
           <span id="chipPatrol" class="chip">自动巡检</span>
+          <span id="chipAgentMode" class="chip">人—人旁听</span>
+          <span id="chipMeetingLife" class="chip">未开会</span>
+          <span id="chipThinking" class="chip">思考中</span>
+          <span id="chipReconnect" class="chip">Duplex</span>
         </div>
+        <div id="alertBanner" class="status warn" style="display:none;margin:8px 0;padding:8px;border:1px solid #f59e0b;border-radius:8px;background:#422006;color:#fde68a"></div>
         <label class="check"><input id="virtualOnly" type="checkbox" checked /> 列表只显示虚拟设备（推荐）</label>
         <label class="check"><input id="allowPhysical" type="checkbox" /> 允许绑定物理设备（调试用，正式开会请勿勾选）</label>
 
@@ -103,11 +109,13 @@
         <select id="outputDevice"></select>
 
         <div id="routeHint"></div>
+        <label class="check"><input id="localMonitor" type="checkbox" checked /> 本机同时听测试音/Host（调试用；正式开会可关）</label>
         <label>输入电平</label>
         <div class="meter"><div id="level"></div></div>
         <div class="row">
           <button id="refresh" class="ghost" type="button">刷新设备</button>
           <button id="beep" class="ghost" type="button">测虚拟麦（测试音）</button>
+          <button id="selfTest" class="accent" type="button">一键自检环路</button>
           <button id="loop" class="ghost" type="button">测环路</button>
           <button id="loopStop" class="danger" type="button" disabled>停环路</button>
         </div>
@@ -121,18 +129,20 @@
         <label class="check"><input id="chkAiMic" type="checkbox" /> AI 账号麦克风 = 虚拟麦克风（如 CABLE-B Output）</label>
         <p id="meetingGate" class="status warn" style="margin-top:10px">勾选以上三项并绑定虚拟设备后，才能启动控场。</p>
 
-        <h2 style="margin-top:14px">控场运行</h2>
+        <h2>控场运行 · 大智</h2>
         <div id="status" class="status warn">待命</div>
-        <label>当前议程</label>
-        <input id="agenda" type="text" value="幼教数字化教研：托班硬件与注意力算法" />
-        <label class="check"><input id="autoPatrol" type="checkbox" checked /> 自动巡检（静默约 8 秒或新增 ≥3 句）</label>
+        <label>当前议程 / 会议主题</label>
+        <input id="agenda" type="text" value="全园美语系统教研会：四端联动、校园经营与家园共育" />
+        <p id="kbStatus" class="status warn" style="margin:6px 0;font-size:11px">知识库加载中…</p>
+        <label class="check"><input id="autoPatrol" type="checkbox" checked /> 自动运行（人—人旁听纠偏 / 呼叫大智咨询或探讨）</label>
         <div class="row">
-          <button id="start" class="primary" type="button">启动听会 + Kaiban 控场</button>
+          <button id="start" class="primary" type="button">启动听会 + 大智顾问</button>
           <button id="stop" class="danger" type="button" disabled>停止</button>
         </div>
         <div class="row">
-          <button id="patrol" class="accent" type="button" disabled>立即 A2A 巡检</button>
+          <button id="patrol" class="accent" type="button" disabled>立即巡检</button>
           <button id="forceSpeak" class="ghost" type="button" disabled>试播 Host 话术</button>
+          <button id="btnSessions" class="ghost" type="button">打开本场记录</button>
         </div>
         <label>手动 Host 话术（可选）</label>
         <input id="manualText" type="text" placeholder="例如：请停止采购话题，回到硬件立项" />
@@ -140,6 +150,8 @@
 
       <section>
         <h2>会场转写</h2>
+        <p id="asrStats" class="status warn" style="margin:0 0 6px;font-size:11px">启动听会后，此处显示实时转写（含中间结果）</p>
+        <p id="duplexStats" class="status warn" style="margin:0 0 6px;font-size:11px">半双工：IDLE</p>
         <div id="transcript"></div>
       </section>
 
@@ -150,13 +162,22 @@
       </section>
 
       <section class="full">
-        <h2>说明 · 日志</h2>
+        <h2>说明 · 调试日志</h2>
         <ol class="help">
-          <li>安装 VB-Cable（或基于微软 SysVAD 的虚拟声卡）。无需任何外接线。</li>
-          <li>建议两对虚拟设备：下行（会场→EXE）、上行（EXE→会场），避免回声。</li>
-          <li>测虚拟麦通过后，再启动控场。偏题/冷场时 Host 才经虚拟麦开口。</li>
+          <li>角色：大智。默认人—人旁听并轻量纠偏；呼叫「大智」进入咨询或探讨；「谢谢大智」停止口播；「大智总结一下」出纪要并抛下一题。</li>
+          <li>口令：大智你好 / 大智咨询 / 大智探讨 / 停止大智 / 要总结 / 暂停记录。</li>
+          <li>等待感：Chat 慢时会先短播「嗯，我想一下」，流式首句可提前开口；忙时下一问会排队。</li>
+          <li>知识库：desktop/knowledge/quan-yuan-meiyu.txt + faq-meeting.txt；本场记录在 knowledge/sessions/。</li>
+          <li>安装 VB-Cable。听会：AI 扬声器=CABLE Input；出声：AI 麦开麦=CABLE Output。正式开会建议关「本机同时听」以减回灌。</li>
+          <li>听会中勿点测麦/自检。日志看界面或 desktop/logs。</li>
         </ol>
-        <div id="log" style="margin-top:8px;height:110px"></div>
+        <div class="row" style="margin-top:8px">
+          <button id="btnCopyLog" class="ghost" type="button">复制日志</button>
+          <button id="btnClearLog" class="ghost" type="button">清空界面日志</button>
+          <button id="btnOpenLogDir" class="ghost" type="button">打开日志目录</button>
+        </div>
+        <div id="logPath" style="font-size:11px;color:#64748b;margin-top:6px"></div>
+        <div id="log" style="margin-top:8px;height:220px;overflow:auto;background:#070b16;border-radius:8px;padding:8px;font-size:11px;line-height:1.4;font-family:ui-monospace,Consolas,monospace"></div>
       </section>
     </main>
     <script src="app.js"></script>
