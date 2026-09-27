@@ -5,11 +5,17 @@
 const fs = require("fs");
 const path = require("path");
 const { normalizeForMatch, detectWake, isIntroSelfTalk, extractFloorLines } = require("./duplexPolicy.cjs");
+const { knowledgeReadRoot } = require("./appPaths.cjs");
 
-const ROOT = path.join(__dirname, "..", "knowledge");
-const PROMPT_FILE = path.join(ROOT, "li-laoshi-system-prompt.txt");
-const FAQ_FILE = path.join(ROOT, "faq-meeting.txt");
-const KB_FILE = path.join(ROOT, "quan-yuan-meiyu.txt");
+function promptFile() {
+  return path.join(knowledgeReadRoot(), "li-laoshi-system-prompt.txt");
+}
+function faqFile() {
+  return path.join(knowledgeReadRoot(), "faq-meeting.txt");
+}
+function kbFile() {
+  return path.join(knowledgeReadRoot(), "quan-yuan-meiyu.txt");
+}
 
 const DEFAULT_AGENDA = "全园美语系统教研会：四端联动、校园经营与家园共育";
 
@@ -29,19 +35,19 @@ function readUtf8(file) {
 
 function getSystemPrompt() {
   if (cachedPrompt) return cachedPrompt;
-  cachedPrompt = readUtf8(PROMPT_FILE) || "你是李老师 AI 专家助手。";
+  cachedPrompt = readUtf8(promptFile()) || "你是李老师 AI 专家助手。";
   return cachedPrompt;
 }
 
 function getKnowledgeRaw() {
   if (cachedKb != null) return cachedKb;
-  cachedKb = readUtf8(KB_FILE) || "";
+  cachedKb = readUtf8(kbFile()) || "";
   return cachedKb;
 }
 
 function getFaqRaw() {
   if (cachedFaq != null) return cachedFaq;
-  cachedFaq = readUtf8(FAQ_FILE) || "";
+  cachedFaq = readUtf8(faqFile()) || "";
   return cachedFaq;
 }
 
@@ -292,7 +298,7 @@ function retrieveKnowledge(query, topK = 3) {
 }
 
 function knowledgeStatus() {
-  const promptOk = Boolean(readUtf8(PROMPT_FILE));
+  const promptOk = Boolean(readUtf8(promptFile()));
   const kb = getKnowledgeRaw();
   const faq = getFaqRaw();
   return {
@@ -304,9 +310,9 @@ function knowledgeStatus() {
     sections: getSections().length,
     faqSections: getFaqSections().length,
     agendaDefault: DEFAULT_AGENDA,
-    promptPath: PROMPT_FILE,
-    faqPath: FAQ_FILE,
-    kbPath: KB_FILE
+    promptPath: promptFile(),
+    faqPath: faqFile(),
+    kbPath: kbFile()
   };
 }
 

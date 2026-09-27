@@ -5,14 +5,25 @@ const fs = require("fs");
 const path = require("path");
 const { debugLog } = require("./debugLog.cjs");
 const { questionFingerprint } = require("./duplexPolicy.cjs");
+const { knowledgeReadRoot, knowledgeWriteRoot } = require("./appPaths.cjs");
 
-const ROOT = path.join(__dirname, "..", "knowledge");
-const INBOX_DIR = path.join(ROOT, "inbox");
-const DISTILLED_DIR = path.join(ROOT, "distilled");
-const FAQ_FILE = path.join(ROOT, "faq-meeting.txt");
+function inboxDir() {
+  return path.join(knowledgeWriteRoot(), "inbox");
+}
+function distilledWriteDir() {
+  return path.join(knowledgeWriteRoot(), "distilled");
+}
+function distilledReadDirs() {
+  const read = path.join(knowledgeReadRoot(), "distilled");
+  const write = distilledWriteDir();
+  return read === write ? [read] : [read, write];
+}
+function faqFile() {
+  return path.join(knowledgeReadRoot(), "faq-meeting.txt");
+}
 
 function ensureDirs() {
-  for (const d of [INBOX_DIR, DISTILLED_DIR]) {
+  for (const d of [inboxDir(), distilledWriteDir()]) {
     try {
       fs.mkdirSync(d, { recursive: true });
     } catch (_) {}
@@ -66,7 +77,7 @@ function sinkAdvisorAnswer(entry = {}) {
     arkMode: String(entry.arkMode || "").slice(0, 32),
     ts: new Date().toISOString()
   };
-  const file = path.join(INBOX_DIR, `${level.toLowerCase()}-${dayStamp()}.jsonl`);
+  const file = path.join(inboxDir(), `${level.toLowerCase()}-${dayStamp()}.jsonl`);
   try {
     fs.appendFileSync(file, JSON.stringify(row) + "\n", "utf8");
     debugLog.info("KnowledgeSink", "inbox 已写", {
@@ -87,14 +98,14 @@ function readInboxEntries() {
   const out = [];
   let files = [];
   try {
-    files = fs.readdirSync(INBOX_DIR).filter((f) => /^l[23]-\d{4}-\d{2}-\d{2}\.jsonl$/i.test(f));
+    files = fs.readdirSync(inboxDir()).filter((f) => /^l[23]-\d{4}-\d{2}-\d{2}\.jsonl$/i.test(f));
   } catch (_) {
     return out;
   }
   for (const f of files.sort()) {
     let text = "";
     try {
-      text = fs.readFileSync(path.join(INBOX_DIR, f), "utf8");
+      text = fs.readFileSync(path.join(inboxDir(), f), "utf8");
     } catch (_) {
       continue;
     }
@@ -173,7 +184,7 @@ function promoteToDistilled(entries) {
     const fp = (e.questionFp || questionFingerprint(e.q || "") || "x")
       .slice(0, 40)
       .replace(/[^\w\u4e00-\u9fff\-]+/g, "_");
-    const file = path.join(DISTILLED_DIR, `${e.level || "L2"}-${fp}.md`);
+    const file = path.join(distilledWriteDir(), `${e.level || "L2"}-${fp}.md`);
     try {
       fs.writeFileSync(file, entryToMarkdown(e), "utf8");
       written.push(file);
@@ -187,7 +198,7 @@ function promoteToDistilled(entries) {
 function faqAlreadyHasQuestion(q) {
   let raw = "";
   try {
-    raw = fs.readFileSync(FAQ_FILE, "utf8");
+    raw = fs.readFileSync(faqFile(), "utf8");
   } catch (_) {
     return false;
   }
@@ -215,7 +226,7 @@ function promoteToFaq(entry, opts = {}) {
     `\n## Q: ${q.slice(0, 80)}\n\n` +
     `A: ${tts}\n`;
   try {
-    fs.appendFileSync(FAQ_FILE, block, "utf8");
+    fs.appendFileSync(faqFile(), block, "utf8");
     debugLog.info("KnowledgeSink", "FAQ 已追加", { q: q.slice(0, 40) });
     return { ok: true };
   } catch (err) {
@@ -223,31 +234,33 @@ function promoteToFaq(entry, opts = {}) {
   }
 }
 
-/** 读取 distilled 目录合并文本（供 RAG） */
+/** 读取 distilled 目录合并文本（供 RAG）：安装包内建库 + 本地新沉淀 */
 function getDistilledRaw() {
   ensureDirs();
-  let files = [];
-  try {
-    files = fs
-      .readdirSync(DISTILLED_DIR)
-      .filter((f) => /\.(md|txt)$/i.test(f))
-      .sort();
-  } catch (_) {
-    return "";
-  }
   const parts = [];
-  for (const f of files) {
+  const seen = new Set();
+  for (const dir of distilledReadDirs()) {
+    let files = [];
     try {
-      const t = fs.readFileSync(path.join(DISTILLED_DIR, f), "utf8").trim();
-      if (t.length >= 40) parts.push(t);
-    } catch (_) {}
+      files = fs.readdirSync(dir).filter((f) => /\.(md|txt)$/i.test(f));
+    } catch (_) {
+      continue;
+    }
+    for (const f of files.sort()) {
+      if (seen.has(f)) continue;
+      seen.add(f);
+      try {
+        const t = fs.readFileSync(path.join(dir, f), "utf8").trim();
+        if (t.length >= 40) parts.push(t);
+      } catch (_) {}
+    }
   }
   return parts.join("\n\n");
 }
 
 module.exports = {
-  INBOX_DIR,
-  DISTILLED_DIR,
+  inboxDir,
+  distilledWriteDir,
   sinkAdvisorAnswer,
   readInboxEntries,
   aggregateInbox,

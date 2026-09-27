@@ -15,9 +15,17 @@ const {
   extractFaqSpeakText
 } = require("./knowledge.cjs");
 const { getDistilledRaw } = require("./knowledgeSink.cjs");
+const { knowledgeReadRoot, knowledgeWriteRoot } = require("./appPaths.cjs");
 
-const ROOT = path.join(__dirname, "..", "knowledge");
-const INDEX_FILE = path.join(ROOT, ".rag-index.json");
+function kbRoot() {
+  return knowledgeReadRoot();
+}
+function indexReadFile() {
+  return path.join(knowledgeReadRoot(), ".rag-index.json");
+}
+function indexWriteFile() {
+  return path.join(knowledgeWriteRoot(), ".rag-index.json");
+}
 /** 临时：多模态向量接口（后续可切回 /embeddings） */
 const EMBED_URL =
   (process.env.DOUBAO_EMBED_URL || "").trim() ||
@@ -48,7 +56,7 @@ function useMultimodal() {
 }
 
 function distilledMtimeKey() {
-  const dir = path.join(ROOT, "distilled");
+  const dir = path.join(kbRoot(), "distilled");
   try {
     const files = fs.readdirSync(dir).filter((f) => /\.(md|txt)$/i.test(f));
     let max = 0;
@@ -65,8 +73,8 @@ function distilledMtimeKey() {
 
 function fileMtimeKey() {
   const files = [
-    path.join(ROOT, "faq-meeting.txt"),
-    path.join(ROOT, "quan-yuan-meiyu.txt")
+    path.join(kbRoot(), "faq-meeting.txt"),
+    path.join(kbRoot(), "quan-yuan-meiyu.txt")
   ];
   return (
     files
@@ -357,20 +365,25 @@ async function embedTexts(texts, opts = {}) {
 }
 
 function loadIndexFromDisk(mtimeKey, model) {
-  try {
-    if (!fs.existsSync(INDEX_FILE)) return null;
-    const j = JSON.parse(fs.readFileSync(INDEX_FILE, "utf8"));
-    if (j.mtimeKey !== mtimeKey || j.model !== model || j.endpoint !== EMBED_URL) return null;
-    if (!Array.isArray(j.chunks) || !j.chunks.length) return null;
-    return j;
-  } catch (_) {
-    return null;
+  const files = [indexWriteFile()];
+  if (indexReadFile() !== indexWriteFile()) files.push(indexReadFile());
+  for (const file of files) {
+    try {
+      if (!fs.existsSync(file)) continue;
+      const j = JSON.parse(fs.readFileSync(file, "utf8"));
+      if (j.mtimeKey !== mtimeKey || j.model !== model || j.endpoint !== EMBED_URL) continue;
+      if (!Array.isArray(j.chunks) || !j.chunks.length) continue;
+      return j;
+    } catch (_) {}
   }
+  return null;
 }
 
 function saveIndexToDisk(index) {
   try {
-    fs.writeFileSync(INDEX_FILE, JSON.stringify(index), "utf8");
+    const file = indexWriteFile();
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(index), "utf8");
   } catch (err) {
     debugLog.warn("SemanticRag", "写索引失败", { error: String(err?.message || err) });
   }
@@ -566,7 +579,7 @@ function semanticStatus() {
     multimodal: useMultimodal(),
     embedUnavailable,
     embedFailReason,
-    indexPath: INDEX_FILE
+    indexPath: indexReadFile()
   };
 }
 
@@ -594,7 +607,7 @@ function warmIndexFromDisk() {
   }
   debugLog.info("SemanticRag", "本地无可用索引（请先 npm run rag:index）", {
     model,
-    indexPath: INDEX_FILE
+    indexPath: indexReadFile()
   });
   return { ok: false, source: "none", chunks: 0 };
 }
@@ -614,5 +627,7 @@ module.exports = {
   embedOneText,
   semanticStatus,
   resetEmbedGate,
-  INDEX_FILE
+  get INDEX_FILE() {
+    return indexReadFile();
+  }
 };

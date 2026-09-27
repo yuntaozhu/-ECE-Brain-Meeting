@@ -16,7 +16,8 @@
     "knowledge:session:all": "node scripts/promote-session.cjs --all --faq --summary",
     "knowledge:session:dry": "node scripts/promote-session.cjs --latest --dry",
     "rag:eval": "node scripts/eval-rag.cjs",
-    "pack": "electron-builder --win portable"
+    "pack": "electron-builder --win nsis",
+    "pack:portable": "electron-builder --win portable"
   },
   "devDependencies": {
     "electron": "^33.4.11",
@@ -37,14 +38,32 @@
       "main.cjs",
       "preload.cjs",
       "lib/**/*",
-      "knowledge/**/*",
       "renderer/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "knowledge",
+        "to": "knowledge",
+        "filter": ["**/*", "**/.rag-index.json", "**/.gitkeep"]
+      },
+      {
+        "from": "../.env",
+        "to": ".env"
+      }
+    ],
     "win": {
       "target": [
-        "portable"
+        "nsis"
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "大智会议顾问",
+      "artifactName": "Dazhi-Meeting-Setup-${version}.${ext}"
     }
   }
 }

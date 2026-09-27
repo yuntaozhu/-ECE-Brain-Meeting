@@ -30,8 +30,14 @@ const {
 } = require("./lib/agentMode.cjs");
 const { appendSession, openSessionsDir } = require("./lib/sessionLog.cjs");
 const { clearMeetingCache } = require("./lib/answerCache.cjs");
+const { envFileCandidates } = require("./lib/appPaths.cjs");
 
-require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
+for (const envPath of envFileCandidates()) {
+  if (require("fs").existsSync(envPath)) {
+    require("dotenv").config({ path: envPath });
+    break;
+  }
+}
 
 try {
   if (process.platform === "win32") {

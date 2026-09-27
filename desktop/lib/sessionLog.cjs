@@ -4,12 +4,17 @@
 const fs = require("fs");
 const path = require("path");
 const { debugLog } = require("./debugLog.cjs");
+const { knowledgeWriteRoot } = require("./appPaths.cjs");
 
-const SESSIONS_DIR = path.join(__dirname, "..", "knowledge", "sessions");
-const INBOX_DIR = path.join(__dirname, "..", "knowledge", "inbox");
+function sessionsDir() {
+  return path.join(knowledgeWriteRoot(), "sessions");
+}
+function inboxDir() {
+  return path.join(knowledgeWriteRoot(), "inbox");
+}
 
 function ensureDirs() {
-  for (const d of [SESSIONS_DIR, INBOX_DIR]) {
+  for (const d of [sessionsDir(), inboxDir()]) {
     try { fs.mkdirSync(d, { recursive: true }); } catch (_) {}
   }
 }
@@ -17,13 +22,13 @@ function ensureDirs() {
 function sessionPath(meetingId) {
   ensureDirs();
   const id = String(meetingId || "unknown").replace(/[^\w\-]+/g, "_");
-  return path.join(SESSIONS_DIR, `${id}.jsonl`);
+  return path.join(sessionsDir(), `${id}.jsonl`);
 }
 
 function summaryPath(meetingId) {
   ensureDirs();
   const id = String(meetingId || "unknown").replace(/[^\w\-]+/g, "_");
-  return path.join(SESSIONS_DIR, `${id}-summary.md`);
+  return path.join(sessionsDir(), `${id}-summary.md`);
 }
 
 function appendSession(meetingId, entry) {
@@ -82,7 +87,7 @@ function writeSummary(meetingId, markdown) {
 function writeFaqCandidate(meetingId, text) {
   ensureDirs();
   const id = String(meetingId || "unknown").replace(/[^\w\-]+/g, "_");
-  const file = path.join(INBOX_DIR, `faq-candidates-${id}.txt`);
+  const file = path.join(inboxDir(), `faq-candidates-${id}.txt`);
   try {
     fs.appendFileSync(file, String(text || "") + "\n\n---\n\n", "utf8");
     return { ok: true, file };
@@ -93,10 +98,18 @@ function writeFaqCandidate(meetingId, text) {
 
 function openSessionsDir() {
   ensureDirs();
-  return SESSIONS_DIR;
+  return sessionsDir();
 }
 
 module.exports = {
-  SESSIONS_DIR, INBOX_DIR, appendSession, readSession, formatSessionForPrompt,
-  writeSummary, writeFaqCandidate, openSessionsDir, sessionPath, summaryPath
+  sessionsDir,
+  inboxDir,
+  appendSession,
+  readSession,
+  formatSessionForPrompt,
+  writeSummary,
+  writeFaqCandidate,
+  openSessionsDir,
+  sessionPath,
+  summaryPath
 };
