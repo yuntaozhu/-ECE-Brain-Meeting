@@ -11,13 +11,20 @@
     "knowledge:promote": "node scripts/promote-inbox.cjs",
     "knowledge:promote:faq": "node scripts/promote-inbox.cjs --faq",
     "knowledge:promote:dry": "node scripts/promote-inbox.cjs --dry",
+    "knowledge:wiki:ingest": "node scripts/wiki-ingest.cjs",
+    "knowledge:wiki:ingest:dry": "node scripts/wiki-ingest.cjs --dry",
+    "knowledge:wiki:lint": "node scripts/wiki-lint.cjs",
+    "knowledge:wiki:bootstrap": "node scripts/bootstrap-wiki.cjs",
     "knowledge:session": "node scripts/promote-session.cjs --latest",
     "knowledge:session:faq": "node scripts/promote-session.cjs --latest --faq --summary",
     "knowledge:session:all": "node scripts/promote-session.cjs --all --faq --summary",
     "knowledge:session:dry": "node scripts/promote-session.cjs --latest --dry",
     "rag:eval": "node scripts/eval-rag.cjs",
-    "pack": "electron-builder --win nsis",
-    "pack:portable": "electron-builder --win portable"
+    "dialog:eval": "node scripts/eval-dialog.cjs",
+    "dialog:eval:long": "node scripts/eval-p0-long.cjs",
+    "smoke": "node scripts/smoke-regression.cjs",
+    "pack": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --win nsis --config.win.signAndEditExecutable=false",
+    "pack:portable": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --win portable --config.win.signAndEditExecutable=false"
   },
   "devDependencies": {
     "electron": "^33.4.11",
@@ -36,6 +43,7 @@
     },
     "files": [
       "main.cjs",
+      "main/**/*",
       "preload.cjs",
       "lib/**/*",
       "renderer/**/*",
@@ -45,7 +53,11 @@
       {
         "from": "knowledge",
         "to": "knowledge",
-        "filter": ["**/*", "**/.rag-index.json", "**/.gitkeep"]
+        "filter": ["**/*", "**/.*", "**/.rag-index.json", "**/.gitkeep"]
+      },
+      {
+        "from": "knowledge/.rag-index.json",
+        "to": "knowledge/rag-index.json"
       },
       {
         "from": "../.env",
@@ -53,6 +65,7 @@
       }
     ],
     "win": {
+      "signAndEditExecutable": false,
       "target": [
         "nsis"
       ]

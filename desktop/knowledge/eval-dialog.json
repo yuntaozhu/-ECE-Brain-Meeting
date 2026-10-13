@@ -1,0 +1,52 @@
+[
+  {
+    "id": "meeting-start",
+    "group": "lifecycle",
+    "input": "大智，会议开始。",
+    "expect": {
+      "reasonAny": ["MEETING_START"],
+      "answerIncludesAny": ["大智"]
+    }
+  },
+  {
+    "id": "theme",
+    "group": "closed",
+    "input": "大智，今天会议主题是什么？",
+    "expect": {
+      "reasonAny": ["WAKE_ANSWER"],
+      "answerIncludesAny": ["全园美语", "四端", "家园"],
+      "answerForbids": ["正在旁听", "需要答疑请直接说"]
+    }
+  },
+  {
+    "id": "price",
+    "group": "closed",
+    "input": "大智，三万九买的是什么？",
+    "expect": {
+      "reasonAny": ["WAKE_ANSWER"],
+      "answerIncludesAny": ["三万九", "学期", "一套"],
+      "answerForbids": ["正在旁听", "需要答疑请直接说"]
+    }
+  },
+  {
+    "id": "price-glue",
+    "group": "closed",
+    "input": "活动以及账号额度可扩到在籍约 1.3 倍等。大智 30,900 的是什么？3 万 9 买的是什么？大智 3 万 9 买的是什么？",
+    "setup": {
+      "lastHostSpeakText": "含：全园 ABCmouse、ABC说、AI测评、每班每日菲教、Teacher说、Family说、成果展活动，以及账号额度可扩到在籍约一点三倍等。"
+    },
+    "expect": {
+      "answerIncludesAny": ["三万九", "学期", "一套", "计费"],
+      "answerForbids": ["正在旁听", "需要答疑请直接说", "大智你好"]
+    }
+  },
+  {
+    "id": "stop",
+    "group": "lifecycle",
+    "input": "谢谢大智。",
+    "expect": {
+      "reasonAny": ["STOP"],
+      "modeAny": ["IDLE_LISTEN"]
+    }
+  }
+]

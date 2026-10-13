@@ -1,10 +1,12 @@
 /**
- * 将 inbox 中的 L2/L3 候选升格到 distilled / FAQ
+ * 将 inbox 中的 L2/L3 候选升格到 Wiki「常见问法」/ FAQ
+ *（兼容旧名：仍写 distilled 仅当 --legacy-distilled）
  *
  * 用法：
- *   node scripts/promote-inbox.cjs              # 全部进 distilled（同 fp 去重）
- *   node scripts/promote-inbox.cjs --faq        # 额外：命中≥3 且短答 → FAQ
+ *   node scripts/promote-inbox.cjs              # inbox → wiki 常见问法
+ *   node scripts/promote-inbox.cjs --faq        # 额外：命中≥3 → FAQ（口播取自词条）
  *   node scripts/promote-inbox.cjs --faq --min=2
+ *   node scripts/promote-inbox.cjs --legacy-distilled  # 未匹配也写 distilled/
  *   node scripts/promote-inbox.cjs --dry
  */
 const path = require("path");
@@ -13,13 +15,14 @@ const {
   promoteToDistilled,
   promoteToFaq,
   ensureDirs
-} = require("../lib/knowledgeSink.cjs");
+} = require("../lib/knowledge");
 
 function parseArgs(argv) {
-  const opts = { faq: false, dry: false, min: 3 };
+  const opts = { faq: false, dry: false, min: 3, legacy: false };
   for (const a of argv) {
     if (a === "--faq") opts.faq = true;
     else if (a === "--dry") opts.dry = true;
+    else if (a === "--legacy-distilled") opts.legacy = true;
     else if (a.startsWith("--min=")) opts.min = Number(a.slice(6)) || 3;
   }
   return opts;
@@ -43,31 +46,42 @@ function main() {
         `- [${e.level}] x${e._count} ${String(e.q).slice(0, 40)} | tts=${String(e.tts).slice(0, 40)}`
       );
     }
+    const d = promoteToDistilled(entries, { dry: true, legacyDistilled: opts.legacy });
+    console.log(
+      `[promote] dry wiki: appendable 见匹配；unmatched=${d.wikiUnmatched}`
+    );
     return;
   }
 
-  const d = promoteToDistilled(entries);
-  console.log(`[promote] distilled 写入 ${d.count} 个文件 → knowledge/distilled/`);
+  const d = promoteToDistilled(entries, { legacyDistilled: opts.legacy });
+  console.log(
+    `[promote] wiki 常见问法 +${d.wikiAppended} · 未匹配 ${d.wikiUnmatched}` +
+      (opts.legacy ? ` · distilled ${d.count} → knowledge/distilled/` : "")
+  );
 
   if (opts.faq) {
     let n = 0;
     for (const e of entries) {
       if ((e._count || 1) < opts.min) continue;
-      if (String(e.tts || "").length > 100) continue;
+      if (!opts.legacy && String(e.tts || "").length > 120) {
+        // 有 wiki 口播时 promoteToFaq 会改用词条，仍可升格
+      }
       const r = promoteToFaq(e);
       if (r.ok) {
         n += 1;
-        console.log(`[promote] FAQ + ${String(e.q).slice(0, 40)}`);
+        console.log(
+          `[promote] FAQ + ${String(e.q).slice(0, 40)}${r.fromWiki ? ` ←wiki:${r.slug}` : ""}`
+        );
       } else {
         console.log(`[promote] FAQ skip: ${r.reason || r.error} | ${String(e.q).slice(0, 30)}`);
       }
     }
     console.log(`[promote] FAQ 新增 ${n} 条（min=${opts.min}）`);
-    console.log("[promote] 建议接着跑: npm run rag:index");
   } else {
-    console.log("[promote] 未加 --faq；仅 distilled。升格模板请加 --faq");
-    console.log("[promote] 建议接着跑: npm run rag:index");
+    console.log("[promote] 未加 --faq；仅 wiki 常见问法。模板秒答请加 --faq");
   }
+  console.log("[promote] 建议: npm run knowledge:wiki:lint && npm run rag:index");
+  void path;
 }
 
 main();

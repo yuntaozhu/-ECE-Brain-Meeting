@@ -9,7 +9,7 @@ const rootEnv = path.join(__dirname, "..", "..", ".env");
 const deskEnv = path.join(__dirname, "..", ".env");
 require("dotenv").config({ path: fs.existsSync(rootEnv) ? rootEnv : deskEnv });
 
-const { retrieveSemantic, warmIndexFromDisk } = require("../lib/semanticRag.cjs");
+const { retrieveSemantic, warmIndexFromDisk } = require("../lib/knowledge");
 
 async function main() {
   const file = path.join(__dirname, "..", "knowledge", "eval-questions.json");

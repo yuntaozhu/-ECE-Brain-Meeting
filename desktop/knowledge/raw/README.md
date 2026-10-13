@@ -1,0 +1,1 @@
+# Raw sources (immutable)\n\n| 文件 | 说明 |\n|------|------|\n| ../quan-yuan-meiyu.txt | 全园美语详版资料 |\n| ../全园美语资料.txt | 资料副本 |\n| ../sessions/*.jsonl | 会场原文 |\n| ../inbox/*.jsonl | L2/L3 答后候选 |\n\n原始材料只追加，不在此目录改口径。正式口径以 wiki/concepts/ 为准。\n

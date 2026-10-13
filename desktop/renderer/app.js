@@ -46,8 +46,8 @@ let patrolInFlight = false;
 /** @type {string|null} 巡检忙时排队的下一触发原因 */
 let pendingPatrolReason = null;
 let thinkingUi = false;
-let agentModeUi = "HH";
-let agentModeLabel = "人—人旁听";
+let interactionModeUi = "HH";
+let interactionModeLabel = "人—人旁听";
 /** P2 会议生命周期 */
 let meetingLifeUi = "OFF";
 let meetingLifeLabel = "未开会";
@@ -70,6 +70,8 @@ function normalizeForMatchLocal(s) {
   let t = String(s || "");
   t = t.replace(/美蚁/g, "美语");
   t = t.replace(/梅雨/g, "美语");
+  t = t.replace(/评测/g, "测评");
+  t = t.replace(/全美语系统/g, "全园美语系统");
   t = t.replace(/全员美语/g, "全园美语");
   t = t.replace(/全员美育/g, "全园美语");
   t = t.replace(/签约美语/g, "全园美语");
@@ -93,7 +95,7 @@ function normalizeForMatchLocal(s) {
   return t;
 }
 
-/** P1：播报中可放行的 barge-in 口令（与 agentMode.looksLikeBargeInCommand 对齐） */
+/** P1：播报中可放行的 barge-in 口令（与 meetingSession.looksLikeBargeInCommand 对齐） */
 function looksLikeBargeInLocal(text) {
   const t = normalizeForMatchLocal(String(text || "").trim());
   if (!t) return false;
@@ -107,11 +109,44 @@ function looksLikeBargeInLocal(text) {
   );
 }
 
+/** 上一答在让选题时，短句命中候选项 → 立刻巡检 */
+function looksLikeOfferedChoicePick(text) {
+  const bare = normalizeForMatchLocal(String(text || "").trim()).replace(/[，,。．.!！？?\s]/g, "");
+  if (!bare || bare.length < 2 || bare.length > 14) return false;
+  if (/(大智|谢谢|会议开始|会议结束|听我说|我说完了)/.test(bare)) return false;
+  const host = recentHostUtterances[0] || "";
+  if (!host || !/想先听|先听哪|听哪一块|哪一块|先说哪|选哪/.test(host)) return false;
+  let chunk = "";
+  const colon = host.match(/[：:]([^。！？?\n]{4,80})/);
+  if (colon) chunk = colon[1];
+  else {
+    const idx = host.search(/想先听|先听哪|听哪一块|哪一块|先说哪|选哪/);
+    if (idx > 4) chunk = host.slice(Math.max(0, idx - 48), idx);
+  }
+  chunk = chunk.replace(/与/g, "、");
+  const parts = chunk
+    .split(/[、，,/／]/)
+    .map((s) => String(s || "").replace(/[的呢啊哦呀\s]/g, "").trim())
+    .filter((s) => s.length >= 2 && s.length <= 12);
+  return parts.some((c) => bare === c || bare.includes(c) || c.includes(bare));
+}
+
 /** v2：默认旁听；点名大智/口令才立刻巡检；残句不巡检 */
 function shouldImmediatePatrol(text) {
   const last = normalizeForMatchLocal(String(text || "").trim());
   if (!last || last.length < 2) return false;
-  if (/谢谢大智|谢谢李老师|停止大智|会议开始|会议结束|请继续|听我说|我说完了/.test(last)) return true;
+  if (
+    /谢谢大智|谢谢李老师|停止大智|大智.{0,8}(会议开始|会议结束)|请继续|听我说|我说完了/.test(last)
+  ) {
+    return true;
+  }
+  // 咨询中：上一答问「想先听哪一块」，用户只回选项名 → 立刻讲解
+  if (
+    (interactionModeUi === "HA_ASK" || interactionModeUi === "HA_TALK" || interactionModeUi === "HA_BIZ") &&
+    looksLikeOfferedChoicePick(text)
+  ) {
+    return true;
+  }
   if (/^(喂+|好+|嗯+|啊+|哦+|行+|对+|是+|没+|不是)[。.!！？]?$/i.test(last)) return false;
   // 残句「一是」「美语是。」不立即巡检，避免拖 LLM
   const bare = last.replace(/[，,。．.!！？?\s]/g, "");
@@ -123,7 +158,7 @@ function shouldImmediatePatrol(text) {
     return false;
   }
   const echo = looksLikeHostEcho(last);
-  if (echo.echo) return false;
+  if (echo.echo && !looksLikeOfferedChoicePick(text)) return false;
   if (
     /大智|大致|李老师|总结|暂停记录|继续记录|要总结|听我说完|我说完了|呼叫大智|大智咨询|大智探讨/.test(
       last
@@ -131,19 +166,25 @@ function shouldImmediatePatrol(text) {
   ) {
     return true;
   }
-  if (
-    agentModeUi === "HA_ASK" || agentModeUi === "HA_TALK" || agentModeUi === "HA_BIZ"
-  ) {
+  // 咨询粘滞内的问句：即使 Host 还在播「我在请讲」，也立刻巡检（ASR 常把「大智，问题」拆成两句）
+  if (interactionModeUi === "HA_ASK" || interactionModeUi === "HA_TALK" || interactionModeUi === "HA_BIZ") {
     const isQ =
       /[？?]/.test(last) ||
-      /(什么意思|是什么|是谁|怎么[样办]|为什么|为何|能不能|可不可以|是否|真的吗|真的能|行不行|是不是|有没有)/.test(
+      /(什么意思|是什么|是谁|怎么[样办]|为什么|为何|能不能|可不可以|是否|真的吗|真的能|行不行|是不是|有没有|值得吗|划算吗)/.test(
         last
       ) ||
       /(吗|呢)\s*[。.!！]?$/.test(last);
     if (isQ) return true;
   }
+  if (
+    (duplexPhase === PHASE.SPEAKING || duplexPhase === PHASE.COOLDOWN) &&
+    !looksLikeBargeInLocal(text) &&
+    !/大智|李老师/.test(last)
+  ) {
+    return false;
+  }
   // P0 静默：无名提问不立刻巡检（不插话）
-  if (agentModeUi === "IDLE_LISTEN" || agentModeUi === "HH" || agentModeUi === "PAUSED" || !agentModeUi) {
+  if (interactionModeUi === "IDLE_LISTEN" || interactionModeUi === "HH" || interactionModeUi === "PAUSED" || !interactionModeUi) {
     return false;
   }
   return false;
@@ -215,9 +256,9 @@ function extendHostMute(ms, why) {
 
 function estimateHoldMsLocal(text, chunks) {
   const c = Number(chunks) || 0;
-  if (c > 0) return Math.min(8000, Math.max(1200, c * 90 + 800));
+  if (c > 0) return Math.min(20000, Math.max(1500, Math.round(c * 400 + 600)));
   const len = String(text || "").length;
-  return Math.min(6000, Math.max(2200, Math.round(len * 70) + 1200));
+  return Math.min(12000, Math.max(2200, Math.round(len * 120) + 800));
 }
 
 function normTextLocal(s) {
@@ -342,7 +383,7 @@ function renderDuplexStats() {
   const cdLeft = Math.max(0, cooldownUntil - Date.now());
   const q = pendingPatrolReason ? " · 排队 1 问" : "";
   const th = thinkingUi ? " · 思考中" : patrolInFlight ? " · 巡检中" : "";
-  el.textContent = `会阶 ${meetingLifeLabel || meetingLifeUi} · 大智: ${agentModeLabel || agentModeUi} · 半双工 ${duplexPhase} · hold ${Math.ceil(
+  el.textContent = `会阶 ${meetingLifeLabel || meetingLifeUi} · 大智: ${interactionModeLabel || interactionModeUi} · 半双工 ${duplexPhase} · hold ${Math.ceil(
     holdLeft / 1000
   )}s · cool ${Math.ceil(cdLeft / 1000)}s · 回灌丢弃 ${echoDiscardCount} · 采纳 ${asrAcceptedCount} · 抑制播报 ${suppressSpeakCount}${th}${q}`;
   el.className =
@@ -352,25 +393,25 @@ function renderDuplexStats() {
     meetingLifeUi === "OPENING" ||
     meetingLifeUi === "CLOSING" ||
     meetingLifeUi === "HOLD" ||
-    agentModeUi === "HA_ASK" ||
-    agentModeUi === "HA_TALK" ||
-    agentModeUi === "HA_BIZ"
+    interactionModeUi === "HA_ASK" ||
+    interactionModeUi === "HA_TALK" ||
+    interactionModeUi === "HA_BIZ"
       ? "warn"
       : duplexPhase === "IDLE"
         ? "ok"
         : "warn");
   const chip = $("chipAgentMode");
   if (chip) {
-    chip.textContent = agentModeLabel || agentModeUi || "模式";
+    chip.textContent = interactionModeLabel || interactionModeUi || "模式";
     chip.classList.toggle("on", true);
     chip.classList.toggle(
       "warn",
-      agentModeUi === "HA_ASK" ||
-        agentModeUi === "HA_TALK" ||
-        agentModeUi === "HA_BIZ" ||
-        agentModeUi === "HH_SUM"
+      interactionModeUi === "HA_ASK" ||
+        interactionModeUi === "HA_TALK" ||
+        interactionModeUi === "HA_BIZ" ||
+        interactionModeUi === "HH_SUM"
     );
-    chip.classList.toggle("good", agentModeUi === "HH" || agentModeUi === "IDLE_LISTEN");
+    chip.classList.toggle("good", interactionModeUi === "HH" || interactionModeUi === "IDLE_LISTEN");
   }
   const lifeChip = $("chipMeetingLife");
   if (lifeChip) {
@@ -507,19 +548,34 @@ function isVirtualLabel(label) {
   return VIRTUAL_RE.test(label || "");
 }
 
+function isBannedCableLabel(label) {
+  const s = String(label || "");
+  return /default/i.test(s) || /16\s*ch|16ch|16通道/i.test(s);
+}
+
 function looksPhysical(label) {
   if (isVirtualLabel(label)) return false;
   return PHYSICAL_WARN_RE.test(label || "") || /default\s*-/i.test(label || "");
 }
 
 function preferVirtual(select, list) {
-  const virtual = list.filter((d) => isVirtualLabel(d.label));
+  const virtual = list.filter((d) => isVirtualLabel(d.label) && !isBannedCableLabel(d.label));
   if (!virtual.length) return;
-  const a = virtual.find((d) => /cable.?a|a\)/i.test(d.label));
-  const b = virtual.find((d) => /cable.?b|b\)/i.test(d.label));
-  if (select.id === "inputDevice" && a) select.value = a.deviceId;
-  else if (select.id === "outputDevice" && b) select.value = b.deviceId;
-  else select.value = virtual[0].deviceId;
+  if (select.id === "inputDevice") {
+    const cableOut = virtual.find((d) => /cable\s*output/i.test(d.label));
+    const a = virtual.find((d) => /cable.?a|a\)/i.test(d.label));
+    select.value = (cableOut || a || virtual[0]).deviceId;
+    return;
+  }
+  if (select.id === "outputDevice") {
+    const cableIn = virtual.find(
+      (d) => /cable\s*input/i.test(d.label) && !/output/i.test(d.label.replace(/input/gi, ""))
+    );
+    const b = virtual.find((d) => /cable.?b|b\)/i.test(d.label));
+    select.value = (cableIn || b || virtual[0]).deviceId;
+    return;
+  }
+  select.value = virtual[0].deviceId;
 }
 
 function fill(select, list, empty) {
@@ -661,14 +717,23 @@ function applyDeviceFilter() {
   );
   try {
     const saved = JSON.parse(localStorage.getItem("ece_bridge_devices") || "{}");
-    if (saved.input && [...$("inputDevice").options].some((o) => o.value === saved.input)) {
-      $("inputDevice").value = saved.input;
-    }
-    if (saved.output && [...$("outputDevice").options].some((o) => o.value === saved.output)) {
-      $("outputDevice").value = saved.output;
-    }
+    const inOk =
+      saved.input &&
+      [...$("inputDevice").options].some((o) => o.value === saved.input) &&
+      !isBannedCableLabel(selectedLabelFromValue("inputDevice", saved.input));
+    const outOk =
+      saved.output &&
+      [...$("outputDevice").options].some((o) => o.value === saved.output) &&
+      !isBannedCableLabel(selectedLabelFromValue("outputDevice", saved.output));
+    if (inOk) $("inputDevice").value = saved.input;
+    if (outOk) $("outputDevice").value = saved.output;
   } catch (_) {}
   updateRouteHint();
+}
+
+function selectedLabelFromValue(selectId, value) {
+  const opt = [...$(selectId).options].find((o) => o.value === value);
+  return (opt?.textContent || "").replace(/\s*\[.*\]\s*$/, "");
 }
 
 function assertVirtualOrAllowed(kind, label) {
@@ -676,6 +741,11 @@ function assertVirtualOrAllowed(kind, label) {
   if (!isVirtualLabel(label)) {
     throw new Error(
       `${kind}必须是虚拟设备（当前：${label}）。请安装 VB-Cable/SysVAD，或勾选「允许物理设备」仅作调试。`
+    );
+  }
+  if (isBannedCableLabel(label)) {
+    throw new Error(
+      `${kind}不能选 Default 或 CABLE In 16ch（当前：${label}）。请选「CABLE Output」采集、「CABLE Input」播放。`
     );
   }
 }
@@ -1069,6 +1139,8 @@ function playPcm16Base64(b64, sampleRate) {
   if (nextPlay < now + 0.02) nextPlay = now + 0.05;
   src.start(nextPlay);
   nextPlay += audioBuf.duration;
+  const remainMs = Math.ceil((nextPlay - playCtx.currentTime) * 1000) + 400;
+  extendHostMute(remainMs, "tts-queue");
 
   // 本机监听：复制同一缓冲到默认音箱，方便确认 TTS 有声
   if ($("localMonitor")?.checked) {
@@ -1171,7 +1243,15 @@ function handleAsrEvent(msg) {
         renderTranscript();
         return;
       }
-      if (last.text.length < 10 && text.length < 24 && !/[。！？]$/.test(last.text) && !bargeIn) {
+      const within2s = lastAsrFinalAt && Date.now() - lastAsrFinalAt < 2000;
+      if (
+        within2s &&
+        !bargeIn &&
+        !looksLikeBargeInLocal(text) &&
+        text.length < 48 &&
+        last.text.length < 80 &&
+        !/[？?]$/.test(last.text)
+      ) {
         last.text = last.text.replace(/[。．]$/, "") + text;
         asrFinalCount += 1;
         asrAcceptedCount += 1;
@@ -1179,7 +1259,7 @@ function handleAsrEvent(msg) {
         renderTranscript();
         lastSpeechRmsAt = Date.now();
         setChip("chipMeetingAudio", true, "good");
-        slog("INFO", "ASR", "合并短句", { text: last.text, total: asrFinalCount });
+        slog("INFO", "ASR", "合并短句", { text: last.text, total: asrFinalCount, within2s });
         if (shouldImmediatePatrol(last.text) || looksLikeBargeInLocal(last.text)) {
           void runPatrol(looksLikeBargeInLocal(last.text) ? "barge-in" : "wake");
         } else if (agentHoldListening) {
@@ -1208,10 +1288,10 @@ function handleAsrEvent(msg) {
       hold: agentHoldListening
     });
     if (bargeIn || looksLikeBargeInLocal(text)) {
-      slog("INFO", "Kaiban", "检测到打断/续说口令，立即巡检", { text: text.slice(0, 80) });
+      slog("INFO", "Strategy", "检测到打断/续说口令，立即巡检", { text: text.slice(0, 80) });
       void runPatrol("barge-in");
     } else if (shouldImmediatePatrol(text)) {
-      slog("INFO", "Kaiban", "检测到大智口令/追问，立即巡检", { text: text.slice(0, 80) });
+      slog("INFO", "Strategy", "检测到大智口令/追问，立即巡检", { text: text.slice(0, 80) });
       void runPatrol("wake");
     } else if (agentHoldListening) {
       void runPatrol("hold");
@@ -1302,10 +1382,10 @@ async function runPatrol(reason) {
   if (patrolInFlight) {
     if (reason === "wake" || reason === "manual" || isBarge) {
       pendingPatrolReason = reason;
-      slog("INFO", "Kaiban", "巡检忙，问答已排队", { reason, queue: 1 });
+      slog("INFO", "Strategy", "巡检忙，问答已排队", { reason, queue: 1 });
       renderDuplexStats();
     } else {
-      slog("DEBUG", "Kaiban", "巡检进行中，single-flight 跳过", { reason });
+      slog("DEBUG", "Strategy", "巡检进行中，single-flight 跳过", { reason });
     }
     return;
   }
@@ -1314,7 +1394,7 @@ async function runPatrol(reason) {
     !isBarge &&
     (Date.now() < hostSpeakingUntil || duplexPhase === PHASE.SPEAKING)
   ) {
-    slog("DEBUG", "Kaiban", "Host 播报/回灌期，跳过巡检", { reason, phase: duplexPhase });
+    slog("DEBUG", "Strategy", "Host 播报/回灌期，跳过巡检", { reason, phase: duplexPhase });
     if (reason === "wake" || reason === "manual") {
       pendingPatrolReason = reason;
       const delay = Math.max(800, hostSpeakingUntil - Date.now() + 400);
@@ -1332,7 +1412,7 @@ async function runPatrol(reason) {
   const now = Date.now();
   const minGap = reason === "wake" || reason === "manual" || isBarge ? 800 : 5000;
   if (now - lastPatrolAt < minGap) {
-    slog("DEBUG", "Kaiban", "巡检节流跳过", { reason, msSince: now - lastPatrolAt, minGap });
+    slog("DEBUG", "Strategy", "巡检节流跳过", { reason, msSince: now - lastPatrolAt, minGap });
     if (reason === "wake" || isBarge) {
       pendingPatrolReason = reason;
       setTimeout(() => {
@@ -1353,7 +1433,7 @@ async function runPatrol(reason) {
     !isBarge &&
     now - lastWakeSpeakAt < 16000
   ) {
-    slog("DEBUG", "Kaiban", "唤起冷却中，跳过自动巡检", {
+    slog("DEBUG", "Strategy", "唤起冷却中，跳过自动巡检", {
       reason,
       sinceMs: now - lastWakeSpeakAt
     });
@@ -1363,7 +1443,7 @@ async function runPatrol(reason) {
   patrolInFlight = true;
   lastPatrolAt = now;
   lastLineCountAtPatrol = transcriptLines.length;
-  setStatus(reason === "wake" ? "对话思考中…" : "Kaiban 巡检中…", "warn");
+  setStatus(reason === "wake" ? "对话思考中…" : "策略巡检中…", "warn");
   setChip("chipPatrol", true);
   if (reason === "wake") setThinkingUi(true, "思考中");
   renderDuplexStats();
@@ -1379,7 +1459,7 @@ async function runPatrol(reason) {
   const textLog = forEval.map((l) => `${l.speaker}: ${l.text}`).join("\n");
   const quietMs = lastSpeechRmsAt ? now - lastSpeechRmsAt : null;
 
-  slog("INFO", "Kaiban", "发起巡检", {
+  slog("INFO", "Strategy", "发起巡检", {
     reason,
     phase: duplexPhase,
     lines: forEval.length,
@@ -1392,7 +1472,8 @@ async function runPatrol(reason) {
   });
 
   try {
-    const res = await window.bridge.kaibanEvaluate({
+    const evaluate = window.bridge.strategyEvaluate;
+    const res = await evaluate({
       transcript: textLog || "（会场暂无转写，检测冷场）",
       agenda: $("agenda").value,
       quietMs,
@@ -1400,8 +1481,8 @@ async function runPatrol(reason) {
     });
     setChip("chipPatrol", false);
     if (res.agent) {
-      agentModeUi = res.agent.mode || agentModeUi;
-      agentModeLabel = res.agent.label || agentModeLabel;
+      interactionModeUi = res.agent.mode || interactionModeUi;
+      interactionModeLabel = res.agent.label || interactionModeLabel;
       if (res.agent.lifecycle) {
         meetingLifeUi = res.agent.lifecycle;
         meetingLifeLabel = res.agent.lifeLabel || meetingLifeUi;
@@ -1417,7 +1498,7 @@ async function runPatrol(reason) {
     }
     if (!res.ok) {
       setStatus("巡检失败", "bad");
-      slog("ERROR", "Kaiban", res.error || "evaluate failed");
+      slog("ERROR", "Strategy", res.error || "evaluate failed");
       return;
     }
     const r = res.result;
@@ -1429,14 +1510,14 @@ async function runPatrol(reason) {
         "bad"
       );
       setChip("chipArk", true, "bad");
-      slog("ERROR", "Kaiban", "Ark 欠费，启发式控场", { error: r.arkError, mode: r.arkMode });
+      slog("ERROR", "Strategy", "Ark 欠费，启发式控场", { error: r.arkError, mode: r.arkMode });
     } else if (r.arkMode === "heuristic") {
-      slog("WARN", "Kaiban", "本轮走启发式（非 LLM）", { mode: r.arkMode });
+      slog("WARN", "Strategy", "本轮走启发式（非 LLM）", { mode: r.arkMode });
     } else {
       setChip("chipArk", true, "good");
     }
     if (r.wake?.echoSkipped || r.reason === "ECHO_SKIP" || r.reason === "DEDUP_SKIP") {
-      slog("INFO", "Kaiban", "策略跳过", { reason: r.reason, wake: r.wake });
+      slog("INFO", "Strategy", "策略跳过", { reason: r.reason, wake: r.wake });
     }
     // P1：打断占麦 / 续说状态
     if (r.holdToEnd || r.reason === "INTERRUPT" || r.reason === "HOLDING") {
@@ -1477,7 +1558,7 @@ async function runPatrol(reason) {
       }
     }
     if (r.silenceGate && !r.silenceGate.ok) {
-      slog("INFO", "Kaiban", "冷场门控", r.silenceGate);
+      slog("INFO", "Strategy", "冷场门控", r.silenceGate);
     }
 
     if (r.shouldIntervene) {
@@ -1494,7 +1575,7 @@ async function runPatrol(reason) {
       if (speakSuppressed) {
         suppressSpeakCount += 1;
         setStatus("已抑制播报（半双工/回灌防护）", "warn");
-        slog("WARN", "Kaiban", "主进程已抑制播报", {
+        slog("WARN", "Strategy", "主进程已抑制播报", {
           reason: r.reason,
           error: res.speakResult?.error
         });
@@ -1505,7 +1586,7 @@ async function runPatrol(reason) {
         const echoOfPending = looksLikeHostEcho(showText);
         if (echoOfPending.echo && Date.now() - lastWakeSpeakAt < 60000) {
           suppressSpeakCount += 1;
-          slog("WARN", "Kaiban", "跳过与近期 Host 话术重复的播报", {
+          slog("WARN", "Strategy", "跳过与近期 Host 话术重复的播报", {
             reason: r.reason,
             echo: echoOfPending,
             text: String(showText || "").slice(0, 60)
@@ -1554,7 +1635,7 @@ async function runPatrol(reason) {
           slog("INFO", "Host", "发言时自动勾选本机同时听");
         }
       }
-      slog("INFO", "Kaiban", "需要发言", {
+      slog("INFO", "Strategy", "需要发言", {
         reason: r.reason,
         text: showText,
         speakResult: res.speakResult,
@@ -1568,7 +1649,7 @@ async function runPatrol(reason) {
         "巡检完成 · 无需干预" + (r.arkMode === "heuristic" ? "（启发式）" : ""),
         "ok"
       );
-      slog("INFO", "Kaiban", "无需干预", {
+      slog("INFO", "Strategy", "无需干预", {
         trigger: reason,
         arkMode: r.arkMode,
         reason: r.reason
@@ -1595,9 +1676,12 @@ function startCaptureToListen() {
   mute.gain.value = 0;
   proc.onaudioprocess = (ev) => {
     if (!listening) return;
-    // Host TTS / 本机回灌窗口：不向 Duplex 推 PCM
-    if (Date.now() < hostSpeakingUntil) return;
-    const f32 = ev.inputBuffer.getChannelData(0);
+    const muteReal =
+      !agentHoldListening &&
+      (Date.now() < hostSpeakingUntil || duplexPhase === PHASE.SPEAKING || duplexPhase === PHASE.COOLDOWN);
+    const f32 = muteReal
+      ? new Float32Array(ev.inputBuffer.length)
+      : ev.inputBuffer.getChannelData(0);
     const pcm = downsampleTo16k(f32, inCtx.sampleRate);
     if (!pcm.length) return;
     const bytes = new Uint8Array(pcm.buffer);
@@ -1614,12 +1698,56 @@ function startCaptureToListen() {
   captureNode = proc;
 }
 
+/** 二阶低通，去掉 8 kHz 以上后再抽取，避免 zh/z 混叠 */
+function lowpassBiquad(f32, sampleRate, cutoffHz) {
+  const w0 = (2 * Math.PI * cutoffHz) / sampleRate;
+  const cos = Math.cos(w0);
+  const sin = Math.sin(w0);
+  const alpha = sin / (2 * 0.707);
+  const b0 = (1 - cos) / 2;
+  const b1 = 1 - cos;
+  const b2 = (1 - cos) / 2;
+  const a0 = 1 + alpha;
+  const a1 = -2 * cos;
+  const a2 = 1 - alpha;
+  const nb0 = b0 / a0;
+  const nb1 = b1 / a0;
+  const nb2 = b2 / a0;
+  const na1 = a1 / a0;
+  const na2 = a2 / a0;
+  const out = new Float32Array(f32.length);
+  let x1 = 0;
+  let x2 = 0;
+  let y1 = 0;
+  let y2 = 0;
+  for (let i = 0; i < f32.length; i++) {
+    const x0 = f32[i];
+    const y0 = nb0 * x0 + nb1 * x1 + nb2 * x2 - na1 * y1 - na2 * y2;
+    out[i] = y0;
+    x2 = x1;
+    x1 = x0;
+    y2 = y1;
+    y1 = y0;
+  }
+  return out;
+}
+
 function downsampleTo16k(f32, rateIn) {
   if (rateIn === 16000) return floatTo16(f32);
+  let filtered = f32;
+  for (let stage = 0; stage < 3; stage++) filtered = lowpassBiquad(filtered, rateIn, 6800);
   const ratio = rateIn / 16000;
-  const outLen = Math.floor(f32.length / ratio);
+  const outLen = Math.floor(filtered.length / ratio);
   const out = new Float32Array(outLen);
-  for (let i = 0; i < outLen; i++) out[i] = f32[Math.floor(i * ratio)];
+  const last = filtered.length - 1;
+  for (let i = 0; i < outLen; i++) {
+    const pos = i * ratio;
+    const i0 = Math.floor(pos);
+    const frac = pos - i0;
+    const s0 = filtered[i0] || 0;
+    const s1 = filtered[Math.min(i0 + 1, last)] || 0;
+    out[i] = s0 + (s1 - s0) * frac;
+  }
   return floatTo16(out);
 }
 
@@ -1705,12 +1833,18 @@ $("selfTest").onclick = async () => {
     suppressCableInjectUntil = Date.now() + 5000;
     const r = await playBeepToSink();
     if (r.peak?.ok) {
+      try {
+        localStorage.setItem("ece_selftest_ok", "1");
+      } catch (_) {}
       setStatus(`自检通过：环回 RMS=${r.peak.peak.toFixed(3)}。下一步核对 AI 扬声器=CABLE Input`, "ok");
       showAlert(
         "EXE↔CABLE 环路正常。转写还需：腾讯会议 AI 扬声器=CABLE Input，「测试」说话时输入电平应跳动。AI 出声还需取消静音。",
         "ok"
       );
     } else {
+      try {
+        localStorage.setItem("ece_selftest_ok", "0");
+      } catch (_) {}
       setStatus("自检失败：CABLE 环回无电平", "bad");
       showAlert(
         "播放后采集无信号。请确认：播放选 CABLE Input、采集选 CABLE Output（同一条 Cable），不要选 Default。",
@@ -1772,6 +1906,18 @@ $("start").onclick = async () => {
   updateMeetingGate();
   if ($("start").disabled) {
     slog("WARN", "Listen", "核对未通过，拒绝启动", deviceSnapshot());
+    return;
+  }
+  const capL = selectedLabel("inputDevice");
+  const playL = selectedLabel("outputDevice");
+  if (isBannedCableLabel(capL) || isBannedCableLabel(playL)) {
+    showAlert("采集请选 CABLE Output、播放请选 CABLE Input，不要选 Default 或 16ch。", "bad");
+    slog("WARN", "Listen", "拒绝禁用设备", deviceSnapshot());
+    return;
+  }
+  if (!$("allowPhysical").checked && localStorage.getItem("ece_selftest_ok") !== "1") {
+    showAlert("请先点「一键自检」并通过环回，再启动听会。", "warn");
+    slog("WARN", "Listen", "自检未通过，拒绝启动");
     return;
   }
   try {
@@ -1981,9 +2127,9 @@ $("start").onclick = async () => {
         setStatus("自动重连失败，请点「停止」后重新「启动听会」", "bad");
         showAlert("Seeduplex 多次重连失败。请停止听会后重试，并检查语音 Key / 网络。", "bad");
         slog("ERROR", "Duplex", "重连失败", msg);
-      } else if (msg.type === "agent-mode") {
-        agentModeUi = msg.mode || agentModeUi;
-        agentModeLabel = msg.label || agentModeLabel;
+      } else if (msg.type === "interaction-mode" || msg.type === "agent-mode") {
+        interactionModeUi = msg.mode || interactionModeUi;
+        interactionModeLabel = msg.label || interactionModeLabel;
         if (msg.lifecycle) {
           meetingLifeUi = msg.lifecycle;
           meetingLifeLabel = msg.lifeLabel || meetingLifeUi;
@@ -2031,7 +2177,7 @@ $("start").onclick = async () => {
           "bad"
         );
         setChip("chipArk", true, "bad");
-        slog("ERROR", "Kaiban", "收到 ark-billing 事件", msg);
+        slog("ERROR", "Strategy", "收到 ark-billing 事件", msg);
       } else if (msg.type === "biz-plan") {
         const steps = Array.isArray(msg.steps) ? msg.steps : [];
         const tier = msg.tier || "";
@@ -2053,16 +2199,16 @@ $("start").onclick = async () => {
         if (steps.length || msg.analysis) {
           showAlert(parts.join("\n"), "ok");
         }
-      } else if (msg.type === "kaiban-thinking") {
+      } else if (msg.type === "strategy-thinking") {
         setThinkingUi(true, "思考中");
         setStatus("大智思考中：" + (msg.text || "嗯，我想一下。"), "warn");
-        slog("INFO", "Kaiban", "思考占位", { text: msg.text });
-      } else if (msg.type === "kaiban-early") {
+        slog("INFO", "Strategy", "思考占位", { text: msg.text });
+      } else if (msg.type === "strategy-early") {
         setThinkingUi(true, "首句中");
         setStatus("大智首句：" + String(msg.text || "").slice(0, 60), "ok");
         if (msg.text) rememberHostUtterance(msg.text);
-        slog("INFO", "Kaiban", "首句提前", { text: msg.text });
-      } else if (msg.type === "kaiban-status") {
+        slog("INFO", "Strategy", "首句提前", { text: msg.text });
+      } else if (msg.type === "strategy-status") {
         if (msg.phase === "thinking") {
           const deep = msg.reason === "HA_BIZ_DEEP" || msg.tier === "L3";
           setThinkingUi(true, deep ? "深度分析中" : "思考中");
@@ -2097,7 +2243,9 @@ $("start").onclick = async () => {
 
     const res = await window.bridge.listenStart();
     if (!res.ok) {
-      setStatus("启动失败", "bad");
+      const why = res.message || res.error || "启动失败";
+      setStatus(why, "bad");
+      showAlert(why, "bad");
       slog("ERROR", "Listen", "listenStart 失败", res);
       await closeInput();
       setAudioTestEnabled(true);
@@ -2114,7 +2262,7 @@ $("start").onclick = async () => {
     $("forceSpeak").disabled = false;
     $("loop").disabled = true;
     schedulePatrol();
-    if (!res.ark) slog("WARN", "Kaiban", "未检测到 Ark Key，巡检将走启发式");
+    if (!res.ark) slog("WARN", "Strategy", "未检测到 Ark Key，巡检将走启发式");
   } catch (e) {
     setStatus("启动失败", "bad");
     setAudioTestEnabled(true);

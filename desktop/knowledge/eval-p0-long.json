@@ -1,0 +1,95 @@
+[
+  {
+    "id": "L01-start",
+    "input": "大智，会议开始。",
+    "expect": { "reasonAny": ["MEETING_START"], "answerIncludesAny": ["大智"] }
+  },
+  {
+    "id": "L02-theme",
+    "input": "大智，今天会议主题是什么？",
+    "expect": { "reasonAny": ["WAKE_ANSWER"], "answerIncludesAny": ["全园美语", "四端"] }
+  },
+  {
+    "id": "L03-price",
+    "input": "怎么收费？",
+    "expect": { "reasonAny": ["WAKE_ANSWER"], "answerIncludesAny": ["三万九", "学期"] }
+  },
+  {
+    "id": "L04-benefits",
+    "input": "八大核心权益有哪些？",
+    "expect": { "reasonAny": ["WAKE_ANSWER"], "answerIncludesAny": ["ABCmouse", "菲教", "成果展"] }
+  },
+  {
+    "id": "L05-rollout",
+    "input": "从签约到落地要准备什么？",
+    "expect": { "reasonAny": ["WAKE_ANSWER", "BIZ_ANSWER"], "answerIncludesAny": ["教师", "行事历", "准备", "家长"] }
+  },
+  {
+    "id": "L06-enroll",
+    "input": "对招生有帮助吗？",
+    "expect": { "reasonAny": ["WAKE_ANSWER", "BIZ_ANSWER"], "answerIncludesAny": ["招生", "一点八万", "家长"] }
+  },
+  {
+    "id": "L07-rescue",
+    "input": "大智，园要倒闭了怎么起死回生？",
+    "expect": { "reasonAny": ["BIZ_ANSWER"], "answerIncludesAny": ["样板", "开口", "老师"] }
+  },
+  {
+    "id": "L08-other-path",
+    "input": "还有其他方案吗？",
+    "expect": { "reasonAny": ["BIZ_ANSWER", "WAKE_ANSWER"], "answerIncludesAny": ["延时", "路径", "一园两制", "增量", "样板"] }
+  },
+  {
+    "id": "L09-teacher",
+    "input": "老师抵触、不愿意拍视频怎么办？",
+    "expect": { "reasonAny": ["BIZ_ANSWER", "WAKE_ANSWER"], "answerIncludesAny": ["老师", "十秒", "补贴", "备课"] }
+  },
+  {
+    "id": "L10-interrupt",
+    "input": "大智听我说。",
+    "expect": { "reasonAny": ["INTERRUPT"] }
+  },
+  {
+    "id": "L11-hold-1",
+    "input": "我们园老师都不愿意额外加班。",
+    "expect": { "reasonAny": ["HOLDING"] }
+  },
+  {
+    "id": "L12-hold-2",
+    "input": "只能先做一个班。",
+    "expect": { "reasonAny": ["HOLDING"] }
+  },
+  {
+    "id": "L13-say-done",
+    "input": "我说完了。",
+    "expect": {
+      "reasonAny": ["BIZ_ANSWER", "WAKE_ANSWER", "CONTINUE"],
+      "answerIncludesAny": ["班", "老师", "样板", "开口", "加班"]
+    }
+  },
+  {
+    "id": "L14-retry",
+    "input": "你说错了，重说。",
+    "expect": { "reasonAny": ["WAKE_ANSWER"], "answerIncludesAny": ["抱歉", "再说", "偏了"] }
+  },
+  {
+    "id": "L15-stop",
+    "input": "谢谢大智。",
+    "expect": { "reasonAny": ["STOP"], "modeAny": ["IDLE_LISTEN"] }
+  },
+  {
+    "id": "L16-summary",
+    "input": "大智总结一下。",
+    "expect": { "reasonAny": ["SUMMARY"], "answerIncludesAny": ["转写", "总结", "议题", "会话", "班级"] }
+  },
+  {
+    "id": "L17-reask",
+    "input": "大智，项目适合哪些园？",
+    "expect": { "reasonAny": ["WAKE_ANSWER"], "answerIncludesAny": ["四万九", "外校"] }
+  },
+  {
+    "id": "L18-end",
+    "input": "大智，会议结束。",
+    "expect": { "reasonAny": ["MEETING_END"], "answerIncludesAny": ["本场", "结论", "纪要", "待办"] }
+  }
+]

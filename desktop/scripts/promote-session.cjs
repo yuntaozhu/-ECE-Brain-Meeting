@@ -16,16 +16,16 @@ const {
   readSession,
   writeSummary,
   sessionPath
-} = require("../lib/sessionLog.cjs");
+} = require("../lib/runtime");
 const {
   sinkAdvisorAnswer,
   promoteToDistilled,
   promoteToFaq,
   ensureDirs
-} = require("../lib/knowledgeSink.cjs");
-const { questionFingerprint } = require("../lib/duplexPolicy.cjs");
-const { normalizeDazhiAliases } = require("../lib/agentMode.cjs");
-const { cacheKey } = require("../lib/answerCache.cjs");
+} = require("../lib/knowledge");
+const { questionFingerprint } = require("../lib/duplex");
+const { normalizeDazhiAliases } = require("../lib/meetingSession");
+const { cacheKey } = require("../lib/runtime");
 
 function parseArgs(argv) {
   const opts = {
@@ -214,24 +214,34 @@ function promoteOne(meetingId, opts) {
   }
   console.log(`[promote-session] inbox 写入 ${inboxN} 条`);
 
-  const d = promoteToDistilled(entries);
-  console.log(`[promote-session] distilled 写入 ${d.count} 个文件`);
+  const d = promoteToDistilled(entries, { legacyDistilled: false });
+  console.log(
+    `[promote-session] wiki 常见问法 +${d.wikiAppended || 0} · 未匹配 ${d.wikiUnmatched || 0}`
+  );
 
   let faqN = 0;
   if (opts.faq) {
     for (const e of entries) {
       if ((e._count || 1) < opts.min) continue;
-      if (String(e.tts || "").length > 100) continue;
       const r = promoteToFaq(e, { force: false });
       if (r.ok) {
         faqN += 1;
-        console.log(`[promote-session] FAQ + ${e.q.slice(0, 40)}`);
+        console.log(
+          `[promote-session] FAQ + ${e.q.slice(0, 40)}${r.fromWiki ? ` ←wiki:${r.slug}` : ""}`
+        );
       }
     }
     console.log(`[promote-session] FAQ 新增 ${faqN}（min=${opts.min}）`);
   }
 
-  return { ok: true, pairs: pairs.length, inbox: inboxN, distilled: d.count, faq: faqN };
+  return {
+    ok: true,
+    pairs: pairs.length,
+    inbox: inboxN,
+    wiki: d.wikiAppended || 0,
+    distilled: d.count,
+    faq: faqN
+  };
 }
 
 function main() {
@@ -261,7 +271,7 @@ function main() {
     }
     promoteOne(id, opts);
   }
-  console.log("[promote-session] 建议接着跑: npm run rag:index");
+  console.log("[promote-session] 建议: npm run knowledge:wiki:lint && npm run rag:index");
 }
 
 main();

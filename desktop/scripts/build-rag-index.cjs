@@ -18,7 +18,7 @@ const {
   resetEmbedGate,
   semanticStatus,
   INDEX_FILE
-} = require("../lib/semanticRag.cjs");
+} = require("../lib/knowledge");
 
 async function main() {
   const force = process.argv.includes("--force");
