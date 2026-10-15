@@ -9,23 +9,17 @@ async function handle(ctx) {
   let { lastFloor } = ctx;
 
   if (cmd.command === "INTERRUPT" || (cmd.interrupt && cmd.holdToEnd)) {
-    state.holdToEnd = true;
-    state.interrupted = true;
+    state.holdToEnd = false;
+    state.interrupted = false;
     state.interruptAt = Date.now();
-    const full = String(
-      state.interruptBuffer?.fullText || opts.lastHostSpeakText || state.lastInterruptedText || ""
-    ).slice(0, 800);
-    state.lastInterruptedText = full;
-    state.interruptBuffer = {
-      fullText: full,
-      interruptedAt: state.interruptAt,
-      chunks: Number(state.interruptBuffer?.chunks || opts.interruptChunks || 0)
-    };
+    state.interruptBuffer = null;
     state.holdFloorLines = [];
-    S.setLifecycle(state, S.MEETING_LIFE.HOLD);
-    S.debugLog.info("Strategy", "打断，请听", {
-      floor: lastFloor.slice(0, 40),
-      lastHost: full.slice(0, 40)
+    state.listenNotes = [];
+    state.haLockedUntil = 0;
+    S.setMode(state, S.INTERACTION_MODE.IDLE_LISTEN);
+    S.setLifecycle(state, state.meetingOpen ? S.MEETING_LIFE.SILENT : S.MEETING_LIFE.OFF);
+    S.debugLog.info("Strategy", "听我说：停口播并旁听", {
+      floor: lastFloor.slice(0, 40)
     });
     return S.baseResult({
       shouldIntervene: false,
@@ -33,9 +27,9 @@ async function handle(ctx) {
       interruptTts: true,
       a2aTrace,
       agentMode: state.mode,
+      modeChange: S.INTERACTION_MODE.IDLE_LISTEN,
       kbStatus,
-      holdToEnd: true,
-      meetingLifecycle: S.MEETING_LIFE.HOLD
+      meetingLifecycle: S.deriveMeetingLife(state)
     });
   }
 

@@ -6,7 +6,17 @@ const {
   sameAnswer,
   isOperateQuestion,
   isOperateBetterAsk,
-  OPERATE_BETTER_TTS
+  isProfitAsk,
+  isRoiConfirmAsk,
+  isLossFearAsk,
+  isAlternatePathAsk,
+  isHowCalcAsk,
+  isParentReasonAsk,
+  OPERATE_BETTER_TTS,
+  PROFIT_TTS,
+  ROI_CONFIRM_TTS,
+  HOW_CALC_TTS,
+  PARENT_REASON_TTS
 } = require("./heuristics.cjs");
 const { isDefinitionSpeak } = require("./speakGuards.cjs");
 const { buildFastLead, pickWikiForIntent, ragSpeakFallback } = require("./lead.cjs");
@@ -21,7 +31,17 @@ module.exports = {
   buildFastLead,
   isOperateQuestion,
   isOperateBetterAsk,
+  isProfitAsk,
+  isRoiConfirmAsk,
+  isLossFearAsk,
+  isAlternatePathAsk,
+  isHowCalcAsk,
+  isParentReasonAsk,
   isDefinitionSpeak,
   OPERATE_BETTER_TTS,
+  PROFIT_TTS,
+  ROI_CONFIRM_TTS,
+  HOW_CALC_TTS,
+  PARENT_REASON_TTS,
   runBusinessAdvisor
 };

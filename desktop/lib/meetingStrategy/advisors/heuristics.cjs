@@ -1,10 +1,149 @@
-/** 启发式方案与经营题判定 */
+/**
+ * 启发式方案与经营题判定。
+ * P2 冻结：经营口播与经营题正则不再扩展。新失败只加 eval 用例，
+ * 新意图放在 agent/intent.cjs，不要在这里加「扭亏 / 总部 / 收费盘面」分支。
+ */
 const { normalizeDazhiAliases } = require("../../meetingSession");
+
+/** 盈利/投入产出：三笔账口径（「如何盈利」），禁止把样板班当盈利答案本身 */
+const PROFIT_TTS =
+  "引入后盈利算三笔账：延时非教扩服务半径、全美语分层增值、招生新增幼儿参考一年一点八万三年约五点四万可能盖过三万九；样板班只是把特色做看得见的抓手，不保证招满。";
+
+/** 「能回本吗」确认：先答能不能，禁止套「如何盈利」开场 */
+const ROI_CONFIRM_TTS =
+  "资料不保证包回本。按说明测算：因美语特色新增一名幼儿约一年一点八万、在园三年约五点四万，可能盖过三万九投入；关键是认真执行、做成家长选择理由。这是参考测算，不是承诺招满。";
+
+/** 测算拆解：回答「怎么算出来的」 */
+const HOW_CALC_TTS =
+  "测算口径是这样：因美语特色新增一名幼儿，参考年贡献约一点八万，在园三年约五点四万，对照项目投入三万九；这是说明里的参考测算，不是保证招满。第一笔还可看二百五乘一百五十六约等于三万九的服务半径账。";
+
+/** 家长选择理由：禁止复读「要成为理由」空句 */
+const PARENT_REASON_TTS =
+  "家长选择园所的理由要做成证据：开口十秒实拍进群、月度AI测评报告、学期成果展；美语看得见，才成为报名理由，不是口号。";
+
+/** 「会不会亏损 / 亏本 / 害怕引入花钱」：与回本确认同答法族 */
+function isLossFearAsk(question) {
+  const q = normalizeDazhiAliases(String(question || ""));
+  if (!q) return false;
+  if (/亏损|亏本|会不会亏|会不会让我亏|怕亏/.test(q)) return true;
+  if (/害怕/.test(q) && /(三万九|39000|3\s*万\s*9|引入|课程|花)/.test(q)) return true;
+  if (/引入后.*亏|花了.*会不会/.test(q) && /(亏|回不了本)/.test(q)) return true;
+  return false;
+}
+
+/** 「能回本吗 / 投资能回本吗」：确认题，不是「如何盈利」；亏损恐惧并入同档 */
+function isRoiConfirmAsk(question) {
+  const q = normalizeDazhiAliases(String(question || ""));
+  if (!q) return false;
+  if (isLossFearAsk(q)) return true;
+  if (/(如何|怎么|怎样)(回本|赚钱|盈利)/.test(q)) return false;
+  if (/(能回本|能不能回本|可以回本|回得了本|回本吗|回本嘛)/.test(q)) return true;
+  if (/回本/.test(q) && /(能|吗|嘛|能否|可不可以|行不行|是否)/.test(q)) return true;
+  // 「花了三万九…投资…回本」类口语
+  if (
+    /(三万九|39000|3\s*万\s*9|投资|投入)/.test(q) &&
+    /回本/.test(q) &&
+    !/(如何|怎么)盈利/.test(q)
+  ) {
+    return true;
+  }
+  // 「投入三万九值得吗」→ 回本/值确认族
+  if (/(三万九|39000|3\s*万\s*9|投资|投入)/.test(q) && /值得|值不值/.test(q)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * 明确「换方案」追问。禁止裸匹配「更好」（会误伤「不是很好」）。
+ */
+function isAlternatePathAsk(question) {
+  const q = normalizeDazhiAliases(String(question || ""));
+  if (!q) return false;
+  // 排除经营困境表述
+  if (/不是很好|不太好|不好|经营得?不/.test(q) && !/还有|其他方案|别的办法|换一条|第\s*\d+\s*条/.test(q)) {
+    return false;
+  }
+  if (/还有更好|更好的方案|更好办法|经营得更好的办法/.test(q)) return true;
+  if (/还有(?:其他|别的)?(?:方案|办法|路)|其他方案|别的办法|换一条|换个路径|第\s*\d+\s*条/.test(q)) {
+    return true;
+  }
+  return false;
+}
+
+function isHowCalcAsk(question) {
+  const q = normalizeDazhiAliases(String(question || ""));
+  if (!q) return false;
+  // 「能回本吗」不是问怎么算
+  if (isRoiConfirmAsk(q)) return false;
+  return /怎么计算|如何计算|怎么算|算出来|测算依据|这个数字|怎么来的|如何得来|怎么得出/.test(q);
+}
+
+function isParentReasonAsk(question) {
+  const q = normalizeDazhiAliases(String(question || ""));
+  if (!q) return false;
+  return /选择.*理由|理由是什么|家长.*理由|看得见.*什么|价值是什么/.test(q);
+}
+
+function isProfitAsk(question) {
+  const q = normalizeDazhiAliases(String(question || ""));
+  if (!q) return false;
+  // 回本确认 / 测算 / 理由 优先，勿吞进「如何盈利」套路
+  if (isRoiConfirmAsk(q) || isHowCalcAsk(q) || isParentReasonAsk(q)) return false;
+  if (/是什么|什么是/.test(q) && !/盈利|赚钱|回本/.test(q)) return false;
+  if (
+    /如何盈利|怎么盈利|如何赚钱|怎么赚钱|走向盈利|机构走向盈利|投入产出|如何回本|怎么回本|靠什么赚钱|营收怎么做|三笔账/.test(
+      q
+    )
+  ) {
+    return true;
+  }
+  return /盈利|赚钱|投入产出|营收/.test(q) && /(如何|怎么|怎样|引入|之后|然后)/.test(q);
+}
 
 function heuristicPlan(diag, question) {
   const q = String(question || "");
-  // 换路径 / 追问优先于 rescue，避免复读锁死
-  if (/还有|其他方案|别的|更好|第\s*\d+\s*条/.test(q)) {
+  // 「会不会亏损 / 能回本吗」优先于换路径 / how-calc / 盈利套路
+  if (diag.stage === "roi-confirm" || isRoiConfirmAsk(q) || isLossFearAsk(q)) {
+    return {
+      tts: ROI_CONFIRM_TTS,
+      steps: [
+        "先表态：不保证包回本",
+        "测算：新增幼儿年约1.8万×3年≈5.4万，对照投入3.9万可能盖过",
+        "条件：认真执行、做成招生选择理由",
+        "边界：参考测算，非承诺招满"
+      ],
+      risks: ["不要说一定能回本或包赚"],
+      cite: ["三笔账第三笔", "招生增长"]
+    };
+  }
+  // 测算拆解优先于「还有其他方案」
+  if (diag.stage === "how-calc" || isHowCalcAsk(q)) {
+    return {
+      tts: HOW_CALC_TTS,
+      steps: [
+        "第三笔：新增幼儿年约1.8万×3年≈5.4万，对照投入3.9万",
+        "第一笔参考：延伸家庭250元×156人≈3.9万服务半径",
+        "边界：测算非承诺，不保证招满"
+      ],
+      risks: ["不要把参考测算说成保证回本"],
+      cite: ["三笔账第三笔", "服务半径"]
+    };
+  }
+  if (diag.stage === "show-value" || isParentReasonAsk(q)) {
+    return {
+      tts: PARENT_REASON_TTS,
+      steps: [
+        "日常：开口实拍+非教报告进家长群",
+        "每月：AI测评报告发给家长",
+        "学期：美语成果展做成选择理由话术"
+      ],
+      risks: ["只讲理念不给证据"],
+      cite: ["家庭端", "AI测评", "成果展"]
+    };
+  }
+  // 换路径：仅明确换方案（禁止「不是很好」误伤）
+  if (isAlternatePathAsk(q)) {
     return {
       tts: "第二条路：先做延时非教增量班，用增收养老师；样板班并行，别只押招生一口价。",
       steps: [
@@ -15,6 +154,19 @@ function heuristicPlan(diag, question) {
       ],
       risks: ["两条路同时全力推会分心"],
       cite: ["延时非教", "一园两制"]
+    };
+  }
+  if (diag.stage === "profit" || isProfitAsk(q)) {
+    return {
+      tts: PROFIT_TTS,
+      steps: [
+        "第一笔：延时非教/服务半径扩量，别只算账号成本",
+        "第二笔：一园两制分层增值（全美语参考月加价）",
+        "第三笔：招生引擎——新增幼儿年约1.8万、三年约5.4万对照三万九",
+        "执行：样板班开口实拍进群，让特色成为选择理由（测算非承诺）"
+      ],
+      risks: ["不要保证招满或包赚", "只开样板班不做三笔账等于文不对题"],
+      cite: ["三笔账", "招生增长", "延时非教"]
     };
   }
   if (diag.stage === "teacher" || (/培育|养老师|培训老师|老师抵触/.test(q) && !/起死回生|倒闭/.test(q))) {
@@ -57,19 +209,6 @@ function heuristicPlan(diag, question) {
       cite: ["多园落地", "样板班"]
     };
   }
-  if (diag.stage === "show-value" || /家长.*价值|看得见/.test(q)) {
-    return {
-      tts: "让家长看见三样：开口实拍进群、月度AI测评报告、成果展；价值靠证据，不靠口号。",
-      steps: [
-        "日常：样板班开口视频+非教报告进家长群",
-        "每月：AI测评报告/证书发给家长",
-        "学期：办一场看得见的美语成果展",
-        "招生季：把上述证据做成选择理由话术"
-      ],
-      risks: ["只讲理念不给证据"],
-      cite: ["家庭端", "AI测评", "成果展"]
-    };
-  }
   if (diag.stage === "rescue" || /起死回生|倒闭|重生/.test(q)) {
     return {
       tts: "先不赌全员翻盘：开一个月样板班，老师只拍十秒转发，您盯开口实拍和续费，先护盘再用增量养老师。",
@@ -96,16 +235,25 @@ function heuristicPlan(diag, question) {
   };
 }
 
-/** 换一条与上一答不同的启发式备选（禁止强制 rescue 同句） */
+/** 换一条与上一答不同的启发式备选（禁止强制 rescue 同句；勿把盈利题换成回本确认） */
 function alternateHeuristic(diag, question, lastTts) {
   const last = String(lastTts || "").replace(/\s+/g, "");
-  const tries = [
-    () => heuristicPlan({ ...diag, stage: "explore" }, `还有其他方案吗？${question}`),
-    () => heuristicPlan({ ...diag, stage: "teacher" }, `如何培育老师？${question}`),
-    () => heuristicPlan({ ...diag, stage: "rollout" }, `0到1第一步怎么走？${question}`),
-    () => heuristicPlan({ ...diag, stage: "show-value" }, `如何让家长看到价值？${question}`),
-    () => heuristicPlan({ ...diag, stage: "explore" }, question)
-  ];
+  const tries = [];
+  if (isRoiConfirmAsk(question) || diag.stage === "roi-confirm") {
+    tries.push(() => heuristicPlan({ ...diag, stage: "roi-confirm" }, question));
+    tries.push(() => heuristicPlan({ ...diag, stage: "how-calc" }, `测算怎么算？${question}`));
+  } else if (isHowCalcAsk(question) || diag.stage === "how-calc") {
+    tries.push(() => heuristicPlan({ ...diag, stage: "how-calc" }, question));
+  } else if (isParentReasonAsk(question) || diag.stage === "show-value") {
+    tries.push(() => heuristicPlan({ ...diag, stage: "show-value" }, question));
+  } else {
+    tries.push(() => heuristicPlan({ ...diag, stage: "explore" }, `还有其他方案吗？${question}`));
+    tries.push(() => heuristicPlan({ ...diag, stage: "profit" }, `如何盈利？${question}`));
+    tries.push(() => heuristicPlan({ ...diag, stage: "show-value" }, `家长选择园所的理由是什么？${question}`));
+    tries.push(() => heuristicPlan({ ...diag, stage: "teacher" }, `如何培育老师？${question}`));
+    tries.push(() => heuristicPlan({ ...diag, stage: "rollout" }, `0到1第一步怎么走？${question}`));
+  }
+  tries.push(() => heuristicPlan({ ...diag, stage: "explore" }, question));
   for (const fn of tries) {
     const p = fn();
     const now = String(p.tts || "").replace(/\s+/g, "");
@@ -126,7 +274,9 @@ function sameAnswer(a, b) {
 function isOperateQuestion(question) {
   const q = normalizeDazhiAliases(String(question || ""));
   if (!q || /是什么|什么是/.test(q)) return false;
-  return /如何|怎么用|怎样用|经营|使用|落地|实施|开展|行事历|第一步|签约|准备|哪些准备/.test(q);
+  return /如何|怎么用|怎样用|经营|盈利|赚钱|营收|使用|落地|实施|开展|行事历|第一步|签约|准备|哪些准备/.test(
+    q
+  );
 }
 
 /** 「经营得更好」本地抓手：样板可见 + 三笔账招生，禁止念定义 */
@@ -135,7 +285,11 @@ const OPERATE_BETTER_TTS =
 
 function isOperateBetterAsk(question) {
   const q = normalizeDazhiAliases(String(question || ""));
-  return /经营得更好|把园经营|园所经营不好|如何经营|怎么经营|经营好园/.test(q);
+  // 回本/亏损确认 / 盈利走专用路径，勿与「经营得更好」混成样板班半句
+  if (isRoiConfirmAsk(q) || isLossFearAsk(q) || isProfitAsk(q) || isAlternatePathAsk(q)) {
+    return false;
+  }
+  return /经营得更好|把园经营|园所经营不好|园所经营的不是很好|如何经营|怎么经营|经营好园/.test(q);
 }
 
 module.exports = {
@@ -144,5 +298,15 @@ module.exports = {
   sameAnswer,
   isOperateQuestion,
   isOperateBetterAsk,
-  OPERATE_BETTER_TTS
+  isProfitAsk,
+  isRoiConfirmAsk,
+  isLossFearAsk,
+  isAlternatePathAsk,
+  isHowCalcAsk,
+  isParentReasonAsk,
+  OPERATE_BETTER_TTS,
+  PROFIT_TTS,
+  ROI_CONFIRM_TTS,
+  HOW_CALC_TTS,
+  PARENT_REASON_TTS
 };

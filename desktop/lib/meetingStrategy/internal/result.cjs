@@ -1,8 +1,9 @@
 /** 结果工厂、口播工具、纠错重答 */
 const D = require("./deps.cjs");
 const scripts = require("./scripts.cjs");
+// 口播热路径：debugLog 直连 platform，避免 deps 未完成导出时 info/warn 崩
+const { debugLog } = require("../../platform/debugLog.cjs");
 const {
-  debugLog,
   matchFaqInstant,
   rememberAnswer,
   stripIntroBoilerplate,
@@ -116,7 +117,7 @@ function continuationAfter(full, spoken) {
 function emitLead(opts, text) {
   const t = stripIntroBoilerplate(String(text || "").trim());
   if (!t) return "";
-  debugLog.info("Strategy", "先开口播", { text: t.slice(0, 48) });
+  // 日志由 onEarlySpeak→speakSoft 统一打，避免「先开口播」成对出现
   try {
     opts.onEarlySpeak?.(t);
   } catch (err) {

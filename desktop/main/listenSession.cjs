@@ -1,23 +1,38 @@
 /**
  * Seeduplex 听会会话：连接、ASR、TTS、打断与重连。
+ * - HOST_ASR_MODE=independent + HOST_TTS_MODE=independent：只开独立 ASR/TTS，不依赖 Dialog。
+ * - 否则走 Seeduplex 3.0 全双工（JSON）：X-Api-Key + Connect-Id，model=1.2.6.1。
+ * 鉴权失败（4xx / 45000030）禁止自动重连。
  */
+const { randomUUID } = require("crypto");
 const WebSocket = require("ws");
 const { debugLog } = require("../lib/platform");
 const { PHASE, COOLDOWN_MS, estimateHoldMs } = require("../lib/duplex");
 const { detectMeetingCommand, looksLikeBargeInCommand } = require("../lib/meetingSession");
+const { synthesizeHostTts, hostTtsMode, ttsSampleRate } = require("../lib/tts/hostTts.cjs");
+const { HostAsrSession, hostAsrMode, asrResourceId } = require("../lib/asr/hostAsr.cjs");
 
-const DUPLEX_URL = "wss://openspeech.bytedance.com/api/v3/duplex/realtime/dialogue";
+const DUPLEX_URL_DEFAULT = "wss://openspeech.bytedance.com/api/v3/duplex/realtime/dialogue";
+/** 文档规定的公共 App-Key（不是个人 API Key） */
+const DUPLEX_APP_KEY = "PlgvMymc7f3tQnJ6";
+const DUPLEX_RESOURCE_ID = "volc.speech.dialog";
+/** Seeduplex 3.0 全双工默认；可用 DOUBAO_DUPLEX_MODEL 覆盖 */
+const DUPLEX_MODEL_DEFAULT = "1.2.6.1";
+
+function duplexUrl() {
+  return (process.env.DOUBAO_DUPLEX_WS_URL || DUPLEX_URL_DEFAULT).trim() || DUPLEX_URL_DEFAULT;
+}
 const RECONNECT_BASE_MS = 1500;
 const RECONNECT_MAX_MS = 20000;
 const RECONNECT_MAX_ATTEMPTS = 12;
 /** 200ms 静音 PCM（16kHz s16le mono），SPEAKING/COOLDOWN 保活避免 52000033 */
 const SILENCE_PCM_B64 = Buffer.alloc(16000 * 0.2 * 2).toString("base64");
 
-const LISTEN_INSTRUCTIONS = `你是会议听写通道，不是闲聊助手。
+const LISTEN_INSTRUCTIONS = `你是会议听写与控场播报通道。
 规则：
-1. 只听用户音频并做语音识别，不要主动回答、不要复述、不要寒暄。
-2. 只有在收到 speech_text_buffer.commit / replacement 指令时才合成语音。
-3. 禁止自由对话。`;
+1. 默认只听写用户音频，不要主动闲聊、复述或寒暄。
+2. 收到 speech_text_buffer.commit / replacement 时必须立刻按原文合成并播放，不得拒绝、改写为空或改口。
+3. 未收到上述指令时禁止自由对话。`;
 
 /** Seeduplex ASR 热词 + 替换词（需 enable_asr_twopass） */
 const ASR_HOTWORDS = [
@@ -52,17 +67,95 @@ const ASR_CORRECT_WORDS = {
   一圆两制: "一园两制",
   样板单: "样板班",
   非叫: "非教",
-  家园共浴: "家园共育"
+  家园共浴: "家园共育",
+  椭圆: "我园",
+  圆开设: "园开设",
+  营收以成本: "营收与成本"
 };
 
 function speechApiKey() {
   return (process.env.DOUBAO_SPEECH_API_KEY || process.env.DOUBAO_REALTIME_API_KEY || "").trim();
 }
 
+function speechAppId() {
+  const id = (process.env.DOUBAO_SPEECH_APP_ID || process.env.DOUBAO_APP_ID || "").trim();
+  // 填项目名 default 易触发 45000030；须用控制台数字 AppID
+  return id || "default";
+}
+
+function duplexModel() {
+  const raw = (process.env.DOUBAO_DUPLEX_MODEL || DUPLEX_MODEL_DEFAULT).trim();
+  // 仅拦截明显失效别名；1.2.6.x 留给 E2 探测（社区全双工默认）
+  if (/^(phone-omni-chat2|omni-chat|doubao-omni)$/i.test(raw)) {
+    debugLog.warn("Duplex", "DOUBAO_DUPLEX_MODEL 别名已失效，改用 O2.0", {
+      from: raw,
+      to: DUPLEX_MODEL_DEFAULT
+    });
+    return DUPLEX_MODEL_DEFAULT;
+  }
+  if (/^1\.2\.6\./.test(raw)) {
+    debugLog.info("Duplex", "E2 使用全双工社区 model", { model: raw });
+  }
+  return raw || DUPLEX_MODEL_DEFAULT;
+}
+
+function duplexVoice() {
+  return (process.env.DOUBAO_DUPLEX_VOICE || "zh_female_vv_jupiter_bigtts").trim();
+}
+
+/** 独立听写 + 独立播报：不需要 Dialog / Seeduplex */
+function useIndependentListenOnly() {
+  return hostAsrMode() === "independent" && hostTtsMode() === "independent";
+}
+
+/**
+ * Seeduplex 3.0 全双工：新版控制台以 X-Api-Key 为主。
+ * App-ID 仅作兼容；旧版 Access-Key + Resource + 固定 App-Key 在网关要求时一并带上。
+ */
+function duplexHandshakeHeaders(apiKey) {
+  const connectId = randomUUID();
+  const appId = speechAppId();
+  if (!/^\d{6,}$/.test(appId)) {
+    debugLog.warn("Duplex", "X-Api-App-ID 建议为数字 AppID", { appId });
+  }
+  const headers = {
+    "X-Api-Key": apiKey,
+    "X-Api-Connect-Id": connectId,
+    "X-Api-Access-Key": apiKey,
+    "X-Api-Resource-Id": DUPLEX_RESOURCE_ID,
+    "X-Api-App-Key": DUPLEX_APP_KEY
+  };
+  if (/^\d{6,}$/.test(appId)) {
+    headers["X-Api-App-ID"] = appId;
+    headers["X-Api-App-Id"] = appId;
+  }
+  return { headers, connectId };
+}
+
 function maskKey(k) {
   if (!k) return "(empty)";
-  if (k.length < 10) return "***";
-  return `${k.slice(0, 6)}…${k.slice(-4)} (len=${k.length})`;
+  if (k.length < 8) return "***";
+  return `****${k.slice(-4)} (len=${k.length})`;
+}
+
+function isAuthForbidden(status, body) {
+  const code = Number(status) || 0;
+  if (code === 401 || code === 403) return true;
+  return /45000030|Forbidden|not granted|requested resource/i.test(String(body || ""));
+}
+
+/** 启动听会时打印配置自检（Key 只留末 4 位） */
+function logSpeechConfigSelfCheck(tag = "Listen") {
+  const apiKey = speechApiKey();
+  debugLog.info(tag, "语音通道配置自检", {
+    appId: speechAppId() || "(empty)",
+    apiKeyTail: maskKey(apiKey),
+    duplexUrl: duplexUrl(),
+    duplexModel: duplexModel(),
+    asrMode: hostAsrMode(),
+    ttsMode: hostTtsMode(),
+    independentOnly: useIndependentListenOnly()
+  });
 }
 
 function extractErrMsg(payload) {
@@ -122,10 +215,27 @@ class ListenSession {
     this.holdUntil = 0;
     this.cooldownUntil = 0;
     this.listenStartedAt = 0;
+    /** Phase 0：下行观测 */
+    this.downlinkTotal = 0;
+    this.speakDownlinkCount = 0;
+    this.speakDownlinkTypes = [];
+    /** @type {AbortController | null} */
+    this.hostTtsAbort = null;
+    /** @type {HostAsrSession | null} */
+    this.hostAsr = null;
+    this.asrHealthTimer = null;
+    this.lastDialogAsrAt = 0;
+    /** independent | dialog；握手失败可降级为 dialog */
+    this.asrModeEffective = hostAsrMode();
+    this.asrDegraded = false;
     /** @type {{ fullText: string, interruptedAt: number, chunks: number, reason?: string } | null} */
     this.interruptBuffer = null;
     this.keepaliveTimer = null;
     this.queuedSpeakTimer = null;
+    /** 独立听会已就绪（无 Dialog socket） */
+    this.listenActive = false;
+    /** 鉴权/参数类错误：禁止自动重连 */
+    this.authFatal = false;
   }
 
   scheduleQueuedSpeak(waitMs) {
@@ -155,9 +265,20 @@ class ListenSession {
   startKeepalive() {
     if (this.keepaliveTimer) return;
     this.keepaliveTimer = setInterval(() => {
-      if (!this.isOpen() || this.intentionalClose) return;
-      if (!this.isUplinkMuted()) return;
-      this.send({ type: "input_audio_buffer.append", audio: SILENCE_PCM_B64 });
+      if (this.intentionalClose) return;
+      const muted = this.isUplinkMuted();
+      // Duplex：COOLDOWN/hold 挡真实麦时用静音保活，避免 52000033（须真有 upstream）
+      if (this.upstream?.readyState === WebSocket.OPEN && muted) {
+        this.send({ type: "input_audio_buffer.append", audio: SILENCE_PCM_B64 });
+      }
+      // HostAsr：同上窗口必须持续有包，停喂会刷 45000081
+      if (
+        muted &&
+        this.hostAsr?.isOpen?.() &&
+        this.getAsrMode() === "independent"
+      ) {
+        this.hostAsr.appendPcmBase64(SILENCE_PCM_B64);
+      }
     }, 200);
   }
 
@@ -195,7 +316,36 @@ class ListenSession {
   }
 
   isOpen() {
-    return this.upstream && this.upstream.readyState === WebSocket.OPEN;
+    if (this.upstream && this.upstream.readyState === WebSocket.OPEN) return true;
+    // 独立 ASR+TTS：听会不依赖 Dialog socket
+    return Boolean(this.listenActive && useIndependentListenOnly());
+  }
+
+  /** 运行时听写模式（可因 HostAsr 握手失败降级为 dialog） */
+  getAsrMode() {
+    return this.asrModeEffective || hostAsrMode();
+  }
+
+  degradeAsrToDialog(reason, detail = {}) {
+    if (this.asrModeEffective === "dialog" && this.asrDegraded) return;
+    this.asrModeEffective = "dialog";
+    this.asrDegraded = true;
+    if (this.hostAsr) {
+      try {
+        this.hostAsr.close();
+      } catch (_) {}
+      this.hostAsr = null;
+    }
+    debugLog.error("HostAsr", "独立听写不可用，已降级 dialog", {
+      reason,
+      ...detail
+    });
+    this.emit({
+      type: "asr-degraded",
+      reason,
+      mode: "dialog",
+      ...detail
+    });
   }
 
   emit(msg) {
@@ -204,8 +354,41 @@ class ListenSession {
     }
   }
 
+  /** Phase 0：TTS 等待窗内抬高下行可见性 */
+  noteDownlink(kind, raw, extra = {}) {
+    let type = extra.type || "";
+    if (!type && raw) {
+      try {
+        type = JSON.parse(raw)?.type || "";
+      } catch (_) {
+        type = "(parse-fail)";
+      }
+    }
+    if (this.expectingSpeak) {
+      this.speakDownlinkCount += 1;
+      if (type) this.speakDownlinkTypes.push(type);
+      debugLog.info("Duplex", "TTS窗下行", {
+        n: this.speakDownlinkCount,
+        kind,
+        type: type || "(none)",
+        preview: raw ? String(raw).slice(0, 200) : undefined,
+        ...extra
+      });
+    } else if (type && type !== "session.created") {
+      debugLog.debug("Duplex", "下行", {
+        kind,
+        type,
+        total: this.downlinkTotal,
+        preview: raw ? String(raw).slice(0, 120) : undefined,
+        ...extra
+      });
+    }
+  }
+
   send(payload) {
-    if (this.isOpen()) {
+    // 独立听会 isOpen() 可为 true，但 Duplex socket 不存在，禁止对 null 调 send
+    const duplexOpen = this.upstream && this.upstream.readyState === WebSocket.OPEN;
+    if (duplexOpen) {
       this.upstream.send(JSON.stringify(payload));
       if (payload?.type && payload.type !== "input_audio_buffer.append") {
         debugLog.debug("Duplex", "upstream send", { type: payload.type });
@@ -229,6 +412,13 @@ class ListenSession {
 
   scheduleReconnect(reason) {
     if (this.intentionalClose) return;
+    if (this.authFatal) {
+      debugLog.error("Duplex", "鉴权/参数错误，跳过自动重连", {
+        reason: String(reason || ""),
+        hint: "核对 DOUBAO_SPEECH_APP_ID 与 API Key 是否同一应用，且已开通 volc.speech.dialog"
+      });
+      return;
+    }
     if (this.reconnectTimer) return;
     if (this.reconnectAttempt >= RECONNECT_MAX_ATTEMPTS) {
       debugLog.error("Duplex", "重连次数用尽，请手动重新启动听会", {
@@ -292,7 +482,8 @@ class ListenSession {
   /**
    * @param {{ isReconnect?: boolean }} [opts]
    */
-  connect(opts = {}) {
+  async connect(opts = {}) {
+    logSpeechConfigSelfCheck("Listen");
     const apiKey = speechApiKey();
     if (!apiKey) {
       debugLog.error("Duplex", "缺少语音 API Key");
@@ -301,8 +492,57 @@ class ListenSession {
         ok: false,
         error: "缺少 DOUBAO_SPEECH_API_KEY（语音 ASR/TTS）。控场推理可用 Ark，但听会需要语音 Key。"
       });
-      return Promise.resolve(false);
+      return false;
     }
+
+    // 独立听写 + 独立播报：不建 Dialog，避免 volc.speech.dialog 未开通向整条链路
+    if (useIndependentListenOnly() && !opts.isReconnect) {
+      return this.connectIndependentOnly();
+    }
+
+    return this.connectDuplex(opts);
+  }
+
+  /** 仅独立 ASR（SAUC）+ 独立 TTS（HTTP），听会不依赖 Seeduplex */
+  async connectIndependentOnly() {
+    this.authFatal = false;
+    this.listenActive = false;
+    this.asrModeEffective = "independent";
+    this.asrDegraded = false;
+    this.sessionId = `ind_${Date.now().toString(36)}`;
+    debugLog.info("Listen", "独立听会模式（跳过 Dialog / Seeduplex）", {
+      asrMode: hostAsrMode(),
+      ttsMode: hostTtsMode(),
+      sessionId: this.sessionId
+    });
+    await this.ensureHostAsr();
+    const asrOk = Boolean(this.hostAsr?.isOpen?.());
+    if (!asrOk) {
+      this.listenActive = false;
+      this.sessionId = null;
+      this.emit({
+        type: "listen-ready",
+        ok: false,
+        error: "独立 ASR 握手失败。请核对 DOUBAO_ASR_API_KEY / DOUBAO_SPEECH_API_KEY 与 AppID。"
+      });
+      return false;
+    }
+    this.listenActive = true;
+    this.connectedOnce = true;
+    this.startKeepalive();
+    this.startAsrHealthLog();
+    this.emit({ type: "listen-ready", ok: true, sessionId: this.sessionId, mode: "independent" });
+    debugLog.info("Listen", "独立听会就绪", { sessionId: this.sessionId });
+    return true;
+  }
+
+  /**
+   * @param {{ isReconnect?: boolean }} [opts]
+   */
+  connectDuplex(opts = {}) {
+    const apiKey = speechApiKey();
+    this.authFatal = false;
+    this.listenActive = false;
 
     // 清掉旧 socket，避免双连接
     if (this.upstream) {
@@ -314,21 +554,23 @@ class ListenSession {
     }
 
     const gen = ++this.socketGeneration;
+    const model = duplexModel();
+    const voice = duplexVoice();
+    const { headers, connectId } = duplexHandshakeHeaders(apiKey);
     debugLog.info("Duplex", opts.isReconnect ? "重连 Seeduplex" : "开始连接 Seeduplex 听写通道", {
-      url: DUPLEX_URL,
+      url: duplexUrl(),
       key: maskKey(apiKey),
-      model: (process.env.DOUBAO_DUPLEX_MODEL || "1.2.6.0").trim(),
-      voice: (process.env.DOUBAO_DUPLEX_VOICE || "zh_female_vv_jupiter_bigtts").trim(),
+      appId: speechAppId(),
+      resourceId: DUPLEX_RESOURCE_ID,
+      connectId,
+      model,
+      voice,
       generation: gen,
       isReconnect: !!opts.isReconnect
     });
 
     return new Promise((resolve) => {
-      const headers = { "X-Api-Key": apiKey };
-      const appId = (process.env.DOUBAO_SPEECH_APP_ID || process.env.DOUBAO_APP_ID || "").trim();
-      if (appId) headers["X-Api-App-Id"] = appId;
-
-      const upstream = new WebSocket(DUPLEX_URL, { headers });
+      const upstream = new WebSocket(duplexUrl(), { headers });
       this.upstream = upstream;
       let settled = false;
       const done = (ok) => {
@@ -336,7 +578,8 @@ class ListenSession {
         settled = true;
         debugLog.info("Duplex", ok ? "连接流程结束: OK" : "连接流程结束: FAIL", {
           generation: gen,
-          sessionId: this.sessionId
+          sessionId: this.sessionId,
+          connectId
         });
         resolve(ok);
       };
@@ -347,14 +590,29 @@ class ListenSession {
         res.on("data", (c) => chunks.push(Buffer.from(c)));
         res.on("end", () => {
           const body = Buffer.concat(chunks).toString("utf8").slice(0, 400);
+          const logId =
+            res.headers?.["x-tt-logid"] ||
+            res.headers?.["X-Tt-Logid"] ||
+            res.headers?.["x-tt-logId"] ||
+            "";
+          const authFail = isAuthForbidden(res.statusCode, body);
+          if (authFail) this.authFatal = true;
           debugLog.error("Duplex", "握手 unexpected-response", {
             status: res.statusCode,
-            body
+            body,
+            logId,
+            connectId,
+            appId: speechAppId(),
+            resourceId: DUPLEX_RESOURCE_ID,
+            authFatal: authFail,
+            hint: authFail
+              ? "核对 AppID 与 API Key 是否同一应用，且已开通端到端实时语音（volc.speech.dialog）；刚开通请等 2~3 分钟"
+              : undefined
           });
           this.emit({
             type: "listen-ready",
             ok: false,
-            error: `ASR 握手失败 HTTP ${res.statusCode} ${body}`
+            error: `Dialog 握手失败 HTTP ${res.statusCode} ${body}${logId ? ` logid=${logId}` : ""}`
           });
           done(false);
         });
@@ -362,22 +620,30 @@ class ListenSession {
 
       upstream.on("open", () => {
         if (gen !== this.socketGeneration) return;
-        debugLog.info("Duplex", "WebSocket open，发送 session.create", { generation: gen });
+        const eventId = randomUUID();
+        debugLog.info("Duplex", "WebSocket open，发送 session.create", {
+          generation: gen,
+          connectId,
+          model,
+          eventId
+        });
         this.send({
           type: "session.create",
+          event_id: eventId,
           session: {
-            model: (process.env.DOUBAO_DUPLEX_MODEL || "1.2.6.0").trim(),
+            model,
             instructions: LISTEN_INSTRUCTIONS,
             audio: {
-              input: { format: { type: "pcm", sample_rate: 16000, channel: 1 } },
+              input: { format: { type: "pcm", rate: 16000 } },
               output: {
-                format: { type: "pcm_s16le", sample_rate: 24000, channel: 1 },
-                voice: (process.env.DOUBAO_DUPLEX_VOICE || "zh_female_vv_jupiter_bigtts").trim()
+                format: { type: "pcm_s16le", rate: 24000 },
+                voice
               }
             }
           },
           extension: {
             asr: {
+              audio_info: { format: "pcm", sample_rate: 16000, channel: 1 },
               extra: {
                 enable_asr_twopass: true,
                 context: {
@@ -385,6 +651,14 @@ class ListenSession {
                   correct_words: ASR_CORRECT_WORDS
                 }
               }
+            },
+            tts: {
+              speaker: voice,
+              audio_config: { format: "pcm_s16le", sample_rate: 24000, channel: 1 }
+            },
+            dialog: {
+              bot_name: "大智",
+              extra: { model }
             }
           }
         });
@@ -392,7 +666,26 @@ class ListenSession {
 
       upstream.on("message", (data) => {
         if (gen !== this.socketGeneration) return;
-        this.handle(data.toString());
+        this.downlinkTotal += 1;
+        if (Buffer.isBuffer(data)) {
+          const asText = data.toString("utf8");
+          if (asText.startsWith("{") || asText.startsWith("[")) {
+            this.noteDownlink("json-buffer", asText);
+            this.handle(asText);
+          } else {
+            const msgType = data.length > 1 ? (data[1] >> 4) & 0x0f : -1;
+            this.noteDownlink("binary", null, { bytes: data.length, msgType });
+            debugLog.warn("Duplex", "收到非 JSON 二进制下行", {
+              bytes: data.length,
+              msgType,
+              expectingSpeak: this.expectingSpeak
+            });
+          }
+        } else {
+          const s = String(data);
+          this.noteDownlink("text", s);
+          this.handle(s);
+        }
         if (this.sessionId) {
           this.connectedOnce = true;
           done(true);
@@ -422,7 +715,7 @@ class ListenSession {
         this.sessionId = null;
         this.emit({ type: "closed", code, reason });
         done(false);
-        if (!this.intentionalClose) {
+        if (!this.intentionalClose && !this.authFatal) {
           this.scheduleReconnect(`close code=${code} ${reason}`.trim());
         }
       });
@@ -455,8 +748,17 @@ class ListenSession {
 
     if (type === "session.created") {
       this.sessionId = evt.session?.id || evt.id || null;
-      debugLog.info("Duplex", "session.created", { sessionId: this.sessionId });
+      this.asrModeEffective = hostAsrMode();
+      this.asrDegraded = false;
+      debugLog.info("Duplex", "session.created", {
+        sessionId: this.sessionId,
+        asrMode: this.getAsrMode(),
+        ttsMode: hostTtsMode(),
+        duplexModel: duplexModel()
+      });
       this.startKeepalive();
+      this.startAsrHealthLog();
+      void this.ensureHostAsr();
       this.emit({ type: "listen-ready", ok: true, sessionId: this.sessionId || "" });
       return;
     }
@@ -468,6 +770,7 @@ class ListenSession {
       const text = evt.delta || evt.transcript || evt.text || "";
       if (text) {
         const final = type.endsWith("completed");
+        this.lastDialogAsrAt = Date.now();
         if (final) {
           this.asrFinalCount += 1;
           this.asrStartedAt = 0;
@@ -475,45 +778,26 @@ class ListenSession {
             clearTimeout(this.asrStallTimer);
             this.asrStallTimer = null;
           }
-          debugLog.info("ASR", "final", { text: String(text).slice(0, 200), total: this.asrFinalCount });
-          // P1：播报中口令短路 — 先停嘴再交给 renderer 巡检
-          const speaking = this.expectingSpeak || this.phase === PHASE.SPEAKING;
-          const t = String(text);
-          if (speaking && looksLikeBargeInCommand(t)) {
-            const cmd = detectMeetingCommand(t);
-            if (cmd.interrupt || cmd.command === "INTERRUPT" || cmd.stop || cmd.command === "STOP") {
-              debugLog.info("ASR", "barge-in 短路打断", {
-                command: cmd.command,
-                text: t.slice(0, 40)
-              });
-              this.interruptSpeak(cmd.command === "STOP" || cmd.stop ? "barge-in-stop" : "barge-in-asr");
-            }
-            this.emit({
-              type: "asr",
-              text: t,
-              final: true,
-              duringSpeak: true,
-              bargeIn: true
-            });
-            return;
-          }
-          if (speaking) {
-            // TTS 回灌噪声：仍上报但标 likelyEcho，renderer 丢弃
-            this.emit({
-              type: "asr",
-              text: t,
-              final: true,
-              duringSpeak: true,
-              likelyEcho: true
-            });
-            return;
-          }
-        } else {
-          if (this.asrStartedCount % 12 === 0) {
-            debugLog.debug("ASR", "delta", { text: String(text).slice(0, 80) });
-          }
+          debugLog.info("ASR", "dialog final", {
+            text: String(text).slice(0, 200),
+            total: this.asrFinalCount,
+            mode: this.getAsrMode()
+          });
+        } else if (this.asrStartedCount % 12 === 0) {
+          debugLog.debug("ASR", "dialog delta", { text: String(text).slice(0, 80) });
         }
-        this.emit({ type: "asr", text: String(text), final });
+        // independent 模式：会场转写走 HostAsr，dialog 仅观测；播报中 barge-in 仍可短路
+        if (this.getAsrMode() === "independent") {
+          if (final) {
+            const speaking = this.expectingSpeak || this.phase === PHASE.SPEAKING;
+            const t = String(text);
+            if (speaking && looksLikeBargeInCommand(t)) {
+              this.handleBargeInAsr(t, "dialog");
+            }
+          }
+          return;
+        }
+        this.emitDialogAsr(String(text), final);
       }
       return;
     }
@@ -521,9 +805,11 @@ class ListenSession {
     if (type === "conversation.item.input_audio_transcription.started") {
       this.asrStartedCount += 1;
       this.asrStartedAt = Date.now();
-      debugLog.debug("Duplex", "transcription.started", {
+      this.lastDialogAsrAt = Date.now();
+      debugLog.info("DuplexASR", "transcription.started", {
         started: this.asrStartedCount,
-        finals: this.asrFinalCount
+        finals: this.asrFinalCount,
+        mode: this.getAsrMode()
       });
       if (this.asrStallTimer) {
         clearTimeout(this.asrStallTimer);
@@ -545,12 +831,14 @@ class ListenSession {
           this.asrStartedAt = 0;
           return;
         }
-        const healthy = this.asrFinalCount > 0;
-        debugLog.debug("ASR", "识别开始后未完成", {
+        const healthy = this.asrFinalCount > 0 || (this.hostAsr && this.hostAsr.finals > 0);
+        debugLog.info("ASR", "识别开始后未完成", {
           started: this.asrStartedCount,
           finals: this.asrFinalCount,
+          hostAsrFinals: this.hostAsr?.finals || 0,
           ageMs: Date.now() - this.asrStartedAt,
-          healthy
+          healthy,
+          mode: this.getAsrMode()
         });
         this.emit({
           type: "asr-stalled",
@@ -650,8 +938,8 @@ class ListenSession {
         this.scheduleReconnect("no-audio-input");
         return;
       }
-      // 未知事件名：标记致命，禁止用同一非法包重连死循环
-      if (/unknown event name/i.test(msg) || /45000000/.test(msg)) {
+      // 真正的协议非法事件才致命；45000000 常为空音频/内部错误，应重连不宜锁死
+      if (/unknown event name/i.test(msg)) {
         this.protocolFatal = true;
         this.clearTtsWatch();
         this.pendingSpeak = null;
@@ -659,6 +947,15 @@ class ListenSession {
         this.emit({ type: "tts-failed", reason: "unknown-event", text: this.currentSpeakText });
         this.expectingSpeak = false;
         this.pauseUplink = false;
+      } else if (/45000000/.test(msg) || String(evt.code || "") === "45000000") {
+        debugLog.warn("Duplex", "45000000 非协议致命，将重连保活", { message: msg });
+        if (this.expectingSpeak && this.ttsChunksOut === 0) {
+          this.pendingSpeak = this.pendingSpeak || this.currentSpeakText;
+        } else {
+          this.expectingSpeak = false;
+        }
+        this.pauseUplink = false;
+        this.scheduleReconnect("error-45000000");
       } else if (this.expectingSpeak && this.currentSpeakText) {
         this.pendingSpeak = this.pendingSpeak || this.currentSpeakText;
         debugLog.warn("HostSpeak", "TTS 中遇错误，话术已保留待重连", {
@@ -681,11 +978,29 @@ class ListenSession {
 
   appendAudio(b64) {
     if (!b64) return;
-    if (!this.isOpen()) {
+    // 独立 ASR：IDLE/SPEAKING 吃真实麦；COOLDOWN/hold 改喂静音保活（停包会 45000081）
+    if (this.hostAsr && this.getAsrMode() === "independent") {
+      const speaking = this.expectingSpeak || this.phase === PHASE.SPEAKING;
+      const inHoldCooldown =
+        this.phase === PHASE.COOLDOWN ||
+        this.pauseUplink ||
+        Date.now() < (this.holdUntil || 0);
+      if (speaking || !inHoldCooldown) {
+        this.hostAsr.appendPcmBase64(b64);
+      } else {
+        this.hostAsr.appendPcmBase64(SILENCE_PCM_B64);
+      }
+    }
+    const duplexOpen = this.upstream && this.upstream.readyState === WebSocket.OPEN;
+    // 独立听会只喂 HostAsr，不要求 Duplex
+    if (!duplexOpen && this.getAsrMode() === "independent") {
+      return;
+    }
+    if (!duplexOpen) {
       debugLog.debug(
         "AudioIn",
         "上行已暂停（socket 未开）",
-        { chunksSoFar: this.audioChunksIn },
+        { chunksSoFar: this.audioChunksIn, asrMode: this.getAsrMode() },
         { rateKey: "audio-paused", rateMs: 10000 }
       );
       return;
@@ -699,7 +1014,8 @@ class ListenSession {
           expectingSpeak: this.expectingSpeak,
           phase: this.phase,
           holdLeft: Math.max(0, (this.holdUntil || 0) - Date.now()),
-          chunks: this.ttsChunksOut
+          chunks: this.ttsChunksOut,
+          hostAsrOpen: Boolean(this.hostAsr?.isOpen?.())
         },
         { rateKey: "audio-paused-tts", rateMs: 15000 }
       );
@@ -712,10 +1028,206 @@ class ListenSession {
       debugLog.debug("AudioIn", "上行 PCM 分片统计", {
         chunks: this.audioChunksIn,
         lastB64len: b64.length,
-        sessionId: this.sessionId
+        sessionId: this.sessionId,
+        asrMode: this.getAsrMode()
       });
     }
     this.send({ type: "input_audio_buffer.append", audio: b64 });
+  }
+
+  /** dialog 路径 ASR → renderer（含 barge-in 短路） */
+  emitDialogAsr(text, final) {
+    if (!text) return;
+    if (final) {
+      const speaking = this.expectingSpeak || this.phase === PHASE.SPEAKING;
+      const t = String(text);
+      if (speaking && looksLikeBargeInCommand(t)) {
+        this.handleBargeInAsr(t, "dialog");
+        return;
+      }
+      if (speaking) {
+        this.emit({
+          type: "asr",
+          text: t,
+          final: true,
+          duringSpeak: true,
+          likelyEcho: true,
+          source: "dialog"
+        });
+        return;
+      }
+    }
+    this.emit({ type: "asr", text: String(text), final, source: "dialog" });
+  }
+
+  handleBargeInAsr(text, source) {
+    const t = String(text || "");
+    const cmd = detectMeetingCommand(t);
+    if (cmd.interrupt || cmd.command === "INTERRUPT" || cmd.stop || cmd.command === "STOP") {
+      debugLog.info("ASR", "barge-in 短路打断", {
+        command: cmd.command,
+        text: t.slice(0, 40),
+        source
+      });
+      this.interruptSpeak(cmd.command === "STOP" || cmd.stop ? "barge-in-stop" : "barge-in-asr");
+    }
+    this.emit({
+      type: "asr",
+      text: t,
+      final: true,
+      duringSpeak: true,
+      bargeIn: true,
+      source
+    });
+  }
+
+  async ensureHostAsr() {
+    if (hostAsrMode() !== "independent") {
+      this.asrModeEffective = "dialog";
+      if (this.hostAsr) {
+        try {
+          this.hostAsr.close();
+        } catch (_) {}
+        this.hostAsr = null;
+      }
+      return;
+    }
+    if (this.asrDegraded && this.getAsrMode() === "dialog") return;
+    if (this.hostAsr && (this.hostAsr.isOpen() || this.hostAsr.ws)) return;
+    const hotwords = ASR_HOTWORDS.map((h) => h.word).filter(Boolean);
+    const session = new HostAsrSession({
+      hotwords,
+      onResult: ({ text, final }) => {
+        if (!text || this.getAsrMode() !== "independent") return;
+        if (final) {
+          this.asrFinalCount += 1;
+          this.asrStartedAt = 0;
+          const speaking = this.expectingSpeak || this.phase === PHASE.SPEAKING;
+          if (speaking && looksLikeBargeInCommand(text)) {
+            this.handleBargeInAsr(text, "host-asr");
+            return;
+          }
+          if (speaking) {
+            this.emit({
+              type: "asr",
+              text,
+              final: true,
+              duringSpeak: true,
+              likelyEcho: true,
+              source: "host-asr"
+            });
+            return;
+          }
+        }
+        this.emit({ type: "asr", text, final, source: "host-asr" });
+      },
+      onError: (err) => {
+        const detail = typeof err === "object" && err ? err : { message: String(err) };
+        // 可恢复超时：已限流，勿刷 UI error
+        if (detail.code === "asr_packet_timeout" || detail.recoverable) {
+          debugLog.warn("HostAsr", "可恢复错误（将重连）", {
+            err: String(detail.message || err).slice(0, 120),
+            asrCode: detail.asrCode
+          });
+          return;
+        }
+        debugLog.warn("HostAsr", "会话错误回调", {
+          err: String(detail.message || err).slice(0, 160),
+          status: detail.status,
+          logId: detail.logId
+        });
+        this.emit({
+          type: "error",
+          message: `HostAsr: ${detail.message || err}`,
+          code: detail.code || "host-asr",
+          logId: detail.logId,
+          status: detail.status
+        });
+      }
+    });
+    this.hostAsr = session;
+    const ok = await session.connect();
+    if (!ok) {
+      const hs = session.lastHandshake || {};
+      // 独立听会模式没有 Dialog 可降级：保持失败，由 connectIndependentOnly 收口
+      if (!useIndependentListenOnly()) {
+        this.degradeAsrToDialog("handshake-failed", {
+          status: hs.status,
+          body: hs.body,
+          logId: hs.logId || session.logId,
+          resourceId: asrResourceId()
+        });
+        this.emit({
+          type: "error",
+          message: `独立 ASR 握手失败已降级 dialog（status=${hs.status || "?"} logId=${hs.logId || session.logId || ""}）`,
+          code: "host-asr-connect",
+          logId: hs.logId || session.logId
+        });
+      } else {
+        debugLog.error("HostAsr", "独立听会 ASR 握手失败", {
+          status: hs.status,
+          body: String(hs.body || "").slice(0, 200),
+          logId: hs.logId || session.logId
+        });
+        this.emit({
+          type: "error",
+          message: `独立 ASR 握手失败 status=${hs.status || "?"} logId=${hs.logId || session.logId || ""}`,
+          code: "host-asr-connect",
+          logId: hs.logId || session.logId
+        });
+      }
+    } else {
+      this.asrModeEffective = "independent";
+      this.asrDegraded = false;
+      this.emit({
+        type: "asr-ready",
+        mode: "independent",
+        logId: session.logId,
+        hostAsrReady: true
+      });
+    }
+  }
+
+  startAsrHealthLog() {
+    if (this.asrHealthTimer) return;
+    this.asrHealthTimer = setInterval(() => {
+      if (this.intentionalClose) return;
+      debugLog.info("AsrHealth", "听写健康快照", {
+        mode: this.getAsrMode(),
+        configuredMode: hostAsrMode(),
+        asrDegraded: this.asrDegraded,
+        hostAsrReady: Boolean(this.hostAsr?.isOpen?.()),
+        duplexOpen: this.isOpen(),
+        audioChunksIn: this.audioChunksIn,
+        dialogAsrStarted: this.asrStartedCount,
+        dialogAsrFinals: this.asrFinalCount,
+        lastDialogAsrAgeMs: this.lastDialogAsrAt ? Date.now() - this.lastDialogAsrAt : null,
+        hostAsrOpen: Boolean(this.hostAsr?.isOpen?.()),
+        hostAsrPackets: this.hostAsr?.audioPackets || 0,
+        hostAsrFinals: this.hostAsr?.finals || 0,
+        phase: this.phase,
+        pauseUplink: this.pauseUplink,
+        uplinkMuted: this.isUplinkMuted()
+      });
+    }, 20000);
+  }
+
+  stopAsrHealthLog() {
+    if (this.asrHealthTimer) {
+      clearInterval(this.asrHealthTimer);
+      this.asrHealthTimer = null;
+    }
+  }
+
+  /** Phase A：回灌结束后 commit，促使 dialog ASR 冲刷 */
+  commitDialogAudio(why) {
+    if (!this.isOpen() || this.intentionalClose) return;
+    try {
+      this.send({ type: "input_audio_buffer.commit" });
+      debugLog.debug("DuplexASR", "input_audio_buffer.commit", { why });
+    } catch (e) {
+      debugLog.warn("DuplexASR", "commit 失败", { why, message: e?.message });
+    }
   }
 
   clearTtsWatch() {
@@ -742,12 +1254,14 @@ class ListenSession {
       this.uplinkHoldTimer = null;
       if (!this.expectingSpeak) this.pauseUplink = false;
       if (this.phase === PHASE.COOLDOWN) this.setPhase(PHASE.IDLE, { why: "hold-elapsed" });
+      this.commitDialogAudio("hold-elapsed");
       debugLog.info("HostSpeak", "回灌防护期结束，恢复上行", { holdMs, chunks });
     }, holdMs);
     // COOLDOWN 结束后再标 IDLE（若 hold 已结束）
     setTimeout(() => {
       if (this.phase === PHASE.COOLDOWN && Date.now() >= this.cooldownUntil && !this.expectingSpeak) {
         this.setPhase(PHASE.IDLE, { why: "cooldown-elapsed" });
+        this.commitDialogAudio("cooldown-elapsed");
       }
     }, holdMs + COOLDOWN_MS + 50);
     debugLog.info("HostSpeak", ok ? "TTS 播报结束" : "TTS 结束(失败)", {
@@ -808,16 +1322,20 @@ class ListenSession {
       debugLog.warn("HostSpeak", "空文本，跳过");
       return { ok: false, error: "empty" };
     }
+    const ttsMode = hostTtsMode();
+    // 独立 TTS：听会存活即可；dialog TTS 必须 Duplex socket open
     if (!this.isOpen()) {
-      debugLog.error("HostSpeak", "无法 TTS：听会 socket 未连接", {
+      debugLog.error("HostSpeak", "无法 TTS：听会未就绪", {
         text: t.slice(0, 80),
-        reconnectAttempt: this.reconnectAttempt
+        reconnectAttempt: this.reconnectAttempt,
+        ttsMode,
+        listenActive: this.listenActive,
+        duplexOpen: Boolean(this.upstream && this.upstream.readyState === WebSocket.OPEN)
       });
       this.emit({ type: "error", message: "听会通道未连接，无法合成 Host 语音（等待重连或重新启动听会）" });
       return { ok: false, error: "not_open" };
     }
 
-    // 正在出声或上一段还在播：排队，避免 response.cancel 把没说完的句子掐掉
     const playbackLeft = Math.max(0, (this.holdUntil || 0) - Date.now());
     if (!opts.isRetry && !opts.fromQueue && (this.expectingSpeak || playbackLeft > 250)) {
       const elapsed = Date.now() - (this.speakSentAt || 0);
@@ -825,7 +1343,6 @@ class ListenSession {
         // 首包超时，允许新话术覆盖
       } else {
         this.pendingSpeak = t;
-        // expectingSpeak 时等 finishSpeak 冲刷；仅 hold 尾声时主动排程
         if (!this.expectingSpeak) this.scheduleQueuedSpeak(Math.min(playbackLeft, 800) + 200);
         debugLog.warn("HostSpeak", "TTS 播放未结束，话术已排队", {
           text: t.slice(0, 80),
@@ -840,45 +1357,128 @@ class ListenSession {
     else if (!opts.isRetry) this.speakRetry = 0;
 
     this.clearTtsWatch();
+    if (this.hostTtsAbort) {
+      try {
+        this.hostTtsAbort.abort();
+      } catch (_) {}
+      this.hostTtsAbort = null;
+    }
     this.speakGeneration += 1;
     const gen = this.speakGeneration;
 
-    // 先 cancel 自由对话（此时 expectingSpeak 仍为 false，canceled 不会误触发 TTS 重试）
-    this.send({ type: "response.cancel" });
-
     this.expectingSpeak = true;
-    // SPEAKING 期间不锁上行，便于「谢谢大智 / 听我说」打断；播完再由 finishSpeak 短暂静音防回灌
     this.pauseUplink = false;
     this.ttsChunksOut = 0;
     this.speakSentAt = Date.now();
     this.currentSpeakText = t;
+    this.speakDownlinkCount = 0;
+    this.speakDownlinkTypes = [];
     const predHold = estimateHoldMs(t);
     this.holdUntil = Date.now() + predHold;
-    this.setPhase(PHASE.SPEAKING, { text: t.slice(0, 60), predHold });
+    this.setPhase(PHASE.SPEAKING, { text: t.slice(0, 60), predHold, ttsMode });
 
-    // 主路径：speech_text_buffer.commit = 直接 TTS / 问候（官方语义）
-    // replacement.* 仅用于「覆盖模型已在生成的回复」，冷启动 alone 会静默无音频
-    // 勿发 response.create / input_audio_buffer.clear（45000000 断线）
+    if (ttsMode === "independent") {
+      return this.speakTextIndependent(t, gen, opts);
+    }
+    return this.speakTextDialog(t, gen, opts);
+  }
+
+  /** P2：独立 HTTP TTS → 虚拟麦（默认） */
+  speakTextIndependent(t, gen, opts) {
+    const mode = "independent-http";
+    debugLog.info("HostSpeak", "请求独立 TTS 进虚拟麦", {
+      text: t.slice(0, 120),
+      retry: this.speakRetry,
+      mode,
+      fromQueue: !!opts.fromQueue,
+      generation: gen
+    });
+    this.emit({ type: "host-speaking", text: t, retry: this.speakRetry, mode });
+
+    const ac = new AbortController();
+    this.hostTtsAbort = ac;
+    let first = false;
+
+    void synthesizeHostTts(t, {
+      signal: ac.signal,
+      onChunk: (b64) => {
+        if (gen !== this.speakGeneration || ac.signal.aborted) return;
+        this.ttsChunksOut += 1;
+        if (!first) {
+          first = true;
+          this.clearTtsWatch();
+          debugLog.info("TTS", "首包语音已到（独立通道）", {
+            b64len: b64.length,
+            text: t.slice(0, 60)
+          });
+          this.emit({ type: "tts-started", text: t });
+        }
+        this.emit({ type: "tts-audio", audio: b64, sampleRate: ttsSampleRate() });
+      }
+    }).then((r) => {
+      if (gen !== this.speakGeneration) return;
+      this.hostTtsAbort = null;
+      if (r.ok && this.ttsChunksOut > 0) {
+        this.finishSpeak(true);
+      } else {
+        const reason = r.error || "timeout-no-audio";
+        debugLog.error("HostSpeak", "独立 TTS 失败", {
+          reason,
+          chunks: this.ttsChunksOut,
+          logId: r.logId
+        });
+        if (this.speakRetry < 1) {
+          this.scheduleSpeakRetry(reason);
+        } else {
+          this.emit({ type: "tts-failed", reason, text: t, logId: r.logId, channel: "independent" });
+          this.finishSpeak(false);
+        }
+      }
+    });
+
+    this.ttsWatchTimer = setTimeout(() => {
+      if (gen !== this.speakGeneration) return;
+      if (!this.expectingSpeak) return;
+      if (this.ttsChunksOut > 0) return;
+      debugLog.warn("HostSpeak", "独立 TTS 超时无首包", { waitMs: 12000, text: t.slice(0, 60) });
+      try {
+        ac.abort();
+      } catch (_) {}
+      this.scheduleSpeakRetry("timeout-no-audio");
+    }, 12000);
+
+    return { ok: true, queued: false, mode };
+  }
+
+  /**
+   * E1：dialog 通道主动播报。
+   * retry0=SayHello(commit)；retry1=ChatTTSText(replacement)；retry2=append+commit
+   */
+  speakTextDialog(t, gen, opts) {
+    if (this.speakRetry > 0 || this.ttsChunksOut > 0) {
+      this.send({ type: "response.cancel" });
+    }
+
     let mode = "commit-only";
     let sentAppend = false;
     let sentCommit = false;
     let sentReplace = false;
 
-    if (this.speakRetry >= 2) {
+    if (this.speakRetry === 0) {
+      mode = "commit-only";
+      sentCommit = this.send({ type: "speech_text_buffer.commit", text: t });
+    } else if (this.speakRetry === 1) {
       mode = "replacement";
       sentReplace =
         this.send({ type: "speech_text_buffer.replacement.append", text: t }) &&
         this.send({ type: "speech_text_buffer.replacement.commit", text: t });
-    } else if (this.speakRetry === 1) {
+    } else {
       mode = "append+commit";
       sentAppend = this.send({ type: "speech_text_buffer.append", text: t });
       sentCommit = this.send({ type: "speech_text_buffer.commit", text: t });
-    } else {
-      mode = "commit-only";
-      sentCommit = this.send({ type: "speech_text_buffer.commit", text: t });
     }
 
-    debugLog.info("HostSpeak", "请求 TTS 进虚拟麦", {
+    debugLog.info("HostSpeak", "请求 dialog TTS 进虚拟麦", {
       text: t.slice(0, 120),
       retry: this.speakRetry,
       mode,
@@ -891,14 +1491,13 @@ class ListenSession {
 
     this.emit({ type: "host-speaking", text: t, retry: this.speakRetry, mode });
 
-    // 8s 无首包 → 有限重试（切换 commit / commit-only / replacement）
     this.ttsWatchTimer = setTimeout(() => {
       if (gen !== this.speakGeneration) return;
       if (!this.expectingSpeak) return;
       if (this.ttsChunksOut > 0) return;
       if (this.protocolFatal) {
         debugLog.error("HostSpeak", "协议错误后放弃 TTS", { text: t.slice(0, 60) });
-        this.emit({ type: "tts-failed", reason: "protocol-fatal", text: t });
+        this.emit({ type: "tts-failed", reason: "protocol-fatal", text: t, channel: "dialog" });
         this.finishSpeak(false);
         return;
       }
@@ -908,12 +1507,14 @@ class ListenSession {
         text: t.slice(0, 60),
         sentAppend,
         sentCommit,
-        sentReplace
+        sentReplace,
+        speakDownlinkCount: this.speakDownlinkCount,
+        speakDownlinkTypes: this.speakDownlinkTypes.slice(0, 20)
       });
       this.scheduleSpeakRetry("timeout-no-audio");
     }, 8000);
 
-    return { ok: true, queued: false };
+    return { ok: true, queued: false, mode };
   }
 
   /** 口令打断：取消当前 TTS，不重试；保留 interruptBuffer 供 CONTINUE 续播 */
@@ -933,6 +1534,12 @@ class ListenSession {
     }
     this.speakGeneration += 1;
     this.clearTtsWatch?.();
+    if (this.hostTtsAbort) {
+      try {
+        this.hostTtsAbort.abort();
+      } catch (_) {}
+      this.hostTtsAbort = null;
+    }
     try {
       this.send({ type: "response.cancel" });
     } catch (_) {}
@@ -962,7 +1569,16 @@ class ListenSession {
 
   close() {
     this.intentionalClose = true;
+    this.listenActive = false;
+    this.authFatal = false;
     this.stopKeepalive();
+    this.stopAsrHealthLog();
+    if (this.hostAsr) {
+      try {
+        this.hostAsr.close();
+      } catch (_) {}
+      this.hostAsr = null;
+    }
     if (this.queuedSpeakTimer) {
       clearTimeout(this.queuedSpeakTimer);
       this.queuedSpeakTimer = null;
@@ -994,7 +1610,9 @@ class ListenSession {
       ttsChunksOut: this.ttsChunksOut,
       reconnectAttempt: this.reconnectAttempt,
       asrStarted: this.asrStartedCount,
-      asrFinals: this.asrFinalCount
+      asrFinals: this.asrFinalCount,
+      asrMode: this.getAsrMode(),
+      asrDegraded: this.asrDegraded
     });
     try {
       this.send({ type: "session.close" });

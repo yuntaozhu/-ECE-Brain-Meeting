@@ -12,19 +12,36 @@ async function runLlmAnswer(ctx) {
   let spoken = "";
   const wikiNow = S.queryWiki(askText, 1);
   const pageSpeak = wikiNow.hits?.[0]?.speak || "";
-  if (pageSpeak && (wikiNow.hits?.[0]?.score || 0) >= 6 && !S.isDefinitionSpeak(pageSpeak)) {
-    spoken = S.emitLead(opts, S.leadClause(pageSpeak, 28));
+  const lastHost = String(opts.lastHostSpeakText || "").trim();
+  const wantDetail =
+    S.isComplexQuestion(askText) ||
+    /追问|具体|更多|详细|展开|盈利|赚钱|怎么走|第一步|怎么算|计算|测算|理由/.test(askText);
+  const tautologyReason =
+    /理由/.test(askText) &&
+    /要成为家长选择|成为家长选择园所的理由/.test(pageSpeak) &&
+    !/(开口|测评|成果展|实拍)/.test(pageSpeak);
+  const wikiLeadOk =
+    pageSpeak &&
+    (wikiNow.hits?.[0]?.score || 0) >= 6 &&
+    !S.isDefinitionSpeak(pageSpeak) &&
+    // 复杂经营/追问：跳过短 wiki-lead，走 RAG+整段 Chat，避免复读半截行事历
+    !wantDetail &&
+    !tautologyReason &&
+    !S.alreadyCovered(S.leadClause(pageSpeak, 28), lastHost);
+  if (wikiLeadOk) {
+    spoken = S.emitLead(opts, S.leadClause(pageSpeak, 72));
   }
   opts.onStatus?.({ phase: "thinking", reason: state.mode });
   if (spoken) {
     const signal = opts.signal;
     const spokenNow = spoken;
+    const pageFull = pageSpeak;
     void (async () => {
       try {
         if (signal?.aborted) return;
         const chat = await S.speakViaChat(
           `${S.CHAT_ASK_SYSTEM}\n【议程】${agenda}`,
-          `请对下面问题做咨询短答（一句，勿前缀）：\n${askText}`,
+          `请对下面问题做咨询短答（一句，勿前缀；禁止复读「${spokenNow.slice(0, 24)}」）：\n${askText}`,
           {
             ...opts,
             signal,
@@ -35,12 +52,21 @@ async function runLlmAnswer(ctx) {
           },
           a2aTrace
         );
-        if (signal?.aborted || !chat.answer || chat.arkMode === "heuristic") return;
-        const extra = S.leadClause(chat.answer, 36);
-        if (!extra || S.isDefinitionSpeak(extra) || S.alreadyCovered(extra, spokenNow)) return;
+        if (signal?.aborted) return;
+        let extra = "";
+        if (chat.answer && chat.arkMode !== "heuristic") {
+          extra = S.leadClause(chat.answer, 48);
+        }
+        // 超时/空答：从同一 Wiki 口播补第二句，勿冷场
+        if (!extra || S.isDefinitionSpeak(extra) || S.alreadyCovered(extra, spokenNow)) {
+          extra = S.continuationAfter(pageFull, spokenNow);
+        }
+        if (!extra || S.alreadyCovered(extra, spokenNow)) return;
         S.emitLead(opts, extra);
       } catch (err) {
         S.debugLog.warn("Strategy", "咨询续写失败", { error: String(err?.message || err) });
+        const rest = S.continuationAfter(pageFull, spokenNow);
+        if (rest && !S.alreadyCovered(rest, spokenNow)) S.emitLead(opts, rest);
       }
     })();
     return {
@@ -119,14 +145,17 @@ async function runLlmAnswer(ctx) {
   const userTask =
     state.mode === S.INTERACTION_MODE.HA_TALK
       ? `园长说：${askText}\n请按探讨结构短复（勿前缀「大智：」）。可参照近场对话，勿编造未出现的提问。`
-      : `请对下面问题做咨询短答（抓手+金句，勿前缀）。若是追问「还有其他方案」，禁止复读上一答；若问刚才问了什么，据近场对话/上一实质问复述：\n${askText}`;
+      : `请对下面问题做咨询短答（抓手+金句，约60–90字，勿前缀）。结合知识片段作答，禁止说「词条对不上」。若与议程/全园美语明显无关，一句拉回议程。若是追问「再具体/更多/还有其他方案」，禁止复读上一答「${String(opts.lastHostSpeakText || "").slice(0, 40)}」，必须补阶段细节或招生测算；若问刚才问了什么，据近场对话/上一实质问复述：\n${askText}`;
 
   let streamed = "";
+  const bridge =
+    S.leadClause(S.matchFaqInstant(askText)?.answer || "", 24) || "我按资料先说一句。";
   const chat = await S.speakViaChat(
     system,
     userTask,
     {
       ...opts,
+      bridgeText: bridge,
       timeoutMs: S.FAST_LLM_MS,
       temperature: state.mode === S.INTERACTION_MODE.HA_TALK ? 0.55 : 0.35,
       maxLen: state.mode === S.INTERACTION_MODE.HA_TALK ? 110 : 110,

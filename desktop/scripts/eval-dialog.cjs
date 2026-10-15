@@ -45,6 +45,10 @@ function check(row, r) {
   if (e.answerIncludesAny?.length && !includesAny(answer, e.answerIncludesAny)) {
     fails.push(`missing any of: ${e.answerIncludesAny.join("|")}`);
   }
+  if (e.answerIncludesAll?.length) {
+    const miss = e.answerIncludesAll.filter((x) => !String(answer || "").includes(x));
+    if (miss.length) fails.push(`missing all of: ${miss.join("|")}`);
+  }
   if (e.answerForbids?.length && !includesNone(answer, e.answerForbids)) {
     fails.push("hit forbid");
   }

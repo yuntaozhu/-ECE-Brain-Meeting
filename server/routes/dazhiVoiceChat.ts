@@ -97,4 +97,14 @@ router.post("/rtc/voicechat/callback", (req, res) => {
   res.json({ success: true });
 });
 
+/**
+ * 预留 RTC 回调入口（运维配置公网地址后再完善 HMAC 验签与 VoiceChat 事件处理）。
+ * 文档：https://www.volcengine.com/docs/6348/75110
+ */
+function rtcCallbackStub(_req: Request, res: Response) {
+  res.status(200).json({});
+}
+router.get("/rtc/callback", rtcCallbackStub);
+router.post("/rtc/callback", rtcCallbackStub);
+
 export default router;

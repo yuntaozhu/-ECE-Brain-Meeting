@@ -22,7 +22,7 @@ function hasArkKey() {
 async function runMeetingAnalysis(recentTranscript, currentAgenda, opts = {}) {
   const ctx = buildAnalysisContext(recentTranscript, currentAgenda, opts);
   if (!ctx.state) {
-    debugLog.error("Strategy", "缺少 agentState");
+    debugLog.error("Strategy", "缺少 meetingState/agentState");
     return baseResult({ reason: "NO_STATE", a2aTrace: ctx.a2aTrace, kbStatus: ctx.kbStatus });
   }
 

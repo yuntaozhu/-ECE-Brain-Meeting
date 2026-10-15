@@ -13,7 +13,8 @@ const steps = [
   "_wave11-smoke.cjs",
   "_wave12-smoke.cjs",
   "eval-dialog.cjs",
-  "eval-p0-long.cjs"
+  "eval-p0-long.cjs",
+  "eval-quan-yuan-scene.cjs"
 ];
 
 let failed = 0;

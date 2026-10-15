@@ -4,12 +4,12 @@ function apiKey() {
 }
 
 function chatModelL2() {
-  // 经营 L2 优先快答接入点，减少 20s 超时→heuristic
+  // 经营 L2 优先快答 Endpoint，减少超时→heuristic
   return (
     process.env.DOUBAO_CHAT_FAST_MODEL ||
     process.env.DOUBAO_CHAT_MODEL ||
     process.env.DOUBAO_MODEL_ENDPOINT ||
-    "doubao-seed-2-1-turbo-260628"
+    ""
   );
 }
 
@@ -18,7 +18,7 @@ function chatModelL3() {
     process.env.DOUBAO_CHAT_DEEP_MODEL ||
     process.env.DOUBAO_CHAT_MODEL ||
     process.env.DOUBAO_MODEL_ENDPOINT ||
-    "doubao-seed-evolving"
+    ""
   );
 }
 
@@ -33,9 +33,16 @@ function timeoutMsForTier(tier) {
   return Number.isFinite(n) && n > 0 ? n : 15000;
 }
 
-/** 仅 doubao-seed-evolving 接受 thinking.type（enabled|disabled，无 auto） */
+/**
+ * Deep Thinking：evolving 模型名，或当前即 DOUBAO_CHAT_DEEP_MODEL（Endpoint ID）。
+ * turbo / lite 接入点不要带 thinking，避免 400。
+ */
 function modelSupportsThinking(model) {
-  return /seed-evolving/i.test(String(model || ""));
+  const m = String(model || "").trim();
+  if (!m) return false;
+  if (/seed-evolving/i.test(m)) return true;
+  const deep = (process.env.DOUBAO_CHAT_DEEP_MODEL || "").trim();
+  return Boolean(deep && m === deep);
 }
 
 /**

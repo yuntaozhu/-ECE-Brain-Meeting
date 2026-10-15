@@ -14,6 +14,7 @@
 | POST | `/api/dazhi/voicechat/kick` | `kickDazhiFromRoom`，用户离房必须调用 |
 | POST | `/api/dazhi/voicechat/interrupt` | `UpdateVoiceChat` + `Command: "Interrupt"` |
 | POST | `/rtc/voicechat/callback` | 控制台 VoiceChat 事件回调 |
+| GET/POST | `/rtc/callback` | 预留回调入口（先回 200 `{}`，公网地址联调后再完善验签） |
 
 真人加房 Token（已有，勿新建平行接口）：
 
@@ -50,10 +51,10 @@ VOLC_RTC_APP_KEY=
 
 - `ARK_API_KEY`：方舟密钥 `dazhi-server-key`。部署时注入，禁止写入源码或提交 Git。
 - `ARK_ENDPOINT_ID`：`ep-20260928112753-fqzc7`（`doubao-seed-2-1-pro`）。
-- `VOLC_ACCESSKEY` / `VOLC_SECRETKEY`：IAM 子用户 AK/SK，只用于 RTC OpenAPI 的 V4 签名。
-- `RTC_APP_ID`：AI 音视频互动方案 AppId（StartVoiceChat）。
+- `VOLC_ACCESSKEY` / `VOLC_SECRETKEY`：IAM 子用户 `dazhi-rtc-server` 的 AK/SK（禁止主账号），只用于 RTC OpenAPI 的 V4 签名。
+- `RTC_APP_ID`：应用 `dazhiMeeting` 的 AppId（StartVoiceChat）。2026-10-15 起勿再用旧 AppId `6ab9e873…`。
 - `VOLC_RTC_APP_ID` / `VOLC_RTC_APP_KEY`：客户端 Token 签发。**必须与 `RTC_APP_ID` 相同应用**，否则真人与 `dazhi-ai-bot` 不在同一应用空间，联调必失败。
-- 桌面控场仍读 `DOUBAO_API_KEY`，不要用 RTC 的方舟 Key 去替换它。
+- 桌面控场 LLM/Embedding 读 `DOUBAO_API_KEY`；VoiceChat 服务端路径读 `ARK_API_KEY`。两个 Key 分开，不要混用。
 - **不要**为 `dazhi-ai-bot` 签发 Token（Bot 由 RTC 服务端自动入房）。
 
 若配置了 `RTC_VOICECHAT_CALLBACK_SECRET`，回调请求需带头：

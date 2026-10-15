@@ -22,8 +22,11 @@ const {
 const {
   runBusinessAdvisor,
   buildFastLead,
+  alternateHeuristic,
   isDefinitionSpeak,
-  isOperateQuestion
+  isOperateQuestion,
+  isProfitAsk,
+  PROFIT_TTS
 } = require("../advisors");
 const {
   lookupAnswer,
@@ -61,9 +64,11 @@ const {
   isWhyInvestIntent,
   isEnrollmentBenefitAsk,
   isRecallLastAsk,
+  isAskListRequest,
   isSessionMemoryMeta,
   isCasualChitchat,
   isBizStickyFollowUp,
+  isBizDeicticFollowUp,
   detectUserTone,
   isTrustChallenge,
   setMode,
@@ -93,8 +98,11 @@ module.exports = {
   classifyAnswerTier,
   runBusinessAdvisor,
   buildFastLead,
+  alternateHeuristic,
   isDefinitionSpeak,
   isOperateQuestion,
+  isProfitAsk,
+  PROFIT_TTS,
   lookupAnswer,
   rememberAnswer,
   clearMeetingCache,
@@ -126,9 +134,11 @@ module.exports = {
   isWhyInvestIntent,
   isEnrollmentBenefitAsk,
   isRecallLastAsk,
+  isAskListRequest,
   isSessionMemoryMeta,
   isCasualChitchat,
   isBizStickyFollowUp,
+  isBizDeicticFollowUp,
   detectUserTone,
   isTrustChallenge,
   setMode,

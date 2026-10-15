@@ -1,0 +1,70 @@
+/**
+ * Agent 可观测事件（供 A2A / Agent 工作台展示）
+ * 兼容旧字段 sender/target/action，并增加 role/summary/runId/detail。
+ */
+
+function newRunId() {
+  return `run_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+/**
+ * @param {object} opts
+ * @param {string} opts.role MeetingAgent | KnowledgeTool | AudioBridge | Gate
+ * @param {string} opts.action RUN_START|RETRIEVE|PLAN|COMPOSE|SPEAK|FALLBACK|RUN_END|…
+ * detail 建议带上 tool、topScore、gate（faq|kb-script|clarify|compose|rewrite）、doubaoSpeak、riskRewrite。
+ * @param {string} [opts.summary] 人话一行
+ * @param {object} [opts.detail]
+ * @param {string} [opts.runId]
+ * @param {string} [opts.target] 兼容旧 UI
+ */
+function agentEvent(opts = {}) {
+  const role = String(opts.role || "MeetingAgent");
+  const action = String(opts.action || "NOTE");
+  const target = String(opts.target || "HostAgent");
+  return {
+    eventId: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    timestamp: Date.now(),
+    runId: opts.runId || "",
+    role,
+    action,
+    summary: String(opts.summary || "").slice(0, 160),
+    detail: opts.detail && typeof opts.detail === "object" ? opts.detail : {},
+    // 兼容旧 renderA2a
+    sender: role,
+    target,
+    payload: opts.detail && typeof opts.detail === "object" ? opts.detail : {}
+  };
+}
+
+function pushAgent(a2aTrace, opts) {
+  if (!Array.isArray(a2aTrace)) return null;
+  const ev = agentEvent(opts);
+  a2aTrace.push(ev);
+  return ev;
+}
+
+/** 从检索结果生成待办（替代模板三句） */
+function todosFromRetrieval(retrieval, askText) {
+  const hits = retrieval?.hits || [];
+  const cites = hits
+    .slice(0, 3)
+    .map((h) => h.title || h.slug)
+    .filter(Boolean);
+  const todos = [];
+  if (cites.length) todos.push(`依据：${cites.join("、")}`);
+  else todos.push("依据：本场知识库（弱相关，已谨慎作答）");
+  if (/回本|值得|投资|盈利|赚钱|测算|三笔账|一点八/.test(String(askText || ""))) {
+    todos.push("边界：测算/参考口径，不保证招满或包赚");
+  } else {
+    todos.push("口径以知识库为准，数字不编造");
+  }
+  todos.push("可追问：怎么算 / 落地准备 / 收费");
+  return todos;
+}
+
+module.exports = {
+  newRunId,
+  agentEvent,
+  pushAgent,
+  todosFromRetrieval
+};

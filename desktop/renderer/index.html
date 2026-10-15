@@ -151,12 +151,12 @@
       <section>
         <h2>会场转写</h2>
         <p id="asrStats" class="status warn" style="margin:0 0 6px;font-size:11px">启动听会后，此处显示实时转写（含中间结果）</p>
-        <p id="duplexStats" class="status warn" style="margin:0 0 6px;font-size:11px">半双工：IDLE</p>
+        <p id="duplexStats" class="status warn" style="margin:0 0 6px;font-size:11px">听写：IDLE</p>
         <div id="transcript"></div>
       </section>
 
       <section>
-        <h2>A2A 事件 / 待办</h2>
+        <h2>Agent 工作台 <span style="font-weight:400;font-size:12px;color:#64748b">（检索 / 作答步骤 · 原 A2A）</span></h2>
         <div id="a2a"></div>
         <ol id="todos"></ol>
       </section>
@@ -180,6 +180,6 @@
         <div id="log" style="margin-top:8px;height:220px;overflow:auto;background:#070b16;border-radius:8px;padding:8px;font-size:11px;line-height:1.4;font-family:ui-monospace,Consolas,monospace"></div>
       </section>
     </main>
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
   </body>
 </html>

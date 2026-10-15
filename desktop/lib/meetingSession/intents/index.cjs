@@ -85,8 +85,18 @@ function isEnrollmentBenefitAsk(text) {
 function isRecallLastAsk(text) {
   const t = normalizeDazhiAliases(String(text || "").trim());
   if (!t) return false;
+  if (isAskListRequest(t)) return false;
   if (/^(大智[，,\s]*)?(什么问题|问的什么|上一问)[？?。.!！]?$/.test(t)) return true;
   return /(刚刚|刚才|上[一1]个?).{0,10}(问了|问的|什么问题)|问了(你|大智)?什么|我(们)?问的是什么|还记不记得.{0,16}问|上一问是什么|刚才什么问题|问的什么问题|他也不知道|问的什么(问题)?/.test(
+    t
+  );
+}
+
+/** 回顾本场多问 / 哪些还没回复：本地列清单，不走慢总结 */
+function isAskListRequest(text) {
+  const t = normalizeDazhiAliases(String(text || "").trim());
+  if (!t) return false;
+  return /(一共|总共|都).{0,6}问了|问了哪些|哪些问题|没有回复|没回复|上面说了什么|刚才说了什么|说了什么没有|哪些还没/.test(
     t
   );
 }
@@ -116,6 +126,20 @@ function isCasualChitchat(text) {
 }
 
 /**
+ * 指代/拆解型追问：针对上一经营答（怎么算、理由是什么、为什么）。
+ * @param {string} text
+ */
+function isBizDeicticFollowUp(text) {
+  const t = normalizeDazhiAliases(String(text || "").trim());
+  if (!t || t.length < 4) return false;
+  if (isCasualChitchat(t) || isRecallLastAsk(t) || isSessionMemoryMeta(t)) return false;
+  if (/谢谢大智|停止大智|听我说|请继续|总结一下/.test(t)) return false;
+  return /(这个方案|刚才|你刚说|上一句|上一答|那笔账|三笔账|这个数字|怎么算|如何计算|怎么计算|算出来|测算|依据|为什么|什么意思|理由是什么|选择.*理由|家长.*理由|一点八|五点四|三万九)/.test(
+    t
+  );
+}
+
+/**
  * stickyBiz 续问：须仍是经营实体/步骤，且非口令/闲聊/元问题。
  * @param {string} text
  */
@@ -124,7 +148,8 @@ function isBizStickyFollowUp(text) {
   if (!t || t.length < 4) return false;
   if (isCasualChitchat(t) || isRecallLastAsk(t) || isSessionMemoryMeta(t)) return false;
   if (/谢谢大智|停止大智|听我说|请继续|总结一下/.test(t)) return false;
-  return /(还有|其他方案|别的|下一步|怎么走|具体|再细|第一步|样板|招生|落地|签约|准备|收费|非教|老师|抵触|倒闭|经营|增量|续费)/.test(
+  if (isBizDeicticFollowUp(t)) return true;
+  return /(还有|其他方案|别的|下一步|怎么走|具体|再细|再具体|更多|详细|展开|描述|第一步|样板|招生|落地|签约|准备|收费|非教|老师|抵触|倒闭|经营|盈利|赚钱|增量|续费)/.test(
     t
   );
 }
@@ -160,8 +185,10 @@ module.exports = {
   isWhyInvestIntent,
   isEnrollmentBenefitAsk,
   isRecallLastAsk,
+  isAskListRequest,
   isSessionMemoryMeta,
   isCasualChitchat,
+  isBizDeicticFollowUp,
   isBizStickyFollowUp,
   detectUserTone,
   isTrustChallenge

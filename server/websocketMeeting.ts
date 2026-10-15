@@ -137,14 +137,25 @@ export function setupMeetingWebSocket(server: http.Server) {
         return;
       }
       try {
-        const response = await fetch("https://ark.cn-beijing.volces.com/api/v3/chat/completions", {
+        const arkBase = (process.env.ARK_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3").replace(
+          /\/$/,
+          ""
+        );
+        const chatModel = (
+          process.env.DOUBAO_CHAT_MODEL ||
+          process.env.DOUBAO_CHAT_FAST_MODEL ||
+          process.env.DOUBAO_MODEL_ENDPOINT ||
+          ""
+        ).trim();
+        if (!chatModel) throw new Error("missing DOUBAO_CHAT_MODEL endpoint");
+        const response = await fetch(`${arkBase}/chat/completions`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${arkKey}`
           },
           body: JSON.stringify({
-            model: process.env.DOUBAO_CHAT_MODEL || "doubao-seed-2-1-turbo-260628",
+            model: chatModel,
             messages: [
               {
                 role: "system",

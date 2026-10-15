@@ -34,8 +34,12 @@ function prepareAsk(ctx) {
       S.isCasualChitchat(peeledAsk)
   });
   const askText = rw.rewritten || peeledAsk;
-  a2aTrace.push(
-    S.newEvent("DirectorAgent", "HostAgent", "QUERY_REWRITE", {
+  const { pushAgent } = require("../../agent/events.cjs");
+  pushAgent(a2aTrace, {
+    role: "MeetingAgent",
+    action: "QUERY_REWRITE",
+    summary: `改写：${String(askText || "").slice(0, 36)}`,
+    detail: {
       original: lastFloor.slice(0, 80),
       rewritten: askText.slice(0, 100),
       complex: rw.complex,
@@ -43,8 +47,8 @@ function prepareAsk(ctx) {
       business: rw.business,
       residual: rw.residual,
       followUp: rw.followUp
-    })
-  );
+    }
+  });
   S.debugLog.info("Strategy", "问句改写", {
     original: lastFloor.slice(0, 60),
     rewritten: askText.slice(0, 80),
@@ -79,20 +83,31 @@ function prepareAsk(ctx) {
 
   const haMode = S.classifyHaIntent(lastFloor, state.mode);
   const stickyBiz = state.mode === S.INTERACTION_MODE.HA_BIZ && Date.now() < (state.haLockedUntil || 0);
+  const lastHost = String(opts.lastHostSpeakText || "");
+  const hostLooksBiz =
+    /(三笔账|一点八|五点四|三万九|盈利|样板|招生|收费|非教|美语|延时|分层|测算)/.test(lastHost);
+  const deicticFollow =
+    (stickyBiz || hostLooksBiz) &&
+    (S.isBizDeicticFollowUp(askText) || S.isBizDeicticFollowUp(lastFloor)) &&
+    !S.isCasualChitchat(askText);
   const stickyFollow =
-    stickyBiz && rw.followUp && S.isBizStickyFollowUp(askText) && !S.isCasualChitchat(askText);
+    stickyBiz &&
+    (rw.followUp || deicticFollow) &&
+    S.isBizStickyFollowUp(askText) &&
+    !S.isCasualChitchat(askText);
+  // 指代追问可越过「是什么」闭题误判，继续走经营顾问
   const useBiz =
-    !rw.closed &&
-    !S.isClosedFaqQuestion(askText) &&
+    (!rw.closed || deicticFollow || stickyFollow) &&
+    (deicticFollow || stickyFollow || !S.isClosedFaqQuestion(askText)) &&
     !S.isEnrollmentBenefitAsk(askText) &&
     !S.isCasualChitchat(askText) &&
-    (rw.business || S.isBusinessIntent(askText) || stickyFollow);
+    (rw.business || S.isBusinessIntent(askText) || stickyFollow || deicticFollow);
 
   if (useBiz) {
     S.setMode(state, S.INTERACTION_MODE.HA_BIZ);
   } else {
     S.setMode(state, haMode === "HA_TALK" ? S.INTERACTION_MODE.HA_TALK : S.INTERACTION_MODE.HA_ASK);
-    if (stickyBiz && !stickyFollow) {
+    if (stickyBiz && !stickyFollow && !deicticFollow) {
       S.debugLog.info("Strategy", "经营粘滞未续，回咨询", { text: askText.slice(0, 40) });
     }
   }

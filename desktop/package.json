@@ -22,6 +22,9 @@
     "rag:eval": "node scripts/eval-rag.cjs",
     "dialog:eval": "node scripts/eval-dialog.cjs",
     "dialog:eval:long": "node scripts/eval-p0-long.cjs",
+    "dialog:eval:scene": "node scripts/eval-quan-yuan-scene.cjs",
+    "agent:eval": "node scripts/eval-agent-variants.cjs",
+    "agent:eval:live": "node scripts/eval-agent-variants.cjs --live",
     "smoke": "node scripts/smoke-regression.cjs",
     "pack": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --win nsis --config.win.signAndEditExecutable=false",
     "pack:portable": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --win portable --config.win.signAndEditExecutable=false"

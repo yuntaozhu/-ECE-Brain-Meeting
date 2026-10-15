@@ -10,14 +10,14 @@ const {
   questionFingerprint,
   debugLog
 } = require("./internal/deps.cjs");
-const { newEvent } = require("./internal/result.cjs");
 
 function buildAnalysisContext(recentTranscript, currentAgenda, opts = {}) {
   const a2aTrace = [];
   const transcript = (recentTranscript || "").trim();
   const agenda = currentAgenda || DEFAULT_AGENDA;
   const kbStatus = knowledgeStatus();
-  const state = opts.agentState;
+  // main 传 meetingState；脚本/旧调用仍可能传 agentState
+  const state = opts.agentState || opts.meetingState || null;
 
   const floors = extractFloorLines(transcript, 4).map((l) => normalizeDazhiAliases(l));
   let lastFloor =
@@ -56,13 +56,17 @@ function attachCommand(ctx) {
     objectionLevel: ctx.state.objectionLevel,
     trigger: ctx.opts.trigger
   });
-  ctx.a2aTrace.push(
-    newEvent("DirectorAgent", "HostAgent", "MODE_SNAPSHOT", {
+  const { pushAgent } = require("./agent/events.cjs");
+  pushAgent(ctx.a2aTrace, {
+    role: "Gate",
+    action: "MODE_SNAPSHOT",
+    summary: `mode=${ctx.state.mode} cmd=${ctx.cmd.command || "-"}`,
+    detail: {
       mode: ctx.state.mode,
       command: ctx.cmd.command,
       segmentId: ctx.state.segmentId
-    })
-  );
+    }
+  });
   return ctx;
 }
 

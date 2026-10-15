@@ -27,7 +27,10 @@ async function embedQuery(query: string): Promise<{ embedding: number[]; isReal:
           Authorization: `Bearer ${doubaoApiKey}`
         },
         body: JSON.stringify({
-          model: process.env.DOUBAO_EMBED_MODEL || "doubao-embedding-vision-251215",
+          model:
+            process.env.DOUBAO_EMBED_ENDPOINT ||
+            process.env.DOUBAO_EMBED_MODEL ||
+            "",
           instructions:
             "Target_modality: text and video.\nInstruction:Compress the text/video into one word.\nQuery:",
           input: [{ type: "text", text: query || "教研检索" }],

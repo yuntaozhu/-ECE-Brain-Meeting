@@ -103,7 +103,10 @@ app.post("/api/rag/embed-resource", async (req, res) => {
               Authorization: `Bearer ${doubaoApiKey}`
             },
             body: JSON.stringify({
-              model: process.env.DOUBAO_EMBED_MODEL || "doubao-embedding-vision-251215",
+              model:
+                process.env.DOUBAO_EMBED_ENDPOINT ||
+                process.env.DOUBAO_EMBED_MODEL ||
+                "",
               instructions:
                 "Target_modality: text and video.\nInstruction:Compress the text/video into one word.\nQuery:",
               input: [{ type: "text", text: piece }],
@@ -613,16 +616,29 @@ app.post("/api/ai/intervene", async (req, res) => {
 // Doubao Ark Chat API Endpoint
 app.post("/api/doubao/chat", async (req, res) => {
   const { prompt, systemInstruction } = req.body;
-  const doubaoApiKey = process.env.DOUBAO_API_KEY || "ark-20c57eca-6b75-4581-bb78-023f7776df4e-58bd0";
+  const doubaoApiKey = (process.env.DOUBAO_API_KEY || process.env.ARK_API_KEY || "").trim();
+  const doubaoModel = (
+    process.env.DOUBAO_CHAT_MODEL ||
+    process.env.DOUBAO_CHAT_FAST_MODEL ||
+    process.env.DOUBAO_MODEL_ENDPOINT ||
+    ""
+  ).trim();
+  if (!doubaoApiKey || !doubaoModel) {
+    return res.status(503).json({
+      success: false,
+      error: "缺少 DOUBAO_API_KEY 或 DOUBAO_CHAT_MODEL（须为 Endpoint ID）"
+    });
+  }
   try {
-    const response = await fetch("https://ark.cn-beijing.volces.com/api/v3/chat/completions", {
+    const arkBase = (process.env.ARK_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3").replace(/\/$/, "");
+    const response = await fetch(`${arkBase}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${doubaoApiKey}`
       },
       body: JSON.stringify({
-        model: "doubao-seed-2-1-turbo-260628",
+        model: doubaoModel,
         messages: [
           { role: "system", content: systemInstruction || "你现在是‘大地 ECE-Brain 智慧教研室’具有绝对威严的主持主席（大地数字教研总督导），由豆包大模型驱动。严厉打击形式主义与无关话题（如买粽子等），专注幼儿教育数字化基础设施及注意力捕捉算法立项。" },
           { role: "user", content: prompt }

@@ -8,8 +8,8 @@ const PHASE = {
   COOLDOWN: "COOLDOWN"
 };
 
-/** Host 播完后禁止唤起/冷场的冷却（ms） */
-const COOLDOWN_MS = 2500;
+/** Host 播完后禁止唤起/冷场的冷却（ms）；Phase A 缩短以尽快恢复听写 */
+const COOLDOWN_MS = 1500;
 /** 冷场巡检静音阈值（ms） */
 const SILENCE_PATROL_MS = 22000;
 /** 开场后禁止 SILENCE 的保护期（不阻挡唤起/主题问答） */
@@ -30,10 +30,11 @@ const POST_HOST_ECHO_MS = 4500;
 function estimateHoldMs(text, opts = {}) {
   const chunks = Number(opts.chunks) || 0;
   if (chunks > 0) {
-    return Math.min(20000, Math.max(1500, Math.round(chunks * 400 + 600)));
+    // 上限 10s：避免长答把真问句/唤醒压死在回灌窗内
+    return Math.min(10000, Math.max(1200, Math.round(chunks * 280 + 500)));
   }
   const len = String(text || "").length;
-  return Math.min(12000, Math.max(2200, Math.round(len * 120) + 800));
+  return Math.min(8000, Math.max(1800, Math.round(len * 100) + 600));
 }
 
 /**

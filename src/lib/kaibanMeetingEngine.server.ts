@@ -33,13 +33,16 @@ function newEvent(
 
 async function doubaoChat(system: string, user: string): Promise<string | null> {
   const doubaoApiKey = process.env.DOUBAO_API_KEY || process.env.ARK_API_KEY || "";
-  const doubaoModel =
+  const doubaoModel = (
     process.env.DOUBAO_CHAT_MODEL ||
+    process.env.DOUBAO_CHAT_FAST_MODEL ||
     process.env.DOUBAO_MODEL_ENDPOINT ||
-    "doubao-seed-2-1-turbo-260628";
-  if (!doubaoApiKey) return null;
+    ""
+  ).trim();
+  if (!doubaoApiKey || !doubaoModel) return null;
 
-  const response = await fetch("https://ark.cn-beijing.volces.com/api/v3/chat/completions", {
+  const arkBase = (process.env.ARK_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3").replace(/\/$/, "");
+  const response = await fetch(`${arkBase}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

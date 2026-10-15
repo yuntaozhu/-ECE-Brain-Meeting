@@ -1,0 +1,156 @@
+[
+  {
+    "id": "S00-start",
+    "scene": "开场",
+    "input": "大智，会议开始。",
+    "expect": {
+      "reasonAny": ["MEETING_START"],
+      "answerIncludesAny": ["大智"]
+    }
+  },
+  {
+    "id": "S01-what",
+    "scene": "全园美语是什么",
+    "input": "大智，全园美语是什么？",
+    "expect": {
+      "reasonAny": ["WAKE_ANSWER"],
+      "answerIncludesAll": ["全园美语"],
+      "answerIncludesAny": ["系统", "四端", "特色", "招生"],
+      "answerForbids": ["正在旁听", "只买一批账号", "随便哪个英语课"]
+    }
+  },
+  {
+    "id": "S02-puhui",
+    "scene": "普惠园能不能做",
+    "input": "我园是一家普惠型幼儿园，可以做全园美语吗？",
+    "expect": {
+      "reasonAny": ["WAKE_ANSWER", "BIZ_ANSWER"],
+      "answerIncludesAny": ["四万九", "外校", "普惠", "大地"],
+      "answerForbids": ["不是单一英语课", "普惠园不能", "一律不能做"]
+    }
+  },
+  {
+    "id": "S03-conditions",
+    "scene": "开办条件",
+    "input": "我园要具备什么条件？",
+    "expect": {
+      "reasonAny": ["WAKE_ANSWER", "BIZ_ANSWER"],
+      "answerIncludesAny": ["园长", "教师", "设备", "网络", "硬件", "菲教", "家长"]
+    }
+  },
+  {
+    "id": "S04-english-teacher",
+    "scene": "要不要招专业英语老师",
+    "input": "需要招专业的英语老师吗？",
+    "expect": {
+      "reasonAny": ["WAKE_ANSWER", "BIZ_ANSWER"],
+      "answerIncludesAny": ["专业", "Teacher", "老师", "不是", "不必", "不用"],
+      "answerForbids": ["必须先招聘专业英语老师", "一定要外聘英语老师", "没有专业老师就不能开始"]
+    }
+  },
+  {
+    "id": "S05-parents-trust",
+    "scene": "老师不敢开口，家长如何认可",
+    "input": "如果没有专业的英语老师，老师都不敢开口说，家长怎么认可？",
+    "expect": {
+      "reasonAny": ["WAKE_ANSWER", "BIZ_ANSWER"],
+      "answerIncludesAny": ["开口", "家长", "成果", "测评", "Teacher", "实拍"]
+    }
+  },
+  {
+    "id": "S06-enroll-pitch",
+    "scene": "如何说服家长报名",
+    "input": "我们该如何来说服家长报名？",
+    "expect": {
+      "reasonAny": ["WAKE_ANSWER", "BIZ_ANSWER"],
+      "answerIncludesAny": ["家长", "成果", "开口", "招生", "选择", "测评"]
+    }
+  },
+  {
+    "id": "S07-vs-training",
+    "scene": "和少儿英语培训班的区别",
+    "input": "全园美语跟外界的少儿英语培训班有什么区别与优势？",
+    "expect": {
+      "reasonAny": ["WAKE_ANSWER", "BIZ_ANSWER"],
+      "answerIncludesAny": ["部分孩子", "课堂", "系统建设", "全园环境"],
+      "answerForbids": ["不是单一英语课或账号采购", "就是培训班", "没有区别"]
+    }
+  },
+  {
+    "id": "S08-edu-bureau",
+    "scene": "教育局不允许开英语课",
+    "input": "我们当地教育局不允许幼儿园开英语课怎么办？",
+    "expect": {
+      "reasonAny": ["WAKE_ANSWER", "BIZ_ANSWER"],
+      "answerIncludesAny": ["教育局", "规定", "不能", "英语课"],
+      "answerForbids": ["无视教育局", "不听教育局", "照样开英语课", "瞒着教育局"]
+    }
+  },
+  {
+    "id": "S09-profit",
+    "scene": "营收与成本",
+    "input": "办全园美语，幼儿园赚钱吗？营收与成本可以估算下吗？",
+    "expect": {
+      "reasonAny": ["WAKE_ANSWER", "BIZ_ANSWER"],
+      "answerIncludesAny": ["三笔账", "一点八万", "三万九", "测算"],
+      "answerForbids": ["不是单一英语课", "保证赚钱", "保证盈利", "一定能赚", "包赚"]
+    }
+  },
+  {
+    "id": "S10-how",
+    "scene": "具体如何开办",
+    "input": "如果要开办，具体要如何做呢？",
+    "expect": {
+      "reasonAny": ["WAKE_ANSWER", "BIZ_ANSWER"],
+      "answerIncludesAny": ["行事历", "阶段", "样板", "准备", "家长", "教师", "第一步"]
+    }
+  },
+  {
+    "id": "S11-price",
+    "scene": "如何收费",
+    "input": "全园美语，你们是如何收费的？",
+    "expect": {
+      "reasonAny": ["WAKE_ANSWER", "BIZ_ANSWER"],
+      "answerIncludesAll": ["三万九"],
+      "answerIncludesAny": ["学期", "一套", "不以在籍"],
+      "answerForbids": ["按在籍人数乘", "一个孩子一份钱"]
+    }
+  },
+  {
+    "id": "S12-too-expensive",
+    "scene": "经营困难觉得太贵",
+    "input": "1年39000元太贵了，我们现在经营困难，付不起这么多钱",
+    "expect": {
+      "reasonAny": ["WAKE_ANSWER", "BIZ_ANSWER"],
+      "answerIncludesAny": ["收益保障", "一半", "三万九", "退差额"],
+      "answerForbids": ["可以不付钱", "免费做", "先不用交钱", "样板班开口实拍"]
+    }
+  },
+  {
+    "id": "S13-no-confidence",
+    "scene": "一开始就要付、没信心",
+    "input": "而且才开始就要付这么多，我们不一定有信心办好",
+    "expect": {
+      "reasonAny": ["WAKE_ANSWER", "BIZ_ANSWER"],
+      "answerIncludesAny": ["样板", "阶段", "收益保障", "执行", "不要一上来", "行事历"]
+    }
+  },
+  {
+    "id": "S14-support",
+    "scene": "总部给予哪些支持",
+    "input": "你们会给予哪些支持？",
+    "expect": {
+      "reasonAny": ["WAKE_ANSWER", "BIZ_ANSWER"],
+      "answerIncludesAny": ["支持", "指导", "总部", "课件", "Teacher", "菲教", "培训"]
+    }
+  },
+  {
+    "id": "S15-stop",
+    "scene": "收口",
+    "input": "谢谢大智。",
+    "expect": {
+      "reasonAny": ["STOP"],
+      "modeAny": ["IDLE_LISTEN"]
+    }
+  }
+]

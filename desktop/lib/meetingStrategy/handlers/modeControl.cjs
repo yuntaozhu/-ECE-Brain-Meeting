@@ -28,17 +28,18 @@ async function handle(ctx) {
     });
   }
   if (cmd.command === "STOP") {
-    S.setMode(state, S.INTERACTION_MODE.IDLE_LISTEN, { newSegment: true });
+    S.setMode(state, S.INTERACTION_MODE.IDLE_LISTEN);
     state.holdToEnd = false;
     state.interrupted = false;
     state.interruptBuffer = null;
     state.holdFloorLines = [];
+    state.listenNotes = [];
     state.haLockedUntil = 0;
     state.bizFollowUps = 0;
     S.setLifecycle(state, state.meetingOpen ? S.MEETING_LIFE.SILENT : S.MEETING_LIFE.OFF);
+    S.debugLog.info("Strategy", "停说并旁听", { floor: String(ctx.lastFloor || "").slice(0, 40) });
     return S.baseResult({
-      shouldIntervene: true,
-      interventionText: "好，我继续静默旁听。需要时请再呼叫大智。",
+      shouldIntervene: false,
       reason: "STOP",
       interruptTts: true,
       a2aTrace,

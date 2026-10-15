@@ -1,12 +1,20 @@
 /**
  * Doubao Seeduplex (Realtime Duplex 3.0) WebSocket bridge.
  * Docs: wss://openspeech.bytedance.com/api/v3/duplex/realtime/dialogue
- * Auth: X-Api-Key (Speech console API Key — not Ark chat key)
+ * Auth: Access-Key + Resource-Id + 固定 App-Key（缺一易 403 / 45000030）
  */
 
+import { randomUUID } from "crypto";
 import WebSocket from "ws";
 
-const DUPLEX_URL = "wss://openspeech.bytedance.com/api/v3/duplex/realtime/dialogue";
+const DUPLEX_URL_DEFAULT = "wss://openspeech.bytedance.com/api/v3/duplex/realtime/dialogue";
+const DUPLEX_APP_KEY = "PlgvMymc7f3tQnJ6";
+const DUPLEX_RESOURCE_ID = "volc.speech.dialog";
+const DUPLEX_MODEL_DEFAULT = "1.2.6.1";
+
+function duplexUrl(): string {
+  return (process.env.DOUBAO_DUPLEX_WS_URL || DUPLEX_URL_DEFAULT).trim() || DUPLEX_URL_DEFAULT;
+}
 
 export type DuplexClientMessage =
   | { type: "ready"; mode: "duplex" | "chat-fallback"; sessionId?: string; logId?: string; error?: string }
@@ -32,8 +40,17 @@ function speechApiKey(): string {
 }
 
 function duplexModel(): string {
-  // Official duplex docs cite 1.2.6.1; some SDK mirrors use 1.2.6.0 — override via env.
-  return (process.env.DOUBAO_DUPLEX_MODEL || "1.2.6.1").trim();
+  const raw = (process.env.DOUBAO_DUPLEX_MODEL || DUPLEX_MODEL_DEFAULT).trim();
+  // 仅拦截失效别名；1.2.6.x 留给 E2 全双工探测
+  if (/^(phone-omni-chat2|omni-chat|doubao-omni)$/i.test(raw)) {
+    return DUPLEX_MODEL_DEFAULT;
+  }
+  return raw || DUPLEX_MODEL_DEFAULT;
+}
+
+function speechAppId(): string {
+  // 须为语音控制台数字 AppID；项目名 default 易 45000030
+  return (process.env.DOUBAO_SPEECH_APP_ID || process.env.DOUBAO_APP_ID || "default").trim();
 }
 
 function defaultVoice(): string {
@@ -65,14 +82,23 @@ export class DoubaoDuplexBridge {
     }
 
     return new Promise((resolve) => {
+      const appId = speechAppId();
+      const connectId = randomUUID();
+      // Seeduplex 3.0：X-Api-Key 为主；App-ID / Resource / 固定 App-Key 作兼容
       const headers: Record<string, string> = {
-        "X-Api-Key": apiKey
+        "X-Api-Key": apiKey,
+        "X-Api-Connect-Id": connectId,
+        "X-Api-Access-Key": apiKey,
+        "X-Api-Resource-Id": DUPLEX_RESOURCE_ID,
+        "X-Api-App-Key": DUPLEX_APP_KEY
       };
-      const appId = (process.env.DOUBAO_SPEECH_APP_ID || process.env.DOUBAO_APP_ID || "").trim();
-      if (appId) headers["X-Api-App-Id"] = appId;
+      if (/^\d{6,}$/.test(appId)) {
+        headers["X-Api-App-ID"] = appId;
+        headers["X-Api-App-Id"] = appId;
+      }
 
       let settled = false;
-      const upstream = new WebSocket(DUPLEX_URL, { headers });
+      const upstream = new WebSocket(duplexUrl(), { headers });
       this.upstream = upstream;
 
       upstream.on("unexpected-response", (_req, res) => {
@@ -80,11 +106,14 @@ export class DoubaoDuplexBridge {
         res.on("data", (c) => chunks.push(Buffer.from(c)));
         res.on("end", () => {
           const body = Buffer.concat(chunks).toString("utf8").slice(0, 400);
-          console.warn(`[Duplex] handshake HTTP ${res.statusCode}: ${body}`);
+          const logId = res.headers?.["x-tt-logid"] || "";
+          console.warn(
+            `[Duplex] handshake HTTP ${res.statusCode}: ${body} logId=${logId} connectId=${connectId}`
+          );
           this.opts.onClientMessage({
             type: "ready",
             mode: "chat-fallback",
-            error: `Seeduplex 握手失败 HTTP ${res.statusCode}`
+            error: `Seeduplex 握手失败 HTTP ${res.statusCode}${logId ? ` logid=${logId}` : ""}`
           });
           if (!settled) {
             settled = true;
@@ -95,11 +124,13 @@ export class DoubaoDuplexBridge {
 
       upstream.on("open", () => {
         const logId = (upstream as any)._req?.res?.headers?.["x-tt-logid"];
-        console.log(`[Duplex] upstream open, logId=${logId || "n/a"}`);
+        const model = duplexModel();
+        console.log(`[Duplex] upstream open, logId=${logId || "n/a"} connectId=${connectId} model=${model}`);
+        const voice = this.opts.voice || defaultVoice();
         this.sendUpstream({
           type: "session.create",
           session: {
-            model: duplexModel(),
+            model,
             instructions: this.opts.instructions || CHAIR_INSTRUCTIONS,
             audio: {
               input: {
@@ -107,9 +138,16 @@ export class DoubaoDuplexBridge {
               },
               output: {
                 format: { type: "pcm_s16le", sample_rate: 24000, channel: 1 },
-                voice: this.opts.voice || defaultVoice()
+                voice
               }
             }
+          },
+          extension: {
+            tts: {
+              speaker: voice,
+              audio_config: { format: "pcm_s16le", sample_rate: 24000, channel: 1 }
+            },
+            dialog: { bot_name: "大智", extra: { model } }
           }
         });
       });
@@ -184,10 +222,16 @@ export class DoubaoDuplexBridge {
         mode: "duplex",
         sessionId: this.sessionId || undefined
       });
-      // Optional greeting so host hears the chair immediately
+      // ChatTTSText：直接指定文本合成（冷启动不先 cancel，避免冲掉问候）
+      const hello =
+        "各位园长好，我是大地 ECE-Brain AI 主席。请围绕当前教研议程发言，我会实时控场。";
       this.sendUpstream({
-        type: "speech_text_buffer.commit",
-        text: "各位园长好，我是大地 ECE-Brain AI 主席。请围绕当前教研议程发言，我会实时控场。"
+        type: "speech_text_buffer.replacement.append",
+        text: hello
+      });
+      this.sendUpstream({
+        type: "speech_text_buffer.replacement.commit",
+        text: hello
       });
       return;
     }
@@ -272,21 +316,22 @@ export class DoubaoDuplexBridge {
     this.sendUpstream({ type: "input_audio_buffer.commit" });
   }
 
-  /** Force-speak chair text (intervention / agenda prompt) via replacement TTS */
-  speakText(text: string) {
+  /** Force-speak chair text (intervention / agenda prompt) via ChatTTSText */
+  speakText(text: string, opts: { cancel?: boolean } = {}) {
     if (!text?.trim()) return;
-    this.sendUpstream({ type: "response.cancel" });
+    if (opts.cancel !== false) this.sendUpstream({ type: "response.cancel" });
+    const t = text.trim();
     this.sendUpstream({
       type: "speech_text_buffer.replacement.append",
-      text: text.trim()
+      text: t
     });
     this.sendUpstream({
       type: "speech_text_buffer.replacement.commit",
-      text: text.trim()
+      text: t
     });
   }
 
-  /** Soft greeting / commit speech text (model may still chat) */
+  /** Soft greeting / SayHello（不 cancel） */
   commitSpeechText(text: string) {
     if (!text?.trim()) return;
     this.sendUpstream({

@@ -4,37 +4,25 @@
  */
 const { app, BrowserWindow, ipcMain, session, shell } = require("electron");
 const path = require("path");
-const {
-  runMeetingAnalysis,
-  hasArkKey,
-  DEFAULT_AGENDA,
-  knowledgeStatus
-} = require("./lib/meetingStrategy");
+const { hasArkKey, DEFAULT_AGENDA, knowledgeStatus } = require("./lib/meetingStrategy");
 const { warmIndexFromDisk, semanticStatus, listConceptPages } = require("./lib/knowledge");
 const { debugLog, envFileCandidates } = require("./lib/platform");
-const {
-  PHASE,
-  looksLikeHostEcho,
-  isIntroSelfTalk,
-  stripIntroBoilerplate,
-  WAKE_COOLDOWN_MS
-} = require("./lib/duplex");
+const { PHASE } = require("./lib/duplex");
 const { ListenSession, speechApiKey, maskKey } = require("./main/listenSession.cjs");
+const { createStrategyEvaluate } = require("./main/strategyEvaluate.cjs");
+const { registerPolicyIpc } = require("./main/policyIpc.cjs");
 
 const {
   MODE_LABEL,
-  MEETING_LIFE,
   LIFE_LABEL,
   createMeetingSession,
-  deriveMeetingLife,
-  setLifecycle
+  deriveMeetingLife
 } = require("./lib/meetingSession");
 const {
   appendSession,
   openSessionsDir,
   readSession,
-  writeSummary,
-  clearMeetingCache
+  writeSummary
 } = require("./lib/runtime");
 
 for (const envPath of envFileCandidates()) {
@@ -154,6 +142,7 @@ app.whenReady().then(() => {
     callback(true);
   });
   session.defaultSession.setPermissionCheckHandler(() => true);
+  registerPolicyIpc(ipcMain);
   createWindow();
 
   debugLog.setUiSink((entry) => {
@@ -193,7 +182,8 @@ app.whenReady().then(() => {
   ipcMain.on("log:ui", (_e, payload) => {
     const level = (payload?.level || "INFO").toUpperCase();
     const fn = debugLog[level.toLowerCase()] || debugLog.info;
-    fn(payload?.tag || "UI", payload?.message || "", payload?.detail);
+    // 已在渲染端 appendLogLine，只写文件/控制台，禁止再推 bridge:log
+    fn(payload?.tag || "UI", payload?.message || "", payload?.detail, { skipUi: true });
   });
 
   ipcMain.handle("listen:start", async () => {
@@ -344,421 +334,30 @@ app.whenReady().then(() => {
   });
   ipcMain.handle("session:mode", handleSessionMode);
 
-  const handleStrategyEvaluate = async (_e, payload) => {
-    const transcript = payload?.transcript || "";
-    const agenda = payload?.agenda || DEFAULT_AGENDA;
-    const phase = listen?.phase || PHASE.IDLE;
-    const emitUi = (msg) => {
-      if (win && !win.isDestroyed()) win.webContents.send("bridge:event", msg);
-    };
-    const speakSoft = (text, tag) => {
-      const t = stripIntroBoilerplate(String(text || "").trim());
-      if (!t || !listen?.isOpen()) return { ok: false };
-      debugLog.info("Strategy", tag || "软播报", { text: t.slice(0, 80) });
-      const res = listen.speakText(t);
-      if (res?.ok || res?.queued) {
-        lastHostSpeakAt = Date.now();
-        lastHostSpeakText = t;
-      }
-      return res;
-    };
-    if (!meetingState) {
-      meetingState = createMeetingSession(`mtg_${Date.now()}`);
-    }
-    // P1：主进程打断缓冲同步进 meetingState，供 CONTINUE 续播
-    if (listen?.interruptBuffer?.fullText) {
-      meetingState.interruptBuffer = { ...listen.interruptBuffer };
-      if (!meetingState.lastInterruptedText) {
-        meetingState.lastInterruptedText = listen.interruptBuffer.fullText.slice(0, 800);
-      }
-    }
-    // 新一轮巡检取消上一轮未完成的 Chat（减停听后仍出答 / cancel 风暴）
-    if (strategyAbort) {
-      try {
-        strategyAbort.abort();
-      } catch (_) {}
-    }
-    strategyAbort = new AbortController();
-    const thisAbort = strategyAbort;
-    const policyOpts = {
-      phase,
-      listenStartedAt: listen?.listenStartedAt || listenStartedAt || 0,
-      lastHostSpeakAt,
-      lastHostSpeakText,
-      quietMs: payload?.quietMs,
-      lastQuestionFp,
-      lastQuestionAt,
-      meetingState,
-      trigger: payload?.reason || payload?.trigger || "manual",
-      signal: thisAbort.signal,
-      interruptChunks: listen?.interruptBuffer?.chunks || 0,
-      onStatus: (st) => emitUi({ type: "strategy-status", ...st }),
-      // P0：思考占位仅 UI，不走 TTS（避免双次触发 / cancel 风暴 / 拆段播报）
-      onThinking: (text) => {
-        emitUi({ type: "strategy-thinking", text });
-      },
-      // 听清后立刻播短句；后文在这句播放时生成，说完由排队接上
-      onEarlySpeak: (text) => {
-        const res = speakSoft(text, "先开口播");
-        if ((res?.ok || res?.queued) && meetingState) {
-          appendSession(meetingState.meetingId, {
-            speaker: "大智",
-            text: String(text || "").slice(0, 200),
-            mode: meetingState.mode,
-            segmentId: meetingState.segmentId
-          });
-        }
-        return res;
-      }
-    };
-    debugLog.info("Strategy", "开始巡检", {
-      agenda,
-      phase,
-      agentMode: meetingState.mode,
-      trigger: policyOpts.trigger,
-      transcriptChars: transcript.length,
-      transcriptPreview: transcript.slice(-240),
-      policyOpts: {
-        phase: policyOpts.phase,
-        listenStartedAt: policyOpts.listenStartedAt,
-        lastHostSpeakAt: policyOpts.lastHostSpeakAt,
-        quietMs: policyOpts.quietMs,
-        lastQuestionFp: policyOpts.lastQuestionFp,
-        lastQuestionAt: policyOpts.lastQuestionAt,
-        sinceHostMs: lastHostSpeakAt ? Date.now() - lastHostSpeakAt : null,
-        lastHostPreview: lastHostSpeakText.slice(0, 60)
-      }
-    });
-    try {
-      const result = await runMeetingAnalysis(transcript, agenda, policyOpts);
-      emitUi({ type: "strategy-status", phase: "idle" });
-      emitInteractionMode();
-      debugLog.info("Strategy", "巡检完成", {
-        shouldIntervene: result.shouldIntervene,
-        reason: result.reason,
-        agentMode: result.agentMode || meetingState.mode,
-        interventionText: result.interventionText,
-        fullAnswer: result.fullAnswer?.slice?.(0, 80),
-        spokenPrefix: result.spokenPrefix?.slice?.(0, 40),
-        earlyCovered: result.earlyCovered,
-        arkMode: result.arkMode,
-        arkBillingOverdue: result.arkBillingOverdue,
-        questionFp: result.questionFp,
-        silenceGate: result.silenceGate,
-        wake: result.wake,
-        todos: result.latestToDos?.length,
-        a2a: result.a2aTrace?.map((e) => `${e.sender}->${e.target}:${e.action}`)
-      });
-
-      if (result.reason === "ABORTED" || thisAbort.signal.aborted) {
-        debugLog.info("Strategy", "巡检已取消（停听会或新巡检）", { reason: result.reason });
-        return {
-          ok: true,
-          result,
-          speakResult: { ok: false, aborted: true },
-          duplex: {
-            phase: listen?.phase || PHASE.IDLE,
-            holdUntil: listen?.holdUntil || 0,
-            cooldownUntil: listen?.cooldownUntil || 0
-          },
-          agent: {
-            mode: meetingState?.mode || null,
-            label: meetingState ? MODE_LABEL[meetingState.mode] : null,
-            meetingId: meetingState?.meetingId || null,
-            segmentId: meetingState?.segmentId || null
-          }
-        };
-      }
-
-      if (result.arkBillingOverdue) {
-        debugLog.error("Strategy", "Ark 账号欠费/过期，已走启发式控场", {
-          hint: "请到火山方舟控制台充值或换可用 Key（ARK_API_KEY / DOUBAO_API_KEY）"
-        });
-        emitUi({
-          type: "ark-billing",
-          overdue: true,
-          message: result.arkError || "AccountOverdueError"
-        });
-      }
-
-      // 仅首句已播完且无尾巴：更新指纹，不再二次 TTS
-      if (result.earlyCovered && !result.interventionText && result.questionFp) {
-        lastQuestionFp = result.questionFp;
-        lastQuestionAt = Date.now();
-        if (result.fullAnswer) lastHostSpeakText = result.fullAnswer;
-      }
-
-      let speakResult = null;
-      if (result.interruptTts && listen) {
-        speakResult = listen.interruptSpeak(result.reason || "INTERRUPT");
-        if (meetingState && listen.interruptBuffer?.fullText) {
-          meetingState.lastInterruptedText = listen.interruptBuffer.fullText.slice(0, 800);
-          meetingState.interruptBuffer = { ...listen.interruptBuffer };
-        }
-        debugLog.info("Strategy", "已打断当前播报", { reason: result.reason });
-      }
-      if (result.reason === "CONTINUE" && listen) {
-        listen.interruptBuffer = null;
-      }
-      if (result.shouldIntervene && result.interventionText && listen) {
-        let text = stripIntroBoilerplate(result.interventionText);
-        result.interventionText = text;
-        // 展示用全文（含已提前播的首句）
-        if (result.fullAnswer) result.displayText = result.fullAnswer;
-        const since = Date.now() - lastHostSpeakAt;
-        const echoHit = looksLikeHostEcho(text, [lastHostSpeakText].filter(Boolean), {
-          sinceHostMs: since
-        });
-
-        if (listen.phase === PHASE.SPEAKING || listen.expectingSpeak) {
-          const canQueue = [
-            "WAKE_ANSWER",
-            "BIZ_ANSWER",
-            "SUMMARY",
-            "WAKE_ACK",
-            "STEER",
-            "SUMMARY_ASK",
-            "STOP",
-            "CONTINUE_HH",
-            "CONTINUE",
-            "MEETING_START",
-            "MEETING_END",
-            "MODE_PAUSE",
-            "MODE_RESUME"
-          ].includes(result.reason);
-          if (canQueue) {
-            debugLog.info("Strategy", "播报中，话术排队", {
-              reason: result.reason,
-              text: text.slice(0, 60)
-            });
-            speakResult = listen.speakText(text);
-            if (speakResult?.ok || speakResult?.queued) {
-              lastHostSpeakAt = Date.now();
-              lastHostSpeakText = result.fullAnswer || text;
-              if (result.questionFp) {
-                lastQuestionFp = result.questionFp;
-                lastQuestionAt = Date.now();
-              }
-              if (meetingState && !(result.earlySpoken && text === (result.fullAnswer || text))) {
-                appendSession(meetingState.meetingId, {
-                  speaker: "大智",
-                  text: result.earlySpoken ? text : result.fullAnswer || text,
-                  mode: meetingState.mode,
-                  segmentId: meetingState.segmentId
-                });
-              }
-            }
-          } else {
-            debugLog.warn("Strategy", "半双工 SPEAKING 跳过非唤起播报", {
-              phase: listen.phase,
-              reason: result.reason,
-              text: text.slice(0, 60)
-            });
-            speakResult = { ok: false, error: "half_duplex_hold", suppressed: true };
-            result.suppressed = true;
-          }
-        } else if (listen.isInHold() && result.reason === "SILENCE") {
-          debugLog.warn("Strategy", "回灌 hold 内跳过冷场", {
-            reason: result.reason,
-            text: text.slice(0, 60)
-          });
-          speakResult = { ok: false, error: "half_duplex_hold", suppressed: true };
-          result.suppressed = true;
-        } else if (listen.isInCooldown() && result.reason === "SILENCE") {
-          debugLog.warn("Strategy", "COOLDOWN 内跳过冷场插话", {
-            reason: result.reason,
-            text: text.slice(0, 60)
-          });
-          speakResult = { ok: false, error: "cooldown", suppressed: true };
-          result.suppressed = true;
-        } else if (
-          (result.reason === "WAKE_ANSWER" ||
-            result.reason === "BIZ_ANSWER" ||
-            result.reason === "SUMMARY") &&
-          since < WAKE_COOLDOWN_MS &&
-          (echoHit.echo || isIntroSelfTalk(text)) &&
-          !result.earlyCovered &&
-          // FAQ/缓存新答常含「四端/全园美语」，faq-theme 会误杀；lcs/复读仍抑制
-          !(
-            result.reason === "WAKE_ANSWER" &&
-            (result.arkMode === "faq" || result.arkMode === "cache") &&
-            echoHit?.reason === "faq-theme"
-          )
-        ) {
-          debugLog.warn("Strategy", "抑制重复自语/回灌唤起", {
-            reason: result.reason,
-            sinceMs: since,
-            echo: echoHit,
-            text: text.slice(0, 80)
-          });
-          speakResult = { ok: false, error: "echo_suppressed", suppressed: true };
-          result.suppressed = true;
-        } else if (!listen.isOpen()) {
-          debugLog.warn("Strategy", "需要发言但 Duplex 未连接，跳过 TTS", {
-            text: text.slice(0, 80)
-          });
-          speakResult = { ok: false, error: "not_open" };
-        } else {
-          if (listen.expectingSpeak) {
-            debugLog.info("Strategy", "Host 正在播报，干预话术排队", {
-              text: text.slice(0, 80)
-            });
-          }
-          speakResult = listen.speakText(text);
-          if (speakResult?.ok || speakResult?.queued) {
-            lastHostSpeakAt = Date.now();
-            lastHostSpeakText = result.fullAnswer || text;
-            if (result.questionFp) {
-              lastQuestionFp = result.questionFp;
-              lastQuestionAt = Date.now();
-            }
-            if (meetingState && !(result.earlySpoken && !text)) {
-              appendSession(meetingState.meetingId, {
-                speaker: "大智",
-                text: result.earlySpoken ? text : result.fullAnswer || text,
-                mode: meetingState.mode,
-                segmentId: meetingState.segmentId
-              });
-            }
-          }
-          debugLog.info("Strategy", "触发 Host 语音进虚拟麦", {
-            text,
-            listenOpen: true,
-            speakRes: speakResult,
-            phase: listen.phase
-          });
-        }
-      } else if (result.shouldIntervene && result.earlyCovered && !result.interventionText) {
-        speakResult = { ok: true, earlyOnly: true };
-        if (meetingState && result.fullAnswer && !result.earlySpoken) {
-          appendSession(meetingState.meetingId, {
-            speaker: "大智",
-            text: result.fullAnswer,
-            mode: meetingState.mode,
-            segmentId: meetingState.segmentId
-          });
-        }
-      } else if (result.shouldIntervene && !listen) {
-        debugLog.warn("Strategy", "需要干预但听会通道未启动，无法 TTS（请先点启动听会）");
-        speakResult = { ok: false, error: "listen_not_started" };
-      } else if (result.shouldIntervene && listen && !listen.isOpen()) {
-        debugLog.warn("Strategy", "需要干预但 Duplex 未连接，等待重连后再试播");
-        speakResult = { ok: false, error: "not_open" };
-      }
-
-      if (result.bizPlan?.steps?.length) {
-        emitUi({
-          type: "biz-plan",
-          tts: result.bizPlan.tts,
-          analysis: result.bizPlan.analysis || "",
-          steps: result.bizPlan.steps,
-          risks: result.bizPlan.risks || [],
-          cite: result.bizPlan.cite || [],
-          tier: result.bizTier || null,
-          arkMode: result.arkMode || null,
-          reason: result.reason
-        });
-      }
-
-      // P2：会议开始 — 清主上下文 + warm 知识库；开场白后生命周期 → SILENT
-      if (result.clearMainContext || result.reason === "MEETING_START") {
-        clearMainSpeakContext();
-        if (listen?.interruptBuffer) listen.interruptBuffer = null;
-        try {
-          if (meetingState?.meetingId) clearMeetingCache(meetingState.meetingId);
-        } catch (_) {}
-      }
-      if (result.warmKnowledge) {
-        try {
-          warmIndexFromDisk();
-          debugLog.info("Strategy", "会议开始：已 warm 知识索引");
-        } catch (err) {
-          debugLog.warn("Strategy", "warm 知识索引失败", { error: String(err?.message || err) });
-        }
-      }
-      if (result.reason === "MEETING_START" && meetingState) {
-        // 开场白播完后标静默（短延迟，避免 UI 闪「未开会」）
-        setTimeout(() => {
-          if (meetingState && meetingState.lifecycle === MEETING_LIFE.OPENING) {
-            setLifecycle(meetingState, MEETING_LIFE.SILENT);
-            emitInteractionMode();
-          }
-        }, Math.min(12000, Math.max(3500, String(result.interventionText || "").length * 180)));
-      }
-
-      // P2：会议结束 — 沉淀 + 收尾后关 Duplex
-      if (result.requestSessionPromote && result.meetingId) {
-        const promoteDelay = result.requestListenStop ? 2500 : 400;
-        setTimeout(() => promoteMeetingSession(result.meetingId, { summary: true }), promoteDelay);
-      }
-      if (result.requestListenStop) {
-        const closeMs = Math.min(
-          22000,
-          Math.max(6000, String(result.interventionText || result.fullAnswer || "").length * 200 + 2500)
-        );
-        const closingId = result.meetingId || meetingState?.meetingId;
-        debugLog.info("Strategy", "会末收尾后将停止听会", { closeMs, meetingId: closingId });
-        emitUi({
-          type: "meeting-closing",
-          meetingId: closingId,
-          closeInMs: closeMs,
-          summaryMarkdown: result.summaryMarkdown || null,
-          closing: result.closing || null
-        });
-        setTimeout(() => {
-          debugLog.info("Listen", "会末自动停止听会", { meetingId: closingId });
-          if (strategyAbort) {
-            try {
-              strategyAbort.abort();
-            } catch (_) {}
-            strategyAbort = null;
-          }
-          listen?.close();
-          listen = null;
-          listenStartedAt = 0;
-          if (meetingState) {
-            setLifecycle(meetingState, MEETING_LIFE.OFF);
-            meetingState.meetingOpen = false;
-          }
-          emitUi({ type: "meeting-ended", meetingId: closingId });
-          emitInteractionMode();
-          meetingState = null;
-        }, closeMs);
-      }
-
-      emitInteractionMode();
-
-      const life = deriveMeetingLife(meetingState, {
-        holdListening: Boolean(result.holdToEnd || meetingState?.holdToEnd)
-      });
-      return {
-        ok: true,
-        result,
-        speakResult,
-        duplex: {
-          phase: listen?.phase || PHASE.IDLE,
-          holdUntil: listen?.holdUntil || 0,
-          cooldownUntil: listen?.cooldownUntil || 0
-        },
-        agent: {
-          mode: meetingState?.mode || null,
-          label: meetingState ? MODE_LABEL[meetingState.mode] : null,
-          lifecycle: result.meetingLifecycle || life,
-          lifeLabel: LIFE_LABEL[result.meetingLifecycle || life] || life,
-          meetingId: meetingState?.meetingId || result.meetingId || null,
-          segmentId: meetingState?.segmentId || null,
-          meetingOpen: Boolean(meetingState?.meetingOpen)
-        }
-      };
-    } catch (err) {
-      emitUi({ type: "strategy-status", phase: "idle" });
-      debugLog.error("Strategy", "巡检异常", debugLog.normalizeError(err));
-      return { ok: false, error: String(err?.message || err) };
-    } finally {
-      if (strategyAbort === thisAbort) strategyAbort = null;
-    }
+  const rt = {
+    get win() { return win; },
+    set win(v) { win = v; },
+    get listen() { return listen; },
+    set listen(v) { listen = v; },
+    get lastHostSpeakAt() { return lastHostSpeakAt; },
+    set lastHostSpeakAt(v) { lastHostSpeakAt = v; },
+    get lastHostSpeakText() { return lastHostSpeakText; },
+    set lastHostSpeakText(v) { lastHostSpeakText = v; },
+    get lastQuestionFp() { return lastQuestionFp; },
+    set lastQuestionFp(v) { lastQuestionFp = v; },
+    get lastQuestionAt() { return lastQuestionAt; },
+    set lastQuestionAt(v) { lastQuestionAt = v; },
+    get listenStartedAt() { return listenStartedAt; },
+    set listenStartedAt(v) { listenStartedAt = v; },
+    get strategyAbort() { return strategyAbort; },
+    set strategyAbort(v) { strategyAbort = v; },
+    get meetingState() { return meetingState; },
+    set meetingState(v) { meetingState = v; },
+    emitInteractionMode,
+    promoteMeetingSession,
+    clearMainSpeakContext
   };
-  ipcMain.handle("strategy:evaluate", handleStrategyEvaluate);
+  ipcMain.handle("strategy:evaluate", createStrategyEvaluate(rt));
 
   ipcMain.handle("host:speak", async (_e, text) => {
     debugLog.info("HostSpeak", "手动试播", { text: String(text || "").slice(0, 120) });

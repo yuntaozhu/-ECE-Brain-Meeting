@@ -20,6 +20,12 @@ contextBridge.exposeInMainWorld("bridge", {
   logOpenDir: () => ipcRenderer.invoke("log:open-dir"),
   logUi: (level, tag, message, detail) =>
     ipcRenderer.send("log:ui", { level, tag, message, detail }),
+  /** 同步策略（主进程 lib），渲染端勿再复制别名/回声/巡检门控 */
+  policySync: (op, args) => {
+    const r = ipcRenderer.sendSync("policy:sync", { op, args: args || {} });
+    if (!r?.ok) return null;
+    return r.value;
+  },
   onEvent: (handler) => {
     const wrapped = (_e, msg) => handler(msg);
     ipcRenderer.on("bridge:event", wrapped);

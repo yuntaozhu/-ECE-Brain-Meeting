@@ -37,11 +37,13 @@ function apiKey() {
 }
 
 function embeddingModel() {
+  // 优先 Endpoint ID；勿默认带版本后缀的旧模型名
   return (
+    process.env.DOUBAO_EMBED_ENDPOINT ||
     process.env.DOUBAO_EMBEDDING_MODEL ||
     process.env.DOUBAO_EMBED_MODEL ||
     process.env.ARK_EMBEDDING_MODEL ||
-    "doubao-embedding-vision-251215"
+    ""
   );
 }
 

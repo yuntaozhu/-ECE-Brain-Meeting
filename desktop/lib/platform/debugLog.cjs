@@ -199,9 +199,12 @@ function write(level, tag, message, detail, opts = {}) {
     console.warn("[debugLog] append failed", String(err?.message || err));
   }
 
-  try {
-    uiSink?.(entry);
-  } catch (_) {}
+  // skipUi：渲染端 slog 已本地上屏，经 log:ui 入档时勿再 bridge:log 回灌，否则 UI 成对刷
+  if (!opts.skipUi) {
+    try {
+      uiSink?.(entry);
+    } catch (_) {}
+  }
 
   return entry;
 }

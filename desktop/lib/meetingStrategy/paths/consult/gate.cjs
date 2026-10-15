@@ -92,6 +92,17 @@ function handleGate(ctx) {
     );
   }
 
+  if (S.isAskListRequest(lastFloor) || S.isAskListRequest(cmd.payload || "")) {
+    S.setMode(state, S.INTERACTION_MODE.HA_ASK);
+    state.haLockedUntil = Date.now() + 90000;
+    const rows = S.readSession(state.meetingId, { limit: 40 });
+    const speech = S.formatAskRecap(rows);
+    S.debugLog.info("Strategy", "本场提问回顾", { chars: speech.length });
+    return S.playAnswer(speech, "WAKE_ANSWER", state, a2aTrace, kbStatus, qFp, "recall-list", {
+      cacheQuestion: lastFloor
+    });
+  }
+
   if (S.isRecallLastAsk(lastFloor) || S.isRecallLastAsk(cmd.payload || "")) {
     S.setMode(state, S.INTERACTION_MODE.HA_ASK);
     state.haLockedUntil = Date.now() + 90000;

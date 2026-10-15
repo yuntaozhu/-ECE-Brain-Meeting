@@ -25,6 +25,16 @@ async function handle(ctx) {
   S.setMode(state, ha === "HA_TALK" ? S.INTERACTION_MODE.HA_TALK : S.INTERACTION_MODE.HA_ASK);
 
   if (onlyGreeting) {
+    const pending = (state.listenNotes || []).filter((n) =>
+      /[？?]|什么|怎么|多少|哪些|吗|条件|收费|支持/.test(n)
+    );
+    const lastPending = pending[pending.length - 1];
+    if (lastPending) {
+      state.listenNotes = [];
+      ctx.lastFloor = lastPending;
+      S.debugLog.info("Strategy", "唤醒后按旁听记录作答", { text: lastPending.slice(0, 40) });
+      return null;
+    }
     if (alreadyConsult) {
       S.debugLog.info("Strategy", "咨询中重复唤醒，静默待问", {
         text: lastFloor.slice(0, 20),
