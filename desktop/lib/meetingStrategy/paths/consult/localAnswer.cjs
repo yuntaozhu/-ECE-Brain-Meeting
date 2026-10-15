@@ -3,7 +3,7 @@
  * 有豆包 Key 时仍优先 FAQ/Wiki 秒答；未命中再放行 MeetingAgent。
  */
 const S = require("./kit.cjs");
-const { isTruncatedAsk } = require("../../agent/relevance.cjs");
+const { isTruncatedAsk, decideSpeak, focusAsk } = require("../../agent/relevance.cjs");
 
 function hasDoubaoKey() {
   return Boolean((process.env.DOUBAO_API_KEY || process.env.ARK_API_KEY || "").trim());
@@ -25,40 +25,36 @@ function tryIdentityOrAgenda(ctx) {
   return null;
 }
 
-/** 长问补规范检索串，避免「才能使用这个课程」把条件 FAQ 挤出 TopK */
-function faqLookupQueries(askText) {
-  const q = String(askText || "").trim();
-  const list = [q];
-  if (/条件|具备/.test(q)) {
-    list.push("我园要具备什么条件？", "开办要具备什么条件？");
-  }
-  if (/普惠/.test(q)) list.push("普惠型幼儿园可以做全园美语吗？");
-  if (/收费|多少钱|如何收费|怎么收费/.test(q)) list.push("全园美语系统怎么收费？", "你们是如何收费的？");
-  if (/开口|认可/.test(q)) list.push("老师不敢开口家长怎么认可？");
-  if (/^(你|您)?(如何|怎么)做/.test(q.replace(/[？?。！!\s]/g, "")) || /具体要如何做|如何落地/.test(q)) {
-    list.push("从签约到落地要做哪些准备", "具体要如何做");
-  }
-  return [...new Set(list.filter(Boolean))];
+function bestFaqHit(askText) {
+  return S.matchFaqInstant(askText);
 }
 
-function bestFaqHit(askText) {
-  let best = null;
-  for (const cand of faqLookupQueries(askText)) {
-    const hit = S.matchFaqInstant(cand);
-    if (!hit?.answer) continue;
-    if (!best || (hit.score || 0) > (best.score || 0)) best = hit;
-  }
-  return best;
+/** 贝叶斯放行才允许把这条 FAQ 当秒答，避免词表改写把窄标题送出口。 */
+function bayesAllows(askText, faqHit) {
+  if (!faqHit?.answer) return false;
+  const d = decideSpeak({
+    ask: askText,
+    hits: [
+      {
+        title: faqHit.title,
+        score: faqHit.score,
+        snippet: `A: ${faqHit.answer}`,
+        source: "faq"
+      }
+    ]
+  });
+  return d.action === "answer" && d.reason === "posterior";
 }
 
 /**
  * @returns {object|null}
  */
 function tryLocalAnswer(ctx) {
-  const { agenda, state, a2aTrace, kbStatus, qFp, askText, rw, useBiz, lastFloor } = ctx;
+  const askText = focusAsk(ctx.askText);
+  const { agenda, state, a2aTrace, kbStatus, qFp, rw, useBiz, lastFloor } = ctx;
   if (isTruncatedAsk(askText) || isTruncatedAsk(lastFloor)) return null;
 
-  const idOrAgenda = tryIdentityOrAgenda(ctx);
+  const idOrAgenda = tryIdentityOrAgenda({ ...ctx, askText });
   if (idOrAgenda) return idOrAgenda;
 
   // 经营题勿查缓存（避免误命中）
@@ -77,24 +73,15 @@ function tryLocalAnswer(ctx) {
     }
   }
 
-  const faqHit = bestFaqHit(askText);
-  // 场景闭题：有 Key 也秒答（日志场：普惠/条件/收费/开口家长）
-  const sceneAsk =
-    /普惠|条件|具备|专业|培训班|区别|教育局|赚钱|营收|收费|如何收费|怎么收费|太贵|付不起|信心|支持|开办|说服家长|不敢开口|开口.{0,8}认可|家长.{0,6}认可|^(你|您)?(如何|怎么)做/.test(
-      askText.replace(/[？?。！!\s]/g, "")
-    ) ||
-    (/普惠|条件|具备|收费|开口|认可|如何做|怎么做/.test(askText) &&
-      !/(什么是全园美语|全园美语(课|系统)?是什么)/.test(askText));
-  // 场景问：分数够且标题/正文对齐即可秒答（不因 complex 被挡）
-  if (!useBiz && sceneAsk && faqHit?.answer && (faqHit.score || 0) >= 18) {
-    const answer = S.stripIntroBoilerplate(S.clipUtterance(faqHit.answer, 160));
-    const badDef =
-      S.isDefinitionSpeak(answer) && !/(是什么|什么是)/.test(askText);
-    if (!badDef) {
-      S.debugLog.info("Strategy", "场景 FAQ 秒答", {
+  const retrieved = S.retrieveKnowledge(askText, 4);
+  const bayes = decideSpeak({ ask: askText, hits: retrieved?.hits || [] });
+  if (bayes.action === "answer" && bayes.reason === "posterior" && bayes.speak) {
+    const answer = S.stripIntroBoilerplate(S.clipUtterance(bayes.speak, 160));
+    if (answer && !(S.isDefinitionSpeak(answer) && !/(是什么|什么是)/.test(askText))) {
+      S.debugLog.info("Strategy", "贝叶斯 FAQ 秒答", {
         text: askText.slice(0, 40),
-        title: faqHit.title,
-        score: faqHit.score
+        title: bayes.title,
+        posterior: bayes.posterior
       });
       return S.playAnswer(answer, "WAKE_ANSWER", state, a2aTrace, kbStatus, qFp, "faq", {
         cacheQuestion: askText
@@ -102,10 +89,19 @@ function tryLocalAnswer(ctx) {
     }
   }
 
+  const rawFaq = bestFaqHit(askText);
+  const faqHit = bayesAllows(askText, rawFaq) ? rawFaq : null;
+
   if (!useBiz && (rw.closed || rw.choicePick || S.isClosedFaqQuestion(askText))) {
     const wikiQ = S.queryWiki(askText, 2);
     const top = wikiQ.hits?.[0];
-    if (top?.speak && (top.score || 0) >= 8) {
+    const wikiOk =
+      top?.speak &&
+      decideSpeak({
+        ask: askText,
+        hits: [{ title: top.title, score: top.score, speak: top.speak, source: "wiki" }]
+      }).action === "answer";
+    if (wikiOk) {
       const answer = S.stripIntroBoilerplate(S.clipUtterance(top.speak, 160));
       return S.playAnswer(answer, "WAKE_ANSWER", state, a2aTrace, kbStatus, qFp, "wiki", {
         cacheQuestion: askText

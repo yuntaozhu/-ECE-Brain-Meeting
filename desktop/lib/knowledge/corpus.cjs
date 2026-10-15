@@ -6,6 +6,7 @@ const fs = require("fs");
 const path = require("path");
 const { normalizeForMatch, detectWake, isIntroSelfTalk, extractFloorLines } = require("../duplex");
 const { knowledgeReadRoot } = require("../platform/appPaths.cjs");
+const { alignScore, buildDf } = require("./align.cjs");
 
 function promptFile() {
   return path.join(knowledgeReadRoot(), "li-laoshi-system-prompt.txt");
@@ -24,6 +25,7 @@ let cachedKb = null;
 let cachedFaq = null;
 let kbSections = null;
 let faqSections = null;
+let faqAlignModel = null;
 
 function readUtf8(file) {
   try {
@@ -78,7 +80,13 @@ function getFaqSections() {
     return faqSections;
   }
   faqSections = splitSections(raw).map((s) => ({ ...s, source: "faq" }));
+  faqAlignModel = buildDf(faqSections.map((s) => s.title || ""));
   return faqSections;
+}
+
+function alignModel() {
+  getFaqSections();
+  return faqAlignModel || buildDf([]);
 }
 
 function scoreSection(sec, keys, q) {
@@ -109,6 +117,10 @@ function scoreSection(sec, keys, q) {
     if (tn.includes(qn.slice(0, Math.min(12, qn.length))) || qn.includes(tn.slice(0, Math.min(12, tn.length)))) {
       score += sec.source === "faq" ? 20 : 6;
     }
+  }
+  // 标题结构对齐：不靠意图词表，高频标题二元组在 align 里已降权
+  if (sec.source === "faq" && title) {
+    score += Math.round(alignScore(q, title, alignModel()) * 100);
   }
   return score;
 }

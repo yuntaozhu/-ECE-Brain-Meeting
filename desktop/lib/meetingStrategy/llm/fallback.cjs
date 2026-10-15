@@ -25,19 +25,7 @@ const {
   formatAskRecap,
   agendaRedirectLine
 } = require("../internal/scripts.cjs");
-const { isAlignedSpeak, isUniversalOperateSoft } = require("../agent/relevance.cjs");
-
-function softAllowed(ask, speak) {
-  const t = String(speak || "").trim();
-  if (!t || looksLikeAgendaMenu(t)) return false;
-  if (isUniversalOperateSoft(t)) {
-    return (
-      isAlignedSpeak(ask, t) ||
-      isAlignedSpeak(ask, "经营得更好园所经营样板班开口收费")
-    );
-  }
-  return true;
-}
+const { decideSpeak } = require("../agent/relevance.cjs");
 
 function isExplicitAgendaAsk(q) {
   return /(会议主题|开什么会|今天.*主题|这次会议的主题|今天开什么会)/.test(q);
@@ -74,61 +62,25 @@ function extractAnswerBody(raw) {
 function kbBiteAnswer(askText) {
   const q = String(askText || "").trim();
   if (!q) return "";
-
-  const faq = matchFaqInstant(q);
-  if (faq?.answer) {
-    const body = extractAnswerBody(faq.answer);
-    if (body) return leadClause(body, 90);
-  }
-
-  // 经营/回本/亏损：同意图软答优先；万能经营句必须对题
+  let intent = null;
+  let script = "";
   try {
     const { ruleUnderstand, intentSoftAnswer } = require("../agent/intent.cjs");
-    const intent = ruleUnderstand(q);
-    const soft = intentSoftAnswer(intent, q);
-    if (soft && softAllowed(q, soft)) return soft;
+    intent = ruleUnderstand(q);
+    script = intentSoftAnswer(intent, q);
   } catch (_) {
     /* ignore */
   }
+  let hits = [];
   try {
-    const lead = buildFastLead(q).lead;
-    if (!lead || isDefinitionSpeak(lead) || looksLikeAgendaMenu(lead)) {
-      /* skip */
-    } else if (/(亏损|亏本|回本|会不会亏)/.test(q) && /第二条路/.test(lead)) {
-      /* skip 误伤 */
-    } else if (softAllowed(q, lead) && (isAlignedSpeak(q, lead) || !isUniversalOperateSoft(lead))) {
-      return lead;
-    }
+    hits = retrieveKnowledge(q, 4)?.hits || [];
   } catch (_) {
-    /* ignore */
+    hits = [];
   }
-
-  try {
-    const wiki = queryWiki(q, 1);
-    const speak = extractAnswerBody(wiki?.hits?.[0]?.speak || wiki?.instantAnswer || "");
-    const title = String(wiki?.hits?.[0]?.title || "");
-    if (speak && !isDefinitionSpeak(speak) && (isAlignedSpeak(q, speak) || isAlignedSpeak(q, title))) {
-      return leadClause(speak, 90);
-    }
-  } catch (_) {
-    /* ignore */
+  const d = decideSpeak({ ask: q, hits, intent, script });
+  if (d.action === "answer" && d.speak && !looksLikeAgendaMenu(d.speak)) {
+    return leadClause(d.speak, 90);
   }
-
-  try {
-    const kn = retrieveKnowledge(q, 2);
-    const top = kn?.hits?.[0];
-    // 弱分命中（如「投资」撞到无关 FAQ）直接丢弃
-    if (top && Number(top.score || 0) >= 28) {
-      const body = extractAnswerBody(top.snippet || top.speak || kn.instantAnswer || "");
-      const title = String(top.title || top.question || "");
-      if (body && !isDefinitionSpeak(body) && (isAlignedSpeak(q, body) || isAlignedSpeak(q, title))) {
-        return leadClause(body, 90);
-      }
-    }
-  } catch (_) {
-    /* ignore */
-  }
-
   return "";
 }
 
@@ -168,7 +120,7 @@ function chatFallbackFor(askText, state, agenda, opts = {}) {
   }
 
   const kb = kbBiteAnswer(q);
-  if (kb && softAllowed(q, kb)) return kb;
+  if (kb && !looksLikeAgendaMenu(kb)) return kb;
 
   if (isEnrollmentBenefitAsk(q)) {
     return (

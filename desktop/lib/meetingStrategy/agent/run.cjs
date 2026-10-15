@@ -7,29 +7,20 @@ const { newRunId, pushAgent, todosFromRetrieval } = require("./events.cjs");
 const { understandIntent, intentSoftAnswer } = require("./intent.cjs");
 const { verifyAnswer, isRiskRewrite } = require("./verify.cjs");
 const {
-  GROUNDED_INTENTS,
   topScore,
   isAnswerable,
-  isTruncatedAsk,
-  repeatLine,
   clarifyLine,
-  isAlignedSpeak,
-  isUniversalOperateSoft
+  decideSpeak,
+  focusAsk
 } = require("./relevance.cjs");
 
-/** 口播候选：万能经营句必须对题；其它句 answerFitsAsk 或结构重叠二选一 */
-function speakAllowed(askText, speak) {
-  const t = String(speak || "").trim();
-  if (!t) return false;
-  if (isUniversalOperateSoft(t)) {
-    // 正问「经营/园所」与模板字面可不重合，但「区别/信心」等不得放行
-    return (
-      isAlignedSpeak(askText, t) ||
-      isAlignedSpeak(askText, "经营得更好园所经营样板班开口收费")
-    );
-  }
-  if (answerFitsAsk(askText, t)) return true;
-  return isAlignedSpeak(askText, t);
+function speakDecision(intentObj, askText, retrieval) {
+  return decideSpeak({
+    ask: askText,
+    hits: retrieval?.hits || [],
+    intent: intentObj,
+    script: intentSoftAnswer(intentObj, askText)
+  });
 }
 
 function composeSystem(intentObj, agenda, kbBite, dialogBlock, mode) {
@@ -64,132 +55,59 @@ function hasApiKey() {
   return Boolean((process.env.DOUBAO_API_KEY || process.env.ARK_API_KEY || "").trim());
 }
 
-/** 问句锚点：检索命中必须对得上，防「全园美语定义」粘滞 */
-function answerFitsAsk(askText, answer) {
-  const q = String(askText || "");
-  const a = String(answer || "");
-  if (!a) return false;
-  if (/普惠/.test(q) && !/普惠|外校园|四万九|生态|性质/.test(a)) return false;
-  if (/条件|具备/.test(q) && !/条件|具备|专业|培训|账号|执行|师资|老师/.test(a)) return false;
-  if (/收费|多少钱|三万九|39000|如何收费|怎么收费/.test(q) && !/收费|三万九|39000|学期|价格|价钱|服务价/.test(a)) {
-    return false;
+function mergeHits(into, more) {
+  const seen = new Set(into.map((h) => String(h.title || "")));
+  for (const h of more || []) {
+    const key = String(h?.title || "");
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    into.push(h);
   }
-  if (/开口|家长.*认|认可/.test(q) && !/开口|家长|实拍|测评|成果|Teacher说|看得见/.test(a)) return false;
-  if (/^(你|您)?(如何|怎么)做/.test(q.replace(/[？?。！!\s]/g, ""))) {
-    if (!/样板|开口|课件|落地|准备|开办|执行|四步|行事历|签约/.test(a)) return false;
-  }
-  // 非定义问却命中定义段 → 拒
-  if (
-    /收费|条件|具备|普惠|开口|认可|亏损|回本|扭亏/.test(q) &&
-    S.isDefinitionSpeak(a) &&
-    !/(是什么|什么是)/.test(q)
-  ) {
-    return false;
-  }
-  return true;
-}
-
-function faqQueryForAsk(askText) {
-  const q = String(askText || "");
-  if (/收费|多少钱|如何收费|怎么收费/.test(q)) return "全园美语系统怎么收费？";
-  if (/普惠/.test(q)) return "普惠型幼儿园可以做全园美语吗？";
-  if (/条件|具备/.test(q)) return "我园要具备什么条件？";
-  if (/开口|家长.*认|认可/.test(q)) return "老师不敢开口家长怎么认可？";
-  if (/^(你|您)?(如何|怎么)做/.test(q.replace(/[？?。！!\s]/g, ""))) {
-    return "从签约到落地要做哪些准备";
-  }
-  return q;
+  return into;
 }
 
 async function retrieveForIntent(intentObj, askText, opts) {
-  const intent = intentObj?.intent || "other";
-  const queries = (intentObj?.retrieve_queries || []).filter(Boolean);
-  if (intent === "hq_support") {
-    const faq = S.retrieveKnowledge(queries[0] || "总部给予哪些支持", 2);
-    return { ...faq, tool: "search_faq", mode: faq.mode || "faq-keyword" };
+  const queries = [focusAsk(askText), ...(intentObj?.retrieve_queries || [])].map((q) => String(q || "").trim()).filter(Boolean);
+  const unique = [...new Set(queries)].slice(0, 3);
+  const hits = [];
+  let preview = "";
+  let instantAnswer = "";
+  for (const q of unique) {
+    const kw = S.retrieveKnowledge(q, 4);
+    mergeHits(hits, kw?.hits);
+    if (!preview && kw?.preview) preview = kw.preview;
+    if (!instantAnswer && kw?.instantAnswer) instantAnswer = kw.instantAnswer;
   }
-  // 场景闭题先打 FAQ 关键词，避免语义检索粘到定义页
-  const faqQ = faqQueryForAsk(askText);
-  const faqKw = S.retrieveKnowledge(faqQ, 3);
-  if (faqKw?.instantAnswer && isAnswerable(faqKw) && answerFitsAsk(askText, faqKw.instantAnswer)) {
-    return { ...faqKw, tool: "search_faq", mode: faqKw.mode || "faq-keyword" };
+  if (!(opts.forceRule || !hasApiKey())) {
+    try {
+      const sem = await S.retrieveSemantic(unique[0] || askText, 4, { signal: opts.signal, preferBiz: true });
+      mergeHits(hits, sem?.hits);
+      if (!preview && sem?.preview) preview = sem.preview;
+    } catch (_) {
+      /* 关键词候选已经够贝叶斯用 */
+    }
   }
-  const q = queries[0] || askText;
-  if (opts.forceRule || !hasApiKey()) {
-    const kw = S.retrieveKnowledge(q, 3);
-    return { ...kw, tool: "search_wiki", mode: kw.mode || "keyword" };
-  }
-  let retrieval = await S.retrieveSemantic(q, 4, { signal: opts.signal, preferBiz: true });
-  if (!retrieval?.hits?.length && queries[1]) {
-    retrieval = await S.retrieveSemantic(queries[1], 4, {
-      signal: opts.signal,
-      preferBiz: true
-    });
-  }
-  if (!retrieval?.hits?.length) {
-    retrieval = S.retrieveKnowledge(askText || q, 3);
-    retrieval.mode = retrieval.mode || "keyword";
-  }
-  // 语义命中若文不对题，回退 FAQ 关键词
-  if (retrieval?.instantAnswer && !answerFitsAsk(askText, retrieval.instantAnswer) && faqKw?.instantAnswer) {
-    return { ...faqKw, tool: "search_faq", mode: "faq-keyword-override" };
-  }
-  return { ...retrieval, tool: "search_wiki" };
+  return { hits, preview, instantAnswer, tool: "search_faq", mode: "bayes" };
 }
 
-/** 豆包未出口：意图软答 → 对齐 FAQ/检索；禁止未对题的经营万能句 */
-function knowledgeSpeakLine(intentObj, askText, retrieval, state, agenda) {
-  const soft = String(intentSoftAnswer(intentObj, askText) || "").trim();
-  if (soft && speakAllowed(askText, soft)) return soft;
-
-  const canon = faqQueryForAsk(askText);
-  const faqHit = S.matchFaqInstant(canon) || S.matchFaqInstant(askText);
-  if (faqHit?.answer && (S.shouldFaqInstant(askText, faqHit, { minScore: 18 }) || (faqHit.score || 0) >= 22)) {
-    const body = S.clipUtterance(faqHit.answer, 160);
-    const title = String(faqHit.question || faqHit.title || "");
-    if (speakAllowed(askText, body) || isAlignedSpeak(askText, `${title}${body}`)) return body;
-  }
-
-  const instant = String(retrieval?.instantAnswer || "").trim();
-  if (instant && isAnswerable(retrieval) && speakAllowed(askText, instant)) {
-    return S.clipUtterance(instant, 160);
-  }
-  const preview = String(retrieval?.preview || "").trim();
-  const hitTitle = String(retrieval?.hits?.[0]?.title || "");
-  if (preview && isAnswerable(retrieval) && (speakAllowed(askText, preview) || isAlignedSpeak(askText, hitTitle))) {
-    return S.clipUtterance(preview, 160);
-  }
-  try {
-    const fb = S.chatFallbackFor(askText, state, agenda || S.DEFAULT_AGENDA, { requireAligned: true });
-    if (fb && !/请再说具体一点|这句我还没对上/.test(fb) && speakAllowed(askText, fb)) {
-      return S.clipUtterance(fb, 160);
-    }
-  } catch (_) {
-    /* ignore */
-  }
+/** 豆包未出口：只采用贝叶斯放行的证据或意图脚本 */
+function knowledgeSpeakLine(intentObj, askText, retrieval) {
+  const d = speakDecision(intentObj, askText, retrieval);
+  if (d.action === "answer" && d.speak) return S.clipUtterance(d.speak, 160);
   return "";
 }
 
 function pickGrounded(intentObj, askText, retrieval, live) {
-  const soft = intentSoftAnswer(intentObj, askText);
-  const instant = String(retrieval?.instantAnswer || "").trim();
-  const intent = intentObj?.intent || "other";
-  if (isTruncatedAsk(askText)) {
-    return { text: repeatLine(), decision: "repeat" };
-  }
-  if (intent === "hq_support" && instant && /课件|Teacher说|菲教|行事历/.test(instant)) {
-    return { text: instant, decision: "faq" };
+  const d = speakDecision(intentObj, askText, retrieval);
+  if (d.action === "repeat") return { text: d.speak, decision: "repeat" };
+  if (d.action === "answer" && d.reason === "posterior") {
+    return { text: d.speak, decision: "faq" };
   }
   if (!live) {
-    if (soft && (intent === "hq_support" || GROUNDED_INTENTS.has(intent)) && speakAllowed(askText, soft)) {
-      return { text: soft, decision: "kb-script" };
-    }
-    if (instant && isAnswerable(retrieval) && speakAllowed(askText, instant)) {
-      return { text: instant, decision: "instant" };
-    }
+    if (d.action === "answer" && d.reason === "script") return { text: d.speak, decision: "kb-script" };
     return { text: clarifyLine(), decision: "clarify" };
   }
-  return { text: soft && speakAllowed(askText, soft) ? soft : "", decision: "compose" };
+  return { text: "", decision: "compose" };
 }
 
 function finishSpoken(ctx, payload) {
@@ -328,11 +246,7 @@ async function runMeetingAgent(ctx) {
     let riskRewrite = false;
     const check = await verifyAnswer(askText, intentObj, answer, { skipLlm: true, forceRule: true });
     if (!check.pass) {
-      const soft = intentSoftAnswer(intentObj, askText);
-      const fixed =
-        (soft && speakAllowed(askText, soft) ? soft : "") ||
-        knowledgeSpeakLine(intentObj, askText, retrieval, state, agenda) ||
-        clarifyLine();
+      const fixed = knowledgeSpeakLine(intentObj, askText, retrieval) || clarifyLine();
       riskRewrite = fixed !== answer;
       answer = fixed;
       pushAgent(a2aTrace, {
@@ -455,11 +369,7 @@ async function runMeetingAgent(ctx) {
     const softBan = /请再说具体一点，我结合资料答您|这句我还没对上/;
     let kb = knowledgeLine;
     if (!kb || softBan.test(kb)) {
-      kb = knowledgeSpeakLine(intentObj, askText, retrieval, state, agenda);
-    }
-    const chatAns = String(chat.answer || "").trim();
-    if ((!kb || softBan.test(kb)) && chatAns && !softBan.test(chatAns) && answerFitsAsk(askText, chatAns)) {
-      kb = chatAns;
+      kb = knowledgeSpeakLine(intentObj, askText, retrieval);
     }
     finalAnswer = (kb && !softBan.test(kb) ? kb : "") || clarifyLine();
     fallbackGate = kb && !softBan.test(kb) ? "kb-fallback" : "clarify";

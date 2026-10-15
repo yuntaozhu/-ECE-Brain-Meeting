@@ -5,6 +5,8 @@
  * - Wiki 关键词（queryWiki）强命中约 ≥5，语义检索里会被抬到 0.9 附近
  * - 纯向量余弦：中文无关句也常在 0.6 上下，作答线取 0.62，只用于没有 Wiki/FAQ 强命中时
  */
+const { bestTitleView, buildDf } = require("../../knowledge/align.cjs");
+
 const FAQ_KEYWORD_ANSWERABLE = 45;
 const WIKI_KEYWORD_ANSWERABLE = 5;
 const SEMANTIC_ANSWERABLE = 0.62;
@@ -54,25 +56,39 @@ function isAnswerable(retrieval) {
   return false;
 }
 
-function stripAsk(askText) {
+/** 粘滞改写只留下本句，供检索和似然共用。 */
+function focusAsk(askText) {
   let q = String(askText || "").trim();
   q = q.replace(/^(大智|大致)[，,：:\s]*/, "");
-  const m = q.match(/(?:针对上一答|追问)[^：:]{0,180}[：:]\s*(.{2,120})$/);
-  if (m) q = m[1].trim();
-  return q.replace(/[？?。！!\s]/g, "");
+  const quoted = q.match(/(?:针对上一答|追问)「[\s\S]{0,240}」[：:]\s*(.{2,120})$/);
+  const plain = q.match(/追问[：:]\s*(.{2,120})$/);
+  if (quoted) q = quoted[1].trim();
+  else if (plain) q = plain[1].trim();
+  return q;
 }
 
-/** 说了一半、动词没收住。完整短问（你如何做/怎么做）不是残句。 */
-function isTruncatedAsk(askText) {
+function stripAsk(askText) {
+  return focusAsk(askText).replace(/[？?。！!\s]/g, "");
+}
+
+/**
+ * 残句后验。先验偏低；句末裸疑问词抬高，句末语气词或已有谓语压低。
+ * 「你如何做」有谓语，不是残句；「如何通」疑问词后缺谓语，是残句。
+ */
+function truncationPosterior(askText) {
   const q = stripAsk(askText);
-  if (!q || q.length > 14) return false;
-  if (/[吗嘛呢吧]$/.test(q)) return false;
-  if (/(什么|哪些|为什么|怎么办|盈利|赚钱|回本|亏损|扭亏|收费|总部|支持)/.test(q)) return false;
-  // 「你如何做 / 怎么做 / 如何落地」是完整短问，不是半截
-  if (/^(你|您|大智)?(如何|怎么|怎样)(做|办|落地|执行|开展|推进|经营)?$/.test(q)) return false;
-  if (/^(我)?(如何|怎么|怎样)(能够|可以|能)?$/.test(q)) return true;
-  // 仅「如何通」这类缺宾语残句
-  return /(如何|怎么|怎样)/.test(q) && /(通)$/.test(q);
+  if (!q || q.length > 18) return 0.02;
+  let logOdds = q.length <= 8 ? Math.log(0.22 / 0.78) : Math.log(0.06 / 0.94);
+  if (/[吗嘛呢吧]$/.test(q)) logOdds -= 2.4;
+  // 只有疑问词本身，或疑问词后面没接上谓语，才像半句。「会议主题是什么」是完整特指问。
+  if (/^(什么|哪些|为什么|如何|怎么|怎样)$/.test(q)) logOdds += 2.8;
+  if (/^(如何|怎么|怎样).{0,1}$/.test(q) && !/[做办算用学看讲说买开吗嘛呢吧]$/.test(q)) logOdds += 2.4;
+  if (/(做|办|算|落地|收费|准备|什么)$/.test(q) && q.length >= 4) logOdds -= 1.6;
+  return 1 / (1 + Math.exp(-logOdds));
+}
+
+function isTruncatedAsk(askText) {
+  return truncationPosterior(askText) >= 0.7;
 }
 
 function repeatLine() {
@@ -164,6 +180,156 @@ function isUniversalOperateSoft(text) {
   return (hasLead && (hasSample || hasLedger)) || (hasSample && hasLedger);
 }
 
+/** Lanczos log-gamma，供 Beta 似然。 */
+function lgamma(z) {
+  const p = [
+    0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059,
+    12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7
+  ];
+  if (z < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * z)) - lgamma(1 - z);
+  let x = p[0];
+  z -= 1;
+  for (let i = 1; i < p.length; i += 1) x += p[i] / (z + i);
+  const t = z + 7.5;
+  return 0.5 * Math.log(2 * Math.PI) + (z + 0.5) * Math.log(t) - t + Math.log(x);
+}
+
+function logBetaPdf(x, alpha, beta) {
+  const t = Math.min(1 - 1e-4, Math.max(1e-4, x));
+  const logB = lgamma(alpha) + lgamma(beta) - lgamma(alpha + beta);
+  return (alpha - 1) * Math.log(t) + (beta - 1) * Math.log(1 - t) - logB;
+}
+
+let faqDf = null;
+function faqAlignModel() {
+  if (faqDf) return faqDf;
+  try {
+    const { getFaqRaw } = require("../../knowledge/corpus.cjs");
+    const titles = String(getFaqRaw() || "")
+      .split(/\n/)
+      .filter((line) => /^##\s*Q:/.test(line));
+    faqDf = buildDf(titles);
+  } catch (_) {
+    faqDf = buildDf([]);
+  }
+  return faqDf;
+}
+
+function hitSpeak(hit) {
+  const raw = String(hit?.speak || hit?.snippet || hit?.body || "");
+  const m = raw.match(/A[:：]\s*([\s\S]+)/);
+  return (m ? m[1] : raw).replace(/\s+/g, " ").trim().slice(0, 160);
+}
+
+function scriptEligible(intent, script) {
+  const name = String(intent?.intent || "");
+  const conf = Number(intent?.confidence) || 0;
+  return GROUNDED_INTENTS.has(name) && conf >= 0.75 && String(script || "").trim().length > 12;
+}
+
+/**
+ * 贝叶斯口播决策。
+ * 候选文档的先验来自检索分（去掉 FAQ 常数底分）；
+ * 似然是对齐度与「标题更窄」的 Beta 对数似然比。
+ * 后验最高的文档须同时压过「没有证据」和第二名（Bayes factor ≥ 3）才作答。
+ * 否则：意图脚本仅在分类器已经认定该意图、且没有任何文档胜出时出口；再否则澄清。
+ *
+ * @returns {{ action: "answer"|"clarify"|"repeat", speak: string, reason: string, posterior?: number, title?: string }}
+ */
+function decideSpeak({ ask, hits, intent, script } = {}) {
+  const focused = focusAsk(ask);
+  if (isTruncatedAsk(focused)) {
+    return { action: "repeat", speak: repeatLine(), reason: "truncated", posterior: truncationPosterior(focused) };
+  }
+
+  const model = faqAlignModel();
+  const askLen = stripAsk(focused).length;
+  const short = askLen > 0 && askLen <= 6;
+  const list = (hits || []).filter((h) => h && (h.title || h.snippet || h.speak));
+
+  const prior0 = 0.62;
+  const priorScript = scriptEligible(intent, script) ? 0.22 : 0;
+  const priorDocMass = Math.max(0.05, 1 - prior0 - priorScript);
+
+  // score 底分 16–18 几乎是 FAQ 常数，不给先验
+  const lifted = list.map((h) => {
+    const s = Number(h.score) || 0;
+    return s > 22 ? Math.log1p(s - 18) : 0;
+  });
+  const sumW = lifted.reduce((a, b) => a + b, 0) || 1;
+
+  const logUnnorm = [];
+  for (let i = 0; i < list.length; i += 1) {
+    const h = list[i];
+    const title = String(h.title || "");
+    const view = bestTitleView(focused, title, model);
+    const a = view.align;
+    const e = view.extra;
+    const llrAlign = logBetaPdf(a, 6, 2) - logBetaPdf(a, 1.4, 5);
+    const relExtra = short ? [1.4, 8] : [2, 4];
+    const irrExtra = short ? [6, 1.5] : [4, 2];
+    const llrExtra = logBetaPdf(e, relExtra[0], relExtra[1]) - logBetaPdf(e, irrExtra[0], irrExtra[1]);
+    const prior = priorDocMass * (sumW > 0 && lifted[i] > 0 ? lifted[i] / sumW : 1 / Math.max(1, list.length));
+    logUnnorm.push({
+      i,
+      logU: Math.log(Math.max(prior, 1e-8)) + llrAlign + llrExtra,
+      title,
+      align: a,
+      extra: e
+    });
+  }
+
+  const logU0 = Math.log(prior0);
+  // 意图脚本：分类器给出该意图，相当于一条弱证据，只够在文档都不像时赢过「没证据」
+  const logUScript = priorScript > 0 ? Math.log(priorScript) + Math.log(3) : -Infinity;
+
+  const terms = [...logUnnorm.map((x) => x.logU), logU0, logUScript].filter((x) => Number.isFinite(x));
+  const maxL = Math.max(...terms, -1e9);
+  const Z = terms.reduce((acc, x) => acc + Math.exp(x - maxL), 0);
+  const post = (logU) => (Number.isFinite(logU) ? Math.exp(logU - maxL) / Z : 0);
+
+  const p0 = post(logU0);
+  const pScript = post(logUScript);
+  const ranked = logUnnorm
+    .map((x) => ({ ...x, p: post(x.logU) }))
+    .sort((a, b) => b.p - a.p);
+  const best = ranked[0];
+  const second = ranked[1];
+  const bfSecond = best && second && second.p > 1e-6 ? best.p / second.p : best ? Infinity : 0;
+
+  if (best && best.p >= 0.42 && best.p > p0 && bfSecond >= 3 && best.align >= 0.28) {
+    const speak = hitSpeak(list[best.i]);
+    if (speak) {
+      return {
+        action: "answer",
+        speak,
+        reason: "posterior",
+        posterior: best.p,
+        title: best.title,
+        align: best.align,
+        extra: best.extra
+      };
+    }
+  }
+
+  if (pScript > p0 && (!best || pScript >= best.p)) {
+    return {
+      action: "answer",
+      speak: String(script).trim().slice(0, 160),
+      reason: "script",
+      posterior: pScript
+    };
+  }
+
+  return {
+    action: "clarify",
+    speak: clarifyLine(),
+    reason: best && bfSecond < 3 ? "ambiguous" : "no_evidence",
+    posterior: best ? best.p : p0,
+    title: best?.title || ""
+  };
+}
+
 module.exports = {
   FAQ_KEYWORD_ANSWERABLE,
   WIKI_KEYWORD_ANSWERABLE,
@@ -172,11 +338,14 @@ module.exports = {
   GROUNDED_INTENTS,
   topScore,
   isAnswerable,
+  focusAsk,
   stripAsk,
   isTruncatedAsk,
+  truncationPosterior,
   repeatLine,
   clarifyLine,
   askSpeakOverlap,
   isAlignedSpeak,
-  isUniversalOperateSoft
+  isUniversalOperateSoft,
+  decideSpeak
 };
