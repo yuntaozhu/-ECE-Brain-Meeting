@@ -5,7 +5,7 @@
  * - Wiki 关键词（queryWiki）强命中约 ≥5，语义检索里会被抬到 0.9 附近
  * - 纯向量余弦：中文无关句也常在 0.6 上下，作答线取 0.62，只用于没有 Wiki/FAQ 强命中时
  */
-const { bestTitleView, buildDf } = require("../../knowledge/align.cjs");
+const { bestTitleView, buildDf, alignScore } = require("../../knowledge/align.cjs");
 const { isDefinitionSpeak } = require("../advisors/speakGuards.cjs");
 const { load, rx, words, hp, fill } = require("../../knowledge/schemaStore.cjs");
 
@@ -279,6 +279,73 @@ function localAsk(focus) {
   const f = String(focus || "").trim();
   if (!f) return fill("localAskEmpty");
   return fill("localAsk", { focus: f });
+}
+
+function plainChars(text) {
+  return String(text || "").replace(/[^\u4e00-\u9fffA-Za-z0-9]/g, "");
+}
+
+/** 完整新问：句中有疑问骨架，或带问号。残句不算。 */
+function asksNewQuestion(ask) {
+  const raw = String(ask || "");
+  if (!rx("operators", "interrogative").test(raw)) return false;
+  return !isTruncatedAsk(raw);
+}
+
+let hostCardPack = null;
+function hostCards() {
+  if (hostCardPack) return hostCardPack;
+  const { getFaqRaw, extractFaqSpeakText } = require("../../knowledge/corpus.cjs");
+  const raw = String(getFaqRaw() || "").replace(/\r\n/g, "\n");
+  const cards = [];
+  for (const part of raw.split(/\n(?=## )/)) {
+    const title = (part.trim().split("\n")[0] || "").replace(/^##\s*/, "").trim();
+    const speak = extractFaqSpeakText(part);
+    if (title && speak) cards.push({ title, speak });
+  }
+  hostCardPack = { cards, model: buildDf(cards.map((card) => card.speak)) };
+  return hostCardPack;
+}
+
+/**
+ * 上一句已经播过具体资料、本句又是完整新问，且没有别的卡压过这张卡时，
+ * 从对齐最高的那张卡里取一段尚未出现在上一句里的分句。
+ * 新卡仍走原有作答线，这里不改阈值。
+ */
+function unspokenProgress(ask, host, ranked) {
+  const pack = hostCards();
+  let anchor = null;
+  let hostAlign = -1;
+  for (const card of pack.cards) {
+    const score = alignScore(host, card.speak, pack.model);
+    if (score > hostAlign) {
+      hostAlign = score;
+      anchor = card;
+    }
+  }
+  if (!anchor || hostAlign <= 0) return null;
+  const anchorAsk = alignScore(ask, anchor.speak, pack.model);
+  const anchorPlain = plainChars(anchor.speak);
+  for (const row of ranked || []) {
+    const speak = String(row.speak || "");
+    if (!speak || plainChars(speak) === anchorPlain) continue;
+    if (alignScore(ask, speak, pack.model) > anchorAsk) return null;
+  }
+  let chosen = "";
+  let chosenAlign = -1;
+  const parts = anchor.speak.split(/[。！？；]/).map((s) => s.trim()).filter(Boolean);
+  for (const clause of parts) {
+    const plain = plainChars(clause);
+    if (plain.length < H().hostClauseMin) continue;
+    if (plainChars(host).includes(plain)) continue;
+    const score = alignScore(ask, clause, pack.model);
+    if (score > chosenAlign) {
+      chosenAlign = score;
+      chosen = clause;
+    }
+  }
+  if (!chosen) return null;
+  return { clause: chosen, title: anchor.title };
 }
 
 function boundaryFor(focus) {
@@ -607,10 +674,27 @@ function decideCore({ ask, hits, intent, script, prevDesign, lastHost, measure, 
     };
   }
 
-  // 上一句已经是资料口播：能接上就说后半句，不再新开套话。
+  // 上一句已经是资料口播。完整新问不复读后半句，改说这张卡里还没播过的分句。
   const host = usableHost(lastHost);
+  const freshQuestion = host && asksNewQuestion(focused);
+  if (freshQuestion) {
+    const progressed = unspokenProgress(focused, host, ranked);
+    if (progressed) {
+      return {
+        action: "answer",
+        speak: progressed.clause,
+        reason: "progress",
+        posterior: best ? best.p : p0,
+        title: progressed.title,
+        hypotheses,
+        eig: 0,
+        design: designOf("answer", progressed.title, [], "final"),
+        downgraded
+      };
+    }
+  }
   const topic = host ? sharedTopic(focused, host) : "";
-  const rest = topic ? hostRest(host) : "";
+  const rest = topic && !freshQuestion ? hostRest(host) : "";
   if (topic && rest) {
     const alreadyCarried = prevDesign?.hypothesisId === "carry" && (prevDesign.segments || []).includes(topic);
     if (!alreadyCarried) {

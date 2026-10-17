@@ -193,5 +193,65 @@
       "answerForbids": ["后半句没听清", "请再说具体一点，我结合资料答您"],
       "answerIncludesAny": ["样板", "开口", "课件", "落地", "准备", "开办", "执行", "四步", "行事历", "你是在问", "这句我还没对上"]
     }
+  },
+  {
+    "id": "report-how",
+    "setup": {
+      "lastHostSpeakText": "AI测评每月做，机试加口试，形成报告和证书给家长看，也服务成果展。老师不必自己出题，系统出报告。"
+    },
+    "input": "系统怎么出报告？",
+    "expect": {
+      "intent": ["other"],
+      "answerForbids": ["你想先听哪一步", "收益保障"],
+      "answerIncludesAll": ["读准", "总部"]
+    }
+  },
+  {
+    "id": "report-what",
+    "setup": {
+      "lastHostSpeakText": "老师不必自己出题，系统出报告。"
+    },
+    "input": "系统会出什么样的报告？",
+    "expect": {
+      "intent": ["other"],
+      "answerForbids": ["你想先听哪一步"],
+      "answerIncludesAll": ["机试", "口试"]
+    }
+  },
+  {
+    "id": "report-appeal",
+    "setup": {
+      "lastHostSpeakText": "AI测评每月做，机试加口试，形成报告和证书给家长看，也服务成果展。"
+    },
+    "input": "这个报告对家长有吸引力吗？",
+    "expect": {
+      "intent": ["other"],
+      "answerForbids": ["你想先听哪一步", "收益保障"],
+      "answerIncludesAll": ["家长", "进步"]
+    }
+  },
+  {
+    "id": "report-appeal-short",
+    "setup": {
+      "lastHostSpeakText": "AI测评每月做，用机试加口试把学习成果变成可记录、可展示的报告和证书，方便家长看见进步，也服务成果展和招生。"
+    },
+    "input": "有没有吸引力？",
+    "expect": {
+      "intent": ["other"],
+      "answerForbids": ["你想先听哪一步", "收益保障", "百分之五十"],
+      "answerIncludesAll": ["家长", "进步"]
+    }
+  },
+  {
+    "id": "fee-follow",
+    "setup": {
+      "lastHostSpeakText": "引入后盈利算三笔账：延时非教扩服务半径、全美语分层增值、招生新增幼儿参考一年一点八万三年约五点四万可能盖过三万九。"
+    },
+    "input": "这个钱包含什么？",
+    "expect": {
+      "intent": ["other", "roi_confirm", "pricing_follow", "profit_how"],
+      "answerForbids": ["你想先听哪一步", "机试", "证书"],
+      "answerIncludesAll": ["三万九", "成本"]
+    }
   }
 ]

@@ -33,6 +33,10 @@ function includesNone(text, arr) {
   const t = String(text || "");
   return (arr || []).every((x) => !t.includes(x));
 }
+function includesAll(text, arr) {
+  const t = String(text || "");
+  return (arr || []).every((x) => t.includes(x));
+}
 
 async function main() {
   console.log(`[eval-agent-variants] live=${live} cases=${rows.length}`);
@@ -43,6 +47,7 @@ async function main() {
 
   for (const row of rows) {
     const lastHost = row.setup?.lastHostSpeakText || "";
+    if (lastHost) state.lastDesign = null;
     if (lastHost) {
       state.mode = "HA_BIZ";
       state.haLockedUntil = Date.now() + 120000;
@@ -77,6 +82,9 @@ async function main() {
     }
     if (e.answerIncludesAny?.length && !includesAny(answer, e.answerIncludesAny)) {
       fails.push(`missing anchors; got: ${answer.slice(0, 80)}`);
+    }
+    if (e.answerIncludesAll?.length && !includesAll(answer, e.answerIncludesAll)) {
+      fails.push(`missing all anchors; got: ${answer.slice(0, 80)}`);
     }
     if (fails.length) {
       console.log(`FAIL ${row.id}`);

@@ -225,6 +225,9 @@ async function replay(cases) {
     if (c.expect?.answerIncludesAny?.length && !includesAny(answer, c.expect.answerIncludesAny)) {
       local.push(`anchors ${answer.slice(0, 60)}`);
     }
+    if (c.expect?.answerIncludesAll?.length && !(c.expect.answerIncludesAll || []).every((x) => String(answer || "").includes(x))) {
+      local.push(`all ${answer.slice(0, 60)}`);
+    }
     if (local.length) fails.push(`${c.id} ${local.join("; ")}`);
     else pass += 1;
 
