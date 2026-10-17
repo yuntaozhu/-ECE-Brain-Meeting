@@ -158,7 +158,7 @@ async function retrieveSemantic(query, topK = 4, opts = {}) {
     if (c.source === "wiki") score += 0.05;
     if (
       opts.preferBiz &&
-      /(招生|经营|样板|落地|收费|倒闭|重生|非教|增量|权益|行事历|一园两制|三笔账|Teacher|菲教|收益|保障)/.test(
+      require("../schemaStore.cjs").rx("faq", "preferBiz").test(
         c.title + c.body.slice(0, 120)
       )
     ) {

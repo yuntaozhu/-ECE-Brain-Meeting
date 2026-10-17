@@ -1,0 +1,271 @@
+{
+  "intents": [
+    "loss_fear",
+    "roi_confirm",
+    "profit_how",
+    "how_calc",
+    "parent_reason",
+    "alternate_path",
+    "operate",
+    "teacher",
+    "rollout",
+    "hq_support",
+    "pricing_follow",
+    "chitchat",
+    "other"
+  ],
+  "moneyIntents": ["loss_fear", "roi_confirm"],
+  "lockedIntents": [
+    "loss_fear",
+    "roi_confirm",
+    "profit_how",
+    "hq_support",
+    "pricing_follow",
+    "how_calc",
+    "parent_reason",
+    "rollout",
+    "alternate_path"
+  ],
+  "contentSpeakIntents": ["loss_fear", "roi_confirm", "how_calc", "profit_how"],
+  "softVariants": [
+    {
+      "whenIntent": "profit_how",
+      "test": "(能不能|能否|可不可以|能让|可以让|会让).{0,16}盈利|能盈利|盈利吗",
+      "unlessAny": ["多久|多长时间|什么时候", "(如何|怎么|怎样)"],
+      "script": "profit_confirm"
+    },
+    {
+      "whenIntent": "rollout",
+      "test": "(如何|怎么|怎样).{0,6}执行|执行过程|怎么执行",
+      "script": "rollout_execute"
+    }
+  ],
+  "enrich": {
+    "loss_fear": {
+      "must_not": ["第二条路", "保证不亏", "包赚", "保证回本", "今天主题是"],
+      "retrieve_queries": ["三笔账 招生增长", "一点八万 五点四万 三万九"],
+      "speak_policy": "content_ok"
+    },
+    "roi_confirm": {
+      "must_not": ["第二条路", "保证不亏", "包赚", "保证回本", "今天主题是"],
+      "retrieve_queries": ["三笔账 招生增长", "一点八万 五点四万 三万九"],
+      "speak_policy": "content_ok"
+    },
+    "alternate_path": {
+      "retrieve_queries": ["延时非教", "一园两制", "样板班"]
+    },
+    "profit_how": {
+      "must_not": ["第二条路", "样板班开口实拍", "保证不亏", "包赚"],
+      "retrieve_queries": ["三笔账", "延时非教", "招生增长"],
+      "speak_policy": "content_ok"
+    },
+    "hq_support": {
+      "must_not": ["第二条路", "样板班开口实拍"],
+      "retrieve_queries": ["总部给予哪些支持"],
+      "speak_policy": "content_ok"
+    },
+    "pricing_follow": {
+      "must_not": ["第二条路", "样板班开口实拍", "保证不亏"],
+      "retrieve_queries": ["收费盘面", "保住现有收费"],
+      "speak_policy": "content_ok"
+    },
+    "how_calc": {
+      "retrieve_queries": ["三笔账第三笔", "服务半径"]
+    },
+    "parent_reason": {
+      "retrieve_queries": ["开口实拍", "成果展", "AI测评"]
+    }
+  },
+  "understandSystem": "你是会场经营顾问的意图分类器。只输出一个 JSON 对象，不要 markdown。\n字段：\n{\"intent\":\"...\",\"confidence\":0.0-1.0,\"must_answer\":\"用户要你回答的核心\",\"must_not\":[\"禁止说的\"],\"retrieve_queries\":[\"检索词\"],\"speak_policy\":\"neutral_bridge|content_ok|wait\",\"depth\":\"L1|L2|L3\"}\n\nintent 只能是其一：\nloss_fear | roi_confirm | profit_how | how_calc | parent_reason | alternate_path | operate | teacher | rollout | hq_support | pricing_follow | chitchat | other\n\n规则（必须遵守）：\n1. 「不是很好/不太好/不好」= 经营困境，绝不是要「更好方案」。只有用户明确说「还有更好的方案/其他办法/换一条/第二条路」才是 alternate_path。\n2. 「亏损/亏本/会不会亏/害怕引入花钱/怕亏」→ loss_fear（与回本确认同答法族）。\n3. 「能回本吗/投资能回本吗」→ roi_confirm。\n4. 「如何盈利/怎么赚钱/扭亏/扭亏为盈」→ profit_how。禁止当成 operate。\n5. 「怎么算/测算怎么来的」→ how_calc。\n6. 「家长选择理由是什么」→ parent_reason。\n7. 「总部支持/指导/帮助」→ hq_support。\n8. 「收费盘面/护盘/互助」且上一句在讲收费或护盘 → pricing_follow。禁止 alternate_path。\n9. loss_fear/roi_confirm/profit_how/pricing_follow 的 must_not 必须含「第二条路」「保证不亏/包赚」；speak_policy 用 content_ok。\n10. 听不清、置信度低于 0.5、且不属于以上意图 → other，speak_policy 用 wait。\n11. retrieve_queries 面向知识库：三笔账/招生增长/1.8万/总部支持 等。",
+  "rules": [
+    {
+      "id": "chitchat-wake",
+      "intent": "chitchat",
+      "confidence": 0.9,
+      "must_answer": "应答在场",
+      "speak_policy": "content_ok",
+      "emptyOr": "^(大智|大致)[。.!！？?\\s]*$"
+    },
+    {
+      "id": "loss-fear-core",
+      "intent": "loss_fear",
+      "confidence": 0.95,
+      "must_answer": "引入后会不会亏损",
+      "test": "亏损|亏本|会不会亏|会不会让我亏|怕亏|害怕.*(?:花|投入|引入)|引入后.*亏"
+    },
+    {
+      "id": "loss-fear-afraid-money",
+      "intent": "loss_fear",
+      "confidence": 0.95,
+      "must_answer": "引入后会不会亏损",
+      "all": ["害怕", "三万九|39000|3\\s*万\\s*9|引入|课程"]
+    },
+    {
+      "id": "roi-confirm-core",
+      "intent": "roi_confirm",
+      "confidence": 0.95,
+      "must_answer": "能不能回本",
+      "unlessAny": ["(如何|怎么|怎样)(回本|赚钱|盈利)"],
+      "test": "(能回本|能不能回本|可以回本|回得了本|回本吗|回本嘛)"
+    },
+    {
+      "id": "roi-confirm-particle",
+      "intent": "roi_confirm",
+      "confidence": 0.95,
+      "must_answer": "能不能回本",
+      "all": ["回本", "(能|吗|嘛|能否|可不可以|行不行|是否)"],
+      "unlessAny": ["(如何|怎么|怎样)(回本|赚钱|盈利)"]
+    },
+    {
+      "id": "roi-confirm-invest",
+      "intent": "roi_confirm",
+      "confidence": 0.95,
+      "must_answer": "能不能回本",
+      "all": ["(三万九|39000|3\\s*万\\s*9|投资|投入)", "回本"],
+      "unlessAny": ["(如何|怎么)盈利"]
+    },
+    {
+      "id": "roi-confirm-worth",
+      "intent": "roi_confirm",
+      "confidence": 0.95,
+      "must_answer": "能不能回本",
+      "all": ["(三万九|39000|3\\s*万\\s*9|投资|投入)", "值得|值不值"]
+    },
+    {
+      "id": "how-calc-core",
+      "intent": "how_calc",
+      "confidence": 0.92,
+      "must_answer": "测算怎么来的",
+      "test": "怎么计算|如何计算|怎么算|算出来|测算依据|这个数字|怎么来的|如何得来|怎么得出"
+    },
+    {
+      "id": "how-calc-host",
+      "intent": "how_calc",
+      "confidence": 0.92,
+      "must_answer": "测算怎么来的",
+      "test": "怎么算|如何计算|测算",
+      "requireHost": true
+    },
+    {
+      "id": "parent-reason",
+      "intent": "parent_reason",
+      "confidence": 0.92,
+      "must_answer": "家长选择理由",
+      "test": "选择.*理由|理由是什么|家长.*理由|看得见.*什么|价值是什么"
+    },
+    {
+      "id": "hq-support-head",
+      "intent": "hq_support",
+      "confidence": 0.93,
+      "must_answer": "总部能提供什么支持",
+      "all": ["总部", "支持|指导|帮助"]
+    },
+    {
+      "id": "hq-support-give",
+      "intent": "hq_support",
+      "confidence": 0.93,
+      "must_answer": "总部能提供什么支持",
+      "test": "(给予|提供).*(支持|指导|帮助)|哪些支持|有哪些支持|会给予哪些"
+    },
+    {
+      "id": "alternate-path",
+      "intent": "alternate_path",
+      "confidence": 0.9,
+      "must_answer": "换一条经营路径",
+      "test": "还有更好|更好的方案|更好办法|经营得更好的办法|还有(?:其他|别的)?(?:方案|办法|路)|其他方案|别的办法|换一条|换个路径|第\\s*\\d+\\s*条",
+      "rejectIf": {
+        "all": ["不是很好|不太好|不好|经营得?不"],
+        "none": ["还有|其他方案|别的办法|换一条|第\\s*\\d+\\s*条"]
+      }
+    },
+    {
+      "id": "pricing-follow-core",
+      "intent": "pricing_follow",
+      "confidence": 0.9,
+      "must_answer": "收费盘面怎么保住",
+      "test": "收费盘面|护盘"
+    },
+    {
+      "id": "pricing-follow-help",
+      "intent": "pricing_follow",
+      "confidence": 0.9,
+      "must_answer": "收费盘面怎么保住",
+      "all": ["互助", "收费|盘面|护盘"]
+    },
+    {
+      "id": "pricing-follow-host",
+      "intent": "pricing_follow",
+      "confidence": 0.9,
+      "must_answer": "收费盘面怎么保住",
+      "test": "互助|这个|刚才|那笔",
+      "hostTest": "收费盘面|护盘|保住现有收费",
+      "requireHost": true
+    },
+    {
+      "id": "exclamation-other",
+      "intent": "other",
+      "confidence": 0.35,
+      "must_answer": "",
+      "speak_policy": "wait",
+      "exclamation": true
+    },
+    {
+      "id": "profit-confirm",
+      "intent": "profit_how",
+      "confidence": 0.92,
+      "must_answer": "能不能盈利",
+      "test": "(能不能|能否|可不可以|能让|可以让|会让).{0,16}盈利|能盈利|盈利吗",
+      "unlessAny": ["多久|多长时间|什么时候", "(如何|怎么|怎样)"]
+    },
+    {
+      "id": "profit-how-core",
+      "intent": "profit_how",
+      "confidence": 0.9,
+      "must_answer": "如何扭亏或盈利",
+      "test": "如何盈利|怎么盈利|如何赚钱|怎么赚钱|走向盈利|机构走向盈利|投入产出|如何回本|怎么回本|靠什么赚钱|营收怎么做|三笔账",
+      "unlessAny": ["多久|多长时间|什么时候"]
+    },
+    {
+      "id": "profit-how-pair",
+      "intent": "profit_how",
+      "confidence": 0.9,
+      "must_answer": "如何扭亏或盈利",
+      "all": ["盈利|赚钱|投入产出|营收", "(如何|怎么|怎样|引入|之后|然后)"],
+      "unlessAny": ["多久|多长时间|什么时候"],
+      "rejectIf": {
+        "all": ["是什么|什么是"],
+        "none": ["盈利|赚钱|回本"]
+      }
+    },
+    {
+      "id": "profit-turnaround",
+      "intent": "profit_how",
+      "confidence": 0.9,
+      "must_answer": "如何扭亏或盈利",
+      "test": "扭亏",
+      "interrogative": true,
+      "unlessAny": ["多久|多长时间|什么时候"]
+    },
+    {
+      "id": "teacher",
+      "intent": "teacher",
+      "confidence": 0.85,
+      "must_answer": "老师怎么配合",
+      "test": "老师|抵触|养老师|培育老师"
+    },
+    {
+      "id": "rollout-execute",
+      "intent": "rollout",
+      "confidence": 0.85,
+      "must_answer": "怎么落地",
+      "test": "(如何|怎么|怎样).{0,6}执行|执行过程|怎么执行|落地|实施|行事历|0.?1|第一步|签约|准备"
+    },
+    {
+      "id": "operate",
+      "intent": "operate",
+      "confidence": 0.8,
+      "must_answer": "经营怎么办",
+      "test": "经营得更好|把园经营|园所经营不好|园所经营的不是很好|如何经营|怎么经营|经营好园"
+    }
+  ]
+}

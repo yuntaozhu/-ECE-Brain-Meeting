@@ -8,6 +8,7 @@ const {
   isFollowUpNotEcho
 } = require("./textNorm.cjs");
 const { POST_HOST_ECHO_MS } = require("./phase.cjs");
+const { rx } = require("../knowledge/schemaStore.cjs");
 
 function longestCommonSubstringLen(a, b) {
   const s = normText(a);
@@ -59,7 +60,7 @@ function isPostHostEchoFragment(text, recentHostUtterances = [], sinceHostMs = n
   const hosts = (recentHostUtterances || []).filter(Boolean);
   if (!hosts.length) return null;
 
-  const affirm = /^(好的|好|嗯|对|行|是|哦|可以)[，,。！!？?\s]/.test(t);
+  const affirm = rx("operators", "postAffirm").test(t);
   const hasTheme = TOPIC_HINT_RE.test(t);
   let bestRatio = 0;
   for (const h of hosts) {
@@ -105,21 +106,14 @@ function looksLikeHostEcho(text, recentHostUtterances = [], opts = {}) {
   const post = isPostHostEchoFragment(t, recentHostUtterances, since);
   if (post) return post;
 
-  const themeFrag =
-    /(四端联动|学生端|教师端|家庭端|运营端|ABCmouse|Teacher说|Family说|全园美语|全员美语|三万九|39000|招生引擎|阅读模块|四端模块)/.test(
-      t
-    );
+  const { load, rx } = require("../knowledge/schemaStore.cjs");
+  const themeFrag = rx("operators", "echoTheme").test(t);
+  const hubs = load().operators.echoHubTokens || [];
   if (
     themeFrag &&
     (recentHostUtterances || []).some((h) => {
       const hub = normText(h);
-      return (
-        hub.includes("四端") ||
-        hub.includes("全园美语") ||
-        hub.includes("ABCmouse") ||
-        hub.includes("阅读") ||
-        hub.includes("模块")
-      );
+      return hubs.some((token) => hub.includes(token));
     })
   ) {
     if (normText(t).length >= 8) {

@@ -1,0 +1,32 @@
+{
+  "patterns": {
+    "whenAsk": "多久|多长时间|什么时候",
+    "whenAnswer": "[0-9一二两三四五六七八九十]+\\s*个?月|个月",
+    "howAsk": "如何|怎么|怎样",
+    "boundaryAsk": "回本|会不会亏|亏损|亏本",
+    "boundaryTopic": "回本",
+    "boundaryMark": "不保证|参考测算|不是承诺",
+    "ledgerTopic": "盈利|赚钱|扭亏|回本",
+    "ledgerAnswer": "三笔账|测算|一点八|延时"
+  },
+  "rules": [
+    {
+      "id": "DURATION_QUANT",
+      "ask": "whenAsk",
+      "answer": "whenAnswer"
+    },
+    {
+      "id": "BOUNDARY_COND",
+      "ask": "boundaryAsk",
+      "answerAll": ["boundaryTopic", "boundaryMark"],
+      "blockedBy": ["DURATION_QUANT"],
+      "blockedByPattern": ["howAsk"]
+    },
+    {
+      "id": "CALC_STRUCT",
+      "askAll": ["howAsk", "ledgerTopic"],
+      "answer": "ledgerAnswer",
+      "blockedBy": ["DURATION_QUANT", "BOUNDARY_COND"]
+    }
+  ]
+}

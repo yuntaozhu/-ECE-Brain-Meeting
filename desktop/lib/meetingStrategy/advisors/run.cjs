@@ -22,6 +22,7 @@ const {
   PARENT_REASON_TTS
 } = require("./heuristics.cjs");
 const { isDefinitionSpeak } = require("./speakGuards.cjs");
+const { rx, speakLine } = require("../../knowledge/schemaStore.cjs");
 const { pickWikiForIntent, ragSpeakFallback } = require("./lead.cjs");
 const { arkJsonChat, parsePlanJson, buildSystemPrompt } = require("./llmChat.cjs");
 const { intentSoftAnswer, isMoneyIntent } = require("../agent/intent.cjs");
@@ -104,7 +105,7 @@ async function runBusinessAdvisor(opts = {}) {
       debugLog.info("BusinessAdvisor", "LLM 与上一答雷同，换路径重试");
       const retryUser =
         user +
-        "\n【强制】禁止复读上一答，必须换一条完全不同的经营路径。";
+        speakLine("advisorForceAlt");
       chatRes = await arkJsonChat(system, retryUser, {
         signal: opts.signal,
         timeoutMs,
@@ -183,8 +184,8 @@ async function runBusinessAdvisor(opts = {}) {
   // 「理由是什么」禁止复读「要成为理由」空句
   if (
     (isParentReasonAsk(question) || diag.stage === "show-value") &&
-    /要成为家长选择|成为家长选择园所的理由/.test(plan.tts) &&
-    !/(开口|测评|成果展|实拍)/.test(plan.tts)
+    rx("faq", "tautology").test(plan.tts) &&
+    !rx("faq", "evidence").test(plan.tts)
   ) {
     plan = { ...heuristicPlan({ ...diag, stage: "show-value" }, question), tts: PARENT_REASON_TTS };
     fromRagFallback = false;
@@ -197,10 +198,9 @@ async function runBusinessAdvisor(opts = {}) {
     isMoneyIntent(intentObj?.intent)
   ) {
     const t = String(plan.tts || "");
-    const hasStance = /不保证|不包回本|不是承诺|测算非承诺|参考测算/.test(t);
+    const hasStance = rx("faq", "moneyStance").test(t);
     const wrongFrame =
-      /第二条路|引入后盈利算三笔账|延时非教扩服务半径|延时非教增量班/.test(t) ||
-      (/要成为家长选择|第三笔账才是核心/.test(t) && !hasStance);
+      rx("faq", "moneyWrong").test(t) || (rx("faq", "moneyWrongAnd").test(t) && !hasStance);
     if (!hasStance || wrongFrame) {
       plan = { ...heuristicPlan({ ...diag, stage: "roi-confirm" }, question), tts: ROI_CONFIRM_TTS };
       fromRagFallback = false;
@@ -209,7 +209,7 @@ async function runBusinessAdvisor(opts = {}) {
   // 「怎么算」禁止只复读盈利开场
   if (
     (isHowCalcAsk(question) || diag.stage === "how-calc") &&
-    !/(一点八|1\.8|五点四|5\.4|测算|乘)/.test(plan.tts)
+    !rx("faq", "howNumbers").test(plan.tts)
   ) {
     plan = { ...heuristicPlan({ ...diag, stage: "how-calc" }, question), tts: HOW_CALC_TTS };
     fromRagFallback = false;
@@ -223,7 +223,7 @@ async function runBusinessAdvisor(opts = {}) {
       isRoiConfirmAsk(question) ||
       isHowCalcAsk(question) ||
       isParentReasonAsk(question) ||
-      /经营|招生|落地|样板|盈利|赚钱|计算|理由|回本/.test(question))
+      rx("faq", "operateCue").test(question))
   ) {
     const fallback =
       isRoiConfirmAsk(question) || diag.stage === "roi-confirm"

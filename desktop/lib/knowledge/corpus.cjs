@@ -7,6 +7,13 @@ const path = require("path");
 const { normalizeForMatch, detectWake, isIntroSelfTalk, extractFloorLines } = require("../duplex");
 const { knowledgeReadRoot } = require("../platform/appPaths.cjs");
 const { alignScore, buildDf } = require("./align.cjs");
+const { load, rx } = require("./schemaStore.cjs");
+
+function faqPat(name) {
+  return rx("faq", name);
+}
+
+const DEFAULT_AGENDA = load().faq.defaultAgenda;
 
 function promptFile() {
   return path.join(knowledgeReadRoot(), "li-laoshi-system-prompt.txt");
@@ -17,8 +24,6 @@ function faqFile() {
 function kbFile() {
   return path.join(knowledgeReadRoot(), "quan-yuan-meiyu.txt");
 }
-
-const DEFAULT_AGENDA = "全园美语系统教研会：四端联动、校园经营与家园共育";
 
 let cachedPrompt = null;
 let cachedKb = null;
@@ -146,7 +151,7 @@ function extractFaqSpeakText(body) {
  */
 function matchFaqInstant(query) {
   let q = normalizeForMatch(String(query || "").trim());
-  const glued = q.match(/(?:针对上一答|追问)[^：:]{0,80}[：:]\s*(.{4,80})$/);
+  const glued = q.match(faqPat("gluedTail"));
   if (glued) q = normalizeForMatch(glued[1]);
   if (!q || q.length < 2) return null;
   const r = retrieveKnowledge(q, 3);
@@ -154,84 +159,58 @@ function matchFaqInstant(query) {
   if (!faqHits.length) return null;
 
   const qn = q.replace(/\s+/g, "");
-  const entities = [
-    "四端联动",
-    "四端",
-    "一园两制",
-    "三笔账",
-    "全园美语",
-    "收益保障",
-    "AI测评",
-    "八大核心",
-    "会议主题",
-    "3900",
-    "39000",
-    "三万九",
-    "菲教",
-    "非教",
-    "ABCmouse",
-    "Teacher说",
-    "Family说"
-  ];
-  // 意图互斥：区别问不得命中收费条；收费问不得命中区别条
-  const diffAsk = /区别|优势|培训班|少儿英语培训/.test(qn) && !/怎么收费|收费多少|多少钱|三万九|39000/.test(qn);
-  const priceAsk = /三万九|39000|买的是什么|项目多少钱|怎么收费|收费多少|要收多少|出多少钱|怎么收钱|如何收费/.test(
-    qn
-  );
-  const condAsk = /条件|具备/.test(qn);
-  const enrollAsk = /说服家长|家长报名|如何招生/.test(qn);
-  const launchAsk = /开办|如何做|落地|签约到/.test(qn) && !priceAsk;
+  const cfg = load().faq;
+  const entities = cfg.entities || [];
+  const diffAsk = faqPat("diffAsk").test(qn) && !faqPat("diffAskNot").test(qn);
+  const priceAsk = faqPat("priceAsk").test(qn);
+  const condAsk = faqPat("condAsk").test(qn);
+  const enrollAsk = faqPat("enrollAsk").test(qn);
+  const launchAsk = faqPat("launchAsk").test(qn) && !priceAsk;
   let best = null;
   for (const hit of faqHits) {
-    if ((hit.score || 0) < 22) continue;
+    if ((hit.score || 0) < cfg.minScore) continue;
     const tn = normalizeForMatch(hit.title || "").replace(/\s+/g, "");
-    const titlePrice = /怎么收费|如何收费|收费多少|多少钱|三万九|39000|3900/.test(tn);
-    const titleDiff = /区别|优势|培训班/.test(tn);
-    const titleCond = /条件|具备/.test(tn);
-    const titleEnroll = /说服家长|家长报名|招生怎么破局|怎么用美语招生/.test(tn);
-    const titleLaunch = /签约到落地|要准备|开办|具体要如何做|落地前/.test(tn);
-    if (priceAsk && /在吗|有没有在听/.test(tn)) continue;
+    const titlePrice = faqPat("titlePrice").test(tn);
+    const titleDiff = faqPat("titleDiff").test(tn);
+    const titleCond = faqPat("titleCond").test(tn);
+    const titleEnroll = faqPat("titleEnroll").test(tn);
+    const titleLaunch = faqPat("titleLaunch").test(tn);
+    if (priceAsk && faqPat("presence").test(tn)) continue;
     if (diffAsk && titlePrice && !titleDiff) continue;
     if (priceAsk && titleDiff && !titlePrice) continue;
     if (condAsk && titlePrice && !titleCond) continue;
     if (enrollAsk && titlePrice && !titleEnroll) continue;
     if (launchAsk && titlePrice && !titleLaunch) continue;
     let score = hit.score || 0;
-    if (/(什么是|是什么|介绍)/.test(qn)) {
+    if (faqPat("definitionCue").test(qn)) {
       const focus = entities.find((e) => qn.includes(e));
       if (focus && !tn.includes(focus)) continue;
     }
-    const specificAsk =
-      /普惠|条件|专业|培训班|区别|教育局|赚钱|营收|收费|太贵|付不起|信心|支持|开办|说服家长|不敢开口|开口|认可/.test(
-        qn
-      );
-    const genericDef = /全园美语是什么|什么是全园美语/.test(tn);
-    if (specificAsk && genericDef && !/(是什么|什么是)/.test(qn)) score -= 80;
-    // 意图对齐加分
-    if (diffAsk && titleDiff) score += 55;
-    if (priceAsk && titlePrice) score += 55;
-    if (condAsk && titleCond) score += 50;
-    if (enrollAsk && titleEnroll) score += 50;
-    if (launchAsk && titleLaunch) score += 50;
+    const specificAsk = faqPat("specificAsk").test(qn);
+    const genericDef = faqPat("genericDef").test(tn);
+    if (specificAsk && genericDef && !faqPat("defMark").test(qn)) score -= cfg.specificPenalty;
+    if (diffAsk && titleDiff) score += cfg.intentBoost;
+    if (priceAsk && titlePrice) score += cfg.intentBoost;
+    if (condAsk && titleCond) score += cfg.pairBoost;
+    if (enrollAsk && titleEnroll) score += cfg.pairBoost;
+    if (launchAsk && titleLaunch) score += cfg.pairBoost;
     for (const e of entities) {
       if (qn.includes(e) && tn.includes(e.replace(/联动$/, ""))) {
         if (genericDef && specificAsk) continue;
-        // 「全园美语」 alone 不再强抬收费条（区别问已互斥跳过）
-        if (e === "全园美语" && titlePrice && !priceAsk) continue;
-        score += e === "全园美语" ? 12 : 40;
+        if (e === cfg.genericEntity && titlePrice && !priceAsk) continue;
+        score += e === cfg.genericEntity ? cfg.genericBoost : cfg.entityBoost;
         break;
       }
     }
-    if (qn.length >= 4 && tn.includes(qn.slice(0, Math.min(8, qn.length)))) score += 20;
-    // 关键词软重叠：说服/报名/条件/开办
-    for (const kw of ["说服家长", "家长报名", "具备什么条件", "什么条件", "具体要如何做", "如何做", "区别与优势", "区别和优势"]) {
+    if (qn.length >= 4 && tn.includes(qn.slice(0, Math.min(cfg.titleSlice, qn.length)))) score += cfg.overlapBoost;
+    for (const kw of cfg.softKeywords || []) {
       if (qn.includes(kw.replace(/与|和/g, "")) || (kw.length >= 4 && qn.includes(kw.slice(0, 4)))) {
-        if (tn.includes(kw.slice(0, 4)) || tn.includes(kw.replace(/与|和/g, ""))) score += 25;
+        if (tn.includes(kw.slice(0, 4)) || tn.includes(kw.replace(/与|和/g, ""))) score += cfg.softBoost;
       }
     }
     if (!best || score > best._s) best = { ...hit, _s: score };
   }
-  if (!best || (best._s || 0) < 22) return null;
+  if (!best || (best._s || 0) < cfg.minScore) return null;
   const sec = getFaqSections().find((s) => s.title === best.title) || null;
   const answer = extractFaqSpeakText(sec?.body || best.snippet || "");
   if (!answer || answer.length < 4) return null;
@@ -252,23 +231,7 @@ function retrieveKnowledge(query, topK = 3) {
     .filter((t) => t.length >= 2)
     .slice(0, 12);
   const extra = [];
-  const boosts = [
-    "全园美语",
-    "ABCmouse",
-    "ABC说",
-    "菲教",
-    "招生",
-    "一园两制",
-    "AI测评",
-    "家园",
-    "四端",
-    "3900",
-    "39000",
-    "三万九",
-    "三笔账",
-    "收益保障",
-    "会议主题"
-  ];
+  const boosts = load().faq.boosts || [];
   for (const b of boosts) {
     if (q.includes(b)) extra.push(b);
   }

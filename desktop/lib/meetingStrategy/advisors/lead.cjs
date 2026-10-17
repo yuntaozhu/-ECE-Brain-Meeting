@@ -1,7 +1,8 @@
-/** 先开口 / Wiki 意图挑页 / RAG 口播兜底 */
+/** 先开口 / Wiki 意图挑页 / RAG 口播兜底。句式与词条映射读 schema。 */
 const { getPageBySlug } = require("../../knowledge");
 const { normalizeDazhiAliases, isEnrollmentBenefitAsk } = require("../../meetingSession");
 const { stripIntroBoilerplate, clipUtterance } = require("../../duplex");
+const { load, rx, speakLine } = require("../../knowledge/schemaStore.cjs");
 const { diagnose } = require("./diagnose.cjs");
 const {
   heuristicPlan,
@@ -11,6 +12,7 @@ const {
   isRoiConfirmAsk,
   isHowCalcAsk,
   isParentReasonAsk,
+  isAlternatePathAsk,
   OPERATE_BETTER_TTS,
   PROFIT_TTS,
   ROI_CONFIRM_TTS,
@@ -19,33 +21,37 @@ const {
 } = require("./heuristics.cjs");
 const { isDefinitionSpeak } = require("./speakGuards.cjs");
 
+function pat(name) {
+  return rx("classify", name);
+}
+
+function pushSlugs(slugs, list) {
+  for (const s of list || []) {
+    if (s && !slugs.includes(s)) slugs.push(s);
+  }
+}
+
 function buildFastLead(question, diag) {
   const q = normalizeDazhiAliases(String(question || ""));
   const d = diag || diagnose({ question: q });
   let source = "";
-  // 「对招生有帮助吗」走三笔账第三笔口播，禁止探索态样板班
   if (isEnrollmentBenefitAsk(q)) {
     source =
-      getPageBySlug("ledger-3-enrollment")?.speak ||
-      "有帮助。美语特色要成为家长选择园所的理由；参考测算是新增一名幼儿约一年一点八万、在园三年约五点四万，可能盖过三万九，但不保证招满。";
+      getPageBySlug("ledger-3-enrollment")?.speak || speakLine("enrollmentLeadFallback");
     const lead = clipUtterance(source, 90);
     return { lead, follow: "", source };
   }
-  // 「能回本吗」：先答能不能 + 测算边界，禁止套「引入后盈利算三笔账」
   if (isRoiConfirmAsk(q) || d.stage === "roi-confirm") {
     source = heuristicPlan({ ...d, stage: "roi-confirm" }, q).tts || ROI_CONFIRM_TTS;
   } else if (isHowCalcAsk(q) || d.stage === "how-calc") {
-    // 「怎么计算出来的」：拆测算，禁止复读盈利半句或议程
     const body = String(getPageBySlug("ledger-3-enrollment")?.body || "");
-    const factBite = body.match(/每年约[^。]{4,40}/)?.[0];
+    const factBite = body.match(pat("leadYearFact"))?.[0];
     source = factBite
       ? `${HOW_CALC_TTS.replace(/。$/, "")}；资料写的是${factBite}。`
       : heuristicPlan({ ...d, stage: "how-calc" }, q).tts || HOW_CALC_TTS;
-  } else if (isParentReasonAsk(q) || (d.stage === "show-value" && /理由|看得见/.test(q))) {
-    // 「家长选择理由」：证据三样，禁止复读「要成为理由」
+  } else if (isParentReasonAsk(q) || (d.stage === "show-value" && pat("leadParentCue").test(q))) {
     source = heuristicPlan({ ...d, stage: "show-value" }, q).tts || PARENT_REASON_TTS;
   } else if (isProfitAsk(q) || d.stage === "profit") {
-    // 「如何盈利」：三笔账投入产出，禁止样板班/菲教开场文不对题
     const ledger3 = String(getPageBySlug("ledger-3-enrollment")?.speak || "")
       .replace(/[。．\s]+$/, "")
       .trim();
@@ -55,10 +61,10 @@ function buildFastLead(question, diag) {
     } else {
       source = plan.tts || PROFIT_TTS;
     }
-  } else if (/落地|实施|开展|行事历|0.?1|申请|第一步|签约|准备/.test(q) || d.stage === "rollout") {
+  } else if (pat("leadRollout").test(q) || d.stage === "rollout") {
     const applySpeak = getPageBySlug("apply-project")?.speak || "";
     const rollSpeak = getPageBySlug("rollout-calendar-phase1")?.speak || "";
-    if (/签约|申请|准备/.test(q) && applySpeak) {
+    if (pat("leadApply").test(q) && applySpeak) {
       const a = applySpeak.replace(/[。．\s]+$/, "");
       const r = String(rollSpeak || "").replace(/[。．\s]+$/, "");
       source = r ? `${a}。${r}。` : `${a}。`;
@@ -69,8 +75,9 @@ function buildFastLead(question, diag) {
     const ledger = String(getPageBySlug("ledger-3-enrollment")?.speak || "")
       .replace(/[。．\s]+$/, "")
       .trim();
+    const forHeuristic = q.replace(new RegExp(load().classify.patterns.leadBetter, "g"), "");
     const explore = String(
-      heuristicPlan({ ...d, stage: "explore" }, q.replace(/得更好/g, "")).tts || OPERATE_BETTER_TTS
+      heuristicPlan({ ...d, stage: "explore" }, forHeuristic).tts || OPERATE_BETTER_TTS
     )
       .replace(/[。．\s]+$/, "")
       .trim();
@@ -81,16 +88,15 @@ function buildFastLead(question, diag) {
     }
   } else if (
     isOperateQuestion(q) ||
-    (/经营|使用/.test(q) && !isEnrollmentBenefitAsk(q) && !isProfitAsk(q))
+    (pat("leadOperateUse").test(q) && !isEnrollmentBenefitAsk(q) && !isProfitAsk(q))
   ) {
-    // 「经营得更好」已在上面；其它经营/使用走探索抓手，禁止定义页
-    // 勿把「不是很好」喂给换路径启发式；仅明确换方案才保留原句
-    const { isAlternatePathAsk: altAsk } = require("./heuristics.cjs");
-    const forHeuristic = altAsk(q)
+    const forHeuristic = isAlternatePathAsk(q)
       ? q
-      : q.replace(/不是很好|不太好/g, "").replace(/得更好/g, "");
+      : q
+          .replace(new RegExp(load().classify.patterns.leadHardship, "g"), "")
+          .replace(new RegExp(load().classify.patterns.leadBetter, "g"), "");
     source = heuristicPlan({ ...d, stage: "explore" }, forHeuristic || q).tts;
-  } else if (/招生/.test(q) && /(怎么|如何|破局|招不到)/.test(q)) {
+  } else if (pat("leadRecruitHow").test(q) && pat("leadRecruitHowAnd").test(q)) {
     source = heuristicPlan({ ...d, stage: "explore" }, q).tts;
   } else {
     source = heuristicPlan(d, q).tts;
@@ -109,7 +115,6 @@ function buildFastLead(question, diag) {
               : heuristicPlan({ ...d, stage: "explore" }, q).tts;
   }
   if (isDefinitionSpeak(source)) {
-    // P0：禁止把 OPERATE_BETTER 当任意问句最后兜底
     source = isRoiConfirmAsk(q)
       ? ROI_CONFIRM_TTS
       : isHowCalcAsk(q)
@@ -122,7 +127,6 @@ function buildFastLead(question, diag) {
               ? OPERATE_BETTER_TTS
               : "";
   }
-  // 一次播完整短答（约 90 字），避免在「；」处硬切导致听感半截
   const lead = clipUtterance(source, 90);
   return { lead, follow: "", source };
 }
@@ -130,31 +134,43 @@ function buildFastLead(question, diag) {
 function pickWikiForIntent(question, retrieval, diag) {
   const q = normalizeDazhiAliases(String(question || ""));
   const slugs = [];
-  if (diag?.stage === "rollout" || /落地|实施|开展|行事历|0.?1|申请|第一步/.test(q)) {
-    slugs.push("rollout-calendar-phase1", "apply-project");
+  for (const row of load().classify.wikiIntent || []) {
+    if (row.enrollment && (isEnrollmentBenefitAsk(q) || (pat("leadRecruitHow").test(q) && row.and && new RegExp(row.and).test(q)))) {
+      pushSlugs(slugs, row.slugs);
+      continue;
+    }
+    if (row.roi && (isRoiConfirmAsk(q) || diag?.stage === "roi-confirm")) {
+      pushSlugs(slugs, row.slugs);
+      continue;
+    }
+    if (row.howCalc && (isHowCalcAsk(q) || diag?.stage === "how-calc")) {
+      pushSlugs(slugs, row.slugs);
+      continue;
+    }
+    if (row.parent && (isParentReasonAsk(q) || diag?.stage === "show-value")) {
+      pushSlugs(slugs, row.slugs);
+      continue;
+    }
+    if (row.profit && (isProfitAsk(q) || diag?.stage === "profit")) {
+      pushSlugs(slugs, row.slugs);
+      continue;
+    }
+    if (row.operate && (isOperateBetterAsk(q) || isOperateQuestion(q) || (row.test && new RegExp(row.test).test(q)))) {
+      pushSlugs(slugs, row.slugs);
+      continue;
+    }
+    if (row.stage && (diag?.stage === row.stage || (row.test && new RegExp(row.test).test(q)))) {
+      pushSlugs(slugs, row.slugs);
+      continue;
+    }
+    if (row.all && row.all.every((src) => new RegExp(src).test(q))) {
+      pushSlugs(slugs, row.slugs);
+      continue;
+    }
+    if (row.test && !row.stage && !row.operate && !row.enrollment && new RegExp(row.test).test(q)) {
+      pushSlugs(slugs, row.slugs);
+    }
   }
-  if (isEnrollmentBenefitAsk(q) || (/招生/.test(q) && /(有帮助|有没有用|能帮)/.test(q))) {
-    slugs.push("ledger-3-enrollment", "quan-yuan-meiyu");
-  }
-  if (isRoiConfirmAsk(q) || diag?.stage === "roi-confirm") {
-    slugs.push("ledger-3-enrollment", "ledger-1-service-radius", "quan-yuan-meiyu");
-  }
-  if (isHowCalcAsk(q) || diag?.stage === "how-calc") {
-    slugs.push("ledger-3-enrollment", "ledger-1-service-radius", "ledger-2-premium");
-  }
-  if (isParentReasonAsk(q) || diag?.stage === "show-value") {
-    slugs.push("ledger-3-enrollment", "benefit-07-chengguozhan");
-  }
-  if (isProfitAsk(q) || diag?.stage === "profit") {
-    slugs.push("ledger-3-enrollment", "ledger-2-premium", "ledger-1-service-radius", "quan-yuan-meiyu");
-  }
-  // 经营/落地：优先行事历与三笔账，勿把定义页塞进 instantAnswer
-  if (isOperateBetterAsk(q) || isOperateQuestion(q) || /经营得更好|把园经营|如何使用|怎么用/.test(q)) {
-    slugs.push("ledger-3-enrollment", "rollout-calendar-phase1", "apply-project");
-  }
-  if (/八大|权益/.test(q)) slugs.push("eight-core-benefits");
-  if (/全美语系统|全园美语/.test(q) && /是什么|什么是/.test(q)) slugs.push("quan-yuan-meiyu");
-  if (diag?.stage === "teacher" || /老师|Teacher说/.test(q)) slugs.push("benefit-05-teacher-shuo");
   if (!slugs.length) return retrieval;
   const seen = new Set();
   const picked = [];
@@ -202,7 +218,6 @@ function ragSpeakFallback(retrieval, question) {
   }
   const hit = (retrieval?.hits || []).find((h) => !(operate && isDefinitionSpeak(h.speak || h.snippet || "")));
   if (!hit) return null;
-  // Wiki 整页优先用口播段，避免切块半句
   let bite = String(hit.speak || "").replace(/\s+/g, " ").trim();
   if (bite.length < 12) {
     bite = String(hit.snippet || "").replace(/\s+/g, " ").trim();

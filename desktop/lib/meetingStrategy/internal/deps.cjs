@@ -1,5 +1,6 @@
 /** 外部依赖聚合，供 internal/* 与 paths/* 共用 */
 const { debugLog } = require("../../platform/debugLog.cjs");
+const { rx, speakLine, speakFill } = require("../../knowledge/schemaStore.cjs");
 const {
   DEFAULT_AGENDA,
   getSystemPrompt,
@@ -81,6 +82,9 @@ const {
 
 module.exports = {
   debugLog,
+  rx,
+  speakLine,
+  speakFill,
   DEFAULT_AGENDA,
   getSystemPrompt,
   retrieveKnowledge,

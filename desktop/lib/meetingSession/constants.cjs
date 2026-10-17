@@ -2,6 +2,7 @@
  * 会议会话 — 互动姿态 / 生命周期常量
  * 与半双工 PHASE（IDLE/SPEAKING/COOLDOWN）正交。
  */
+const { wakeRe, hp, rx, load } = require("../knowledge/schemaStore.cjs");
 
 /** @deprecated 语义上请用 INTERACTION_MODE；值相同 */
 const AGENT_MODE = {
@@ -33,7 +34,7 @@ const MODE_LABEL = {
   HH_TOPIC: "抛题",
   HA_ASK: "咨询中",
   HA_TALK: "探讨中",
-  HA_BIZ: "经营顾问",
+  HA_BIZ: load().session.modeLabelBiz,
   PAUSED: "暂停记录",
   IDLE_LISTEN: "静默监听"
 };
@@ -50,13 +51,10 @@ const LIFE_LABEL = {
   CLOSING: "收尾中"
 };
 
-/** 咨询粘滞默认 90s */
-const HA_STICKY_MS = 90000;
+/** 咨询粘滞，时长在 schema/engine-hyperparams.json */
+const HA_STICKY_MS = hp("stickyMs");
 
-const DAZHI_RE = /大智|大致|大志|大制|达智/;
-
-const OFF_TOPIC_RE =
-  /粽子|买菜|打牌|八卦|报销(?!.*美语)|晚饭|外卖|股票|短视频|追剧|游戏开黑/;
+const DAZHI_RE = wakeRe();
 
 const STEER_MAX_PER_SEGMENT = 2;
 const STEER_COOLDOWN_MS = 20000;
@@ -70,7 +68,9 @@ module.exports = {
   LIFE_LABEL,
   HA_STICKY_MS,
   DAZHI_RE,
-  OFF_TOPIC_RE,
+  get OFF_TOPIC_RE() {
+    return rx("session", "offTopic");
+  },
   STEER_MAX_PER_SEGMENT,
   STEER_COOLDOWN_MS
 };

@@ -84,8 +84,7 @@ function prepareAsk(ctx) {
   const haMode = S.classifyHaIntent(lastFloor, state.mode);
   const stickyBiz = state.mode === S.INTERACTION_MODE.HA_BIZ && Date.now() < (state.haLockedUntil || 0);
   const lastHost = String(opts.lastHostSpeakText || "");
-  const hostLooksBiz =
-    /(三笔账|一点八|五点四|三万九|盈利|样板|招生|收费|非教|美语|延时|分层|测算)/.test(lastHost);
+  const hostLooksBiz = require("../../../knowledge/schemaStore.cjs").rx("classify", "hostLooksBiz").test(lastHost);
   const deicticFollow =
     (stickyBiz || hostLooksBiz) &&
     (S.isBizDeicticFollowUp(askText) || S.isBizDeicticFollowUp(lastFloor)) &&
@@ -108,7 +107,7 @@ function prepareAsk(ctx) {
   } else {
     S.setMode(state, haMode === "HA_TALK" ? S.INTERACTION_MODE.HA_TALK : S.INTERACTION_MODE.HA_ASK);
     if (stickyBiz && !stickyFollow && !deicticFollow) {
-      S.debugLog.info("Strategy", "经营粘滞未续，回咨询", { text: askText.slice(0, 40) });
+      S.debugLog.info("Strategy", "粘滞未续，回咨询", { text: askText.slice(0, 40) });
     }
   }
   state.haLockedUntil = Date.now() + 90000;

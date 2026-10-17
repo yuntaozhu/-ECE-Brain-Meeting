@@ -1,10 +1,11 @@
 const S = require("./kit.cjs");
+const { rx } = require("../../knowledge/schemaStore.cjs");
 
 async function handle(ctx) {
   const { state, a2aTrace, kbStatus, lastFloor } = ctx;
   if (S.isSilentMode(state.mode)) {
     const note = String(lastFloor || "").trim();
-    if (note.length >= 4 && !/^(大智|谢谢大智|停止大智)/.test(note)) {
+    if (note.length >= 4 && !rx("operators", "silentSkip").test(note)) {
       if (!Array.isArray(state.listenNotes)) state.listenNotes = [];
       const prev = state.listenNotes[state.listenNotes.length - 1] || "";
       if (note !== prev) {

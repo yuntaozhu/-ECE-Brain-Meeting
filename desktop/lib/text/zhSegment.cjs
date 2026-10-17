@@ -1,55 +1,12 @@
 /**
- * 无证据短引导才使用的分词。
- * 结巴懒加载；对齐、回声、普通检索不经过这里。
- * 本机用 @node-rs/jieba（jieba-rs 预编译）。nodejieba 在 Node 26 / 无 MSVC 时装不上。
+ * 无证据短引导用的焦点抽取。
+ * 主路径：编译索引上的高信息连续二元组。索引未就绪时退回结巴。
  */
 const fs = require("fs");
 const path = require("path");
-
-const DROP = new Set([
-  "什么",
-  "怎么",
-  "如何",
-  "怎样",
-  "可以",
-  "是否",
-  "你们",
-  "我们",
-  "这个",
-  "那个",
-  "一下",
-  "还有",
-  "以及",
-  "或者",
-  "因为",
-  "所以",
-  "如果",
-  "那么",
-  "一个",
-  "一些",
-  "没有",
-  "不是",
-  "能不能",
-  "不会",
-  "不具备",
-  "怎么办",
-  "现在",
-  "一起",
-  "大智",
-  "大致",
-  "能够",
-  "怎么做",
-  "可以让",
-  "第一次",
-  "问题",
-  "回复",
-  "刚才",
-  "刚刚",
-  "打断"
-]);
-
-/** 句末弱动词：再往前取一个内容词。 */
-const WEAK_TAIL = new Set(["实施", "执行", "处理", "解决", "开展", "进行", "办理", "完成", "具备"]);
+const { words, hp } = require("../knowledge/schemaStore.cjs");
+const { extractHighEntropyFocus } = require("./universalOperators.cjs");
+const { loadCompiled } = require("../knowledge/compiler.cjs");
 
 let jieba = null;
 
@@ -67,13 +24,12 @@ function getJieba() {
 
 function keepWord(word) {
   const s = String(word || "").replace(/[^\u4e00-\u9fffA-Za-z0-9]/g, "");
-  if (s.length < 2 || s.length > 6) return "";
-  if (DROP.has(s)) return "";
+  if (s.length < hp("focusWordMin") || s.length > hp("focusWordMax")) return "";
+  if (words("operators", "dropWords").has(s)) return "";
   return s;
 }
 
-/** 本句内容词，2–6 字，给短引导和下一轮检索。 */
-function focusPhrase(text) {
+function focusPhraseLegacy(text) {
   const raw = String(text || "").trim();
   if (!raw) return "";
   const jb = getJieba();
@@ -85,8 +41,19 @@ function focusPhrase(text) {
   }
   if (!kept.length) return "";
   let focus = kept[kept.length - 1];
-  if (WEAK_TAIL.has(focus) && kept.length >= 2) focus = kept[kept.length - 2];
+  if (words("operators", "weakTail").has(focus) && kept.length >= 2) focus = kept[kept.length - 2];
   return focus;
+}
+
+/** 本句内容词，给短引导和下一轮检索。 */
+function focusPhrase(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return "";
+  if (loadCompiled()) {
+    const focus = extractHighEntropyFocus(raw);
+    if (focus) return focus;
+  }
+  return focusPhraseLegacy(raw);
 }
 
 module.exports = { focusPhrase };

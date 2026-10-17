@@ -24,7 +24,8 @@ function rememberRealAsk(state, question) {
   const q = String(question || "").trim();
   if (q.length < 8) return;
   if (detectUserTone(q)) return;
-  if (/^(大智|谢谢大智|我在)/.test(q) && q.length < 16) return;
+  const { rx } = require("../../knowledge/schemaStore.cjs");
+  if (rx("speak", "realAskSkip").test(q) && q.length < 16) return;
   state.lastRealAsk = q.slice(0, 200);
   state.lastRealAskAt = Date.now();
 }
@@ -32,12 +33,13 @@ function rememberRealAsk(state, question) {
 /** 投诉后重答上一实质问：优先 FAQ / 行事历本地口播，禁止样板班兜底 */
 function answerCorrectionForPrev(prevAsk, tone, state, a2aTrace, kbStatus, qFp) {
   const q = String(prevAsk || "").trim();
-  const prefix = tone === "insult" || tone === "retry" ? "抱歉，我重新说。" : "";
+  const { speakLine, rx } = require("../../knowledge/schemaStore.cjs");
+  const prefix = tone === "insult" || tone === "retry" ? speakLine("correctPrefix") : "";
   const faq =
     matchFaqInstant(q) ||
-    (/落地|签约|准备/.test(q) ? matchFaqInstant("从签约到落地要做哪些准备") : null) ||
-    (/收费|多少钱|值得/.test(q) ? matchFaqInstant("投入三万九真的值得吗") : null) ||
-    (isEnrollmentBenefitAsk(q) ? matchFaqInstant("加入全园美语对招生有帮助吗") : null);
+    (rx("speak", "correctRollout").test(q) ? matchFaqInstant(speakLine("faqRollout")) : null) ||
+    (rx("speak", "correctPricing").test(q) ? matchFaqInstant(speakLine("faqWorth")) : null) ||
+    (isEnrollmentBenefitAsk(q) ? matchFaqInstant(speakLine("faqEnrollment")) : null);
   if (faq?.answer) {
     return playAnswer(
       `${prefix}${faq.answer}`,
@@ -50,7 +52,7 @@ function answerCorrectionForPrev(prevAsk, tone, state, a2aTrace, kbStatus, qFp) 
       { cacheQuestion: q }
     );
   }
-  if (isBusinessIntent(q) || isOperateQuestion(q) || /落地|签约|准备|收费/.test(q)) {
+  if (isBusinessIntent(q) || isOperateQuestion(q) || rx("speak", "correctBiz").test(q)) {
     const fast = buildFastLead(q);
     const body = clipUtterance(fast.lead || fast.source || "", 160);
     if (body && !isDefinitionSpeak(body)) {
@@ -155,16 +157,11 @@ function newEvent(sender, target, action, payload = {}) {
 }
 
 function objectionAnswer(level) {
-  if (level >= 4) {
-    return "核心不是靠加费赚快钱，是用三万九换三个结果：一靠开口成果和公办拉开，保住您现有高收费；二靠特色拉高续费，少花招生钱；三靠延时非教收两三百增量，给配合老师发补贴。金句：先护盘，再用增量养老师。";
-  }
-  if (level >= 3) {
-    return "那就锁县城最小的一个整班做样板，不雇人、不跨班抽人。每天约五分钟：非教片段和开口数据一键进家长群，总部给配文。金句：一整班、五分钟、一键转。";
-  }
-  if (level >= 2) {
-    return "先不要求全员老师参与。您先顶第一个样板班的发视频和转发；一个月若有美语加收，再从增量里拿小半给愿意接的老师。金句：用项目赚的钱养配合，不挤原工资包。";
-  }
-  return "不碰全员，先做一个月样板班：总部课件加非教，老师不备课，只拍十秒视频发群；您盯班攒开口实拍。金句：先出样板，再谈铺开。";
+  const { speakLine } = require("../../knowledge/schemaStore.cjs");
+  if (level >= 4) return speakLine("objection4");
+  if (level >= 3) return speakLine("objection3");
+  if (level >= 2) return speakLine("objection2");
+  return speakLine("objection1");
 }
 
 function baseResult(extra) {

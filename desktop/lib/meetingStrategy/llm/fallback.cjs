@@ -1,6 +1,6 @@
 /**
  * Chat 失败/超时本地口播。
- * P0：默认走知识库/启发式，禁止「未知 → 议程菜单」当兜底。
+ * 句式与兜底文案只读 schema/speak-lines.json。
  */
 const {
   matchFaqInstant,
@@ -10,10 +10,7 @@ const {
   readSession,
   isCasualChitchat,
   isEnrollmentBenefitAsk,
-  buildFastLead,
-  isDefinitionSpeak,
   retrieveKnowledge,
-  queryWiki,
   clipUtterance,
   leadClause,
   DEFAULT_AGENDA
@@ -25,22 +22,23 @@ const {
   formatAskRecap,
   agendaRedirectLine
 } = require("../internal/scripts.cjs");
-const { decideSpeak, repeatLine } = require("../agent/relevance.cjs");
+const { repeatLine } = require("../agent/relevance.cjs");
+const { decideSpeak } = require("../decideSpeak.cjs");
+const { speakLine, speakFill, rx } = require("../../knowledge/schemaStore.cjs");
 
 function isExplicitAgendaAsk(q) {
-  return /(会议主题|开什么会|今天.*主题|这次会议的主题|今天开什么会)/.test(q);
+  return rx("speak", "explicitAgenda").test(q);
 }
 
 function isObviousChitchatOrOffTopic(q) {
   if (isCasualChitchat(q)) return true;
-  return /^(天气|吃饭|几点了|你好啊|哈哈+|嗯+|哦+)[。.!！？?\s]*$/.test(q);
+  return rx("speak", "obviousChitchat").test(q);
 }
 
 function looksLikeAgendaMenu(text) {
-  return /今天主题是|您可以问全园美语是什么|四端联动、校园经营与家园共育/.test(String(text || ""));
+  return rx("speak", "agendaMenu").test(String(text || ""));
 }
 
-/** 从 FAQ 块抽出 A: 正文；拒绝标题行 */
 function extractAnswerBody(raw) {
   let s = String(raw || "").trim();
   if (!s) return "";
@@ -55,10 +53,6 @@ function extractAnswerBody(raw) {
   return s;
 }
 
-/**
- * 从本地知识挤一句口播。
- * 优先启发式/精确 FAQ，弱相关 keyword 命中不可靠时宁可用 soft fallback。
- */
 function kbBiteAnswer(askText) {
   const q = String(askText || "").trim();
   if (!q) return "";
@@ -83,38 +77,31 @@ function kbBiteAnswer(askText) {
   return d.speak;
 }
 
-/**
- * @param {string} askText
- * @param {object} state
- * @param {string} agenda
- * @param {object} [opts]
- * @returns {string}
- */
 function chatFallbackFor(askText, state, agenda, opts = {}) {
   const q = String(askText || "").trim();
-  if (/^(大智|大致)[。.!！？?\s]*$/.test(q)) return "我在，请讲。";
+  if (rx("speak", "wakeOnly").test(q)) return speakLine("wakePresence");
   if (isAskListRequest(q)) {
     const rows = readSession(state?.meetingId, { limit: 40 });
     return formatAskRecap(rows);
   }
   if (isRecallLastAsk(q)) {
     const prev = String(state?.lastRealAsk || "").trim();
-    if (prev) return `刚才您问的是：${clipUtterance(prev, 80)}`;
-    return "我这边还没记下您上一句实质问题。请再说一遍。";
+    if (prev) return speakFill("recallPrev", { prev: clipUtterance(prev, 80) });
+    return speakLine("recallEmpty");
   }
   if (isSessionMemoryMeta(q)) {
     const prev = String(state?.lastRealAsk || "").trim();
     return prev
-      ? `上一问我记着：${clipUtterance(prev, 60)}。也可以说「大智总结一下」。`
-      : "本场转写有记。您可以说「大智总结一下」听要点。";
+      ? speakFill("memoryPrev", { prev: clipUtterance(prev, 60) })
+      : speakLine("memoryEmpty");
   }
   if (isCasualChitchat(q)) return CHITCHAT_LINE;
-  if (/(你是谁|你是什么|你叫什么)/.test(q)) return IDENTITY_LINE;
+  if (rx("speak", "identityAsk").test(q)) return IDENTITY_LINE;
   if (isExplicitAgendaAsk(q)) {
     return (
-      matchFaqInstant("今天会议主题是什么")?.answer ||
+      matchFaqInstant(speakLine("faqAgenda"))?.answer ||
       matchFaqInstant(q)?.answer ||
-      `今天主题是${agenda || DEFAULT_AGENDA}。`
+      speakFill("agendaToday", { agenda: agenda || DEFAULT_AGENDA })
     );
   }
 
@@ -122,10 +109,7 @@ function chatFallbackFor(askText, state, agenda, opts = {}) {
   if (kb && !looksLikeAgendaMenu(kb)) return kb;
 
   if (isEnrollmentBenefitAsk(q)) {
-    return (
-      matchFaqInstant("加入全园美语对招生有帮助吗")?.answer ||
-      "有帮助。项目核心目标是让美语特色成为招生引擎，测算口径不等于保证招满。"
-    );
+    return matchFaqInstant(speakLine("faqEnrollment"))?.answer || speakLine("enrollmentSoft");
   }
 
   if (isObviousChitchatOrOffTopic(q)) {
@@ -135,8 +119,7 @@ function chatFallbackFor(askText, state, agenda, opts = {}) {
   if (opts.allowAgendaRedirect === true && opts.forceAgenda) {
     return agendaRedirectLine(agenda || DEFAULT_AGENDA);
   }
-  // 无对齐命中时走设计算法的澄清或复述，不再用议程菜单句
   return kb || repeatLine();
 }
 
-module.exports = { chatFallbackFor, kbBiteAnswer };
+module.exports = { chatFallbackFor, kbBiteAnswer, extractAnswerBody };

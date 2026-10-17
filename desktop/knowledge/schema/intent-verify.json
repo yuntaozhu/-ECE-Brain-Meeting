@@ -1,0 +1,64 @@
+{
+  "moneyForbidAlternate": "第二条路",
+  "moneyRequireStance": "不保证|不包回本|不是承诺|测算非承诺|不必然亏",
+  "moneyRequireNumbers": "(一点八|1\\.8|五点四|5\\.4|三万九)",
+  "checks": [
+    {
+      "intent": "alternate_path",
+      "require": "第二条路|延时|非教|增量",
+      "fail": "alternate_missing_path"
+    },
+    {
+      "intent": "how_calc",
+      "require": "(一点八|1\\.8|五点四|5\\.4|测算|乘)",
+      "fail": "how_calc_missing_numbers"
+    },
+    {
+      "intent": "parent_reason",
+      "require": "(开口|测评|成果展|实拍)",
+      "fail": "parent_reason_missing_evidence"
+    },
+    {
+      "intent": "profit_how",
+      "forbid": "第二条路",
+      "fail": "profit_alternate_path"
+    },
+    {
+      "intent": "profit_how",
+      "forbid": "样板班开口实拍",
+      "fail": "profit_sample_opener"
+    },
+    {
+      "intent": "profit_how",
+      "require": "三笔账|延时|招生|一点八",
+      "fail": "profit_missing_ledger"
+    },
+    {
+      "intent": "hq_support",
+      "require": "课件|Teacher说|菲教|行事历",
+      "fail": "hq_missing_support"
+    },
+    {
+      "intent": "hq_support",
+      "forbid": "样板班开口实拍|第二条路",
+      "fail": "hq_wrong_template"
+    },
+    {
+      "intent": "pricing_follow",
+      "forbid": "第二条路|样板班开口实拍",
+      "fail": "pricing_wrong_path"
+    },
+    {
+      "intent": "pricing_follow",
+      "require": "保住现有收费|加收|护盘",
+      "fail": "pricing_missing_hold"
+    }
+  ],
+  "promiseHard": "保证不亏|包赚|一定回本",
+  "promiseReturn": "保证回本",
+  "promiseReturnOk": "不保证回本",
+  "promiseFull": "保证招满",
+  "promiseFullOk": "不保证招满|不是保证招满",
+  "agendaMenu": "今天主题是|您可以问全园美语是什么",
+  "llmSystem": "判断口播是否回答了用户核心问题。只输出 JSON：{\"pass\":true|false,\"reason\":\"短理由\"}"
+}

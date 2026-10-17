@@ -1,0 +1,15 @@
+---
+description: desktop 会场口播引擎的机制与策略分离。改 desktop 时必须遵守。
+globs: desktop/**/*
+alwaysApply: true
+---
+
+# desktop 架构宪法
+
+完整条文在 `desktop/.cursorrules`。改 `desktop/` 时按该文件执行。
+
+- 引擎 `desktop/lib/**/*.cjs` 只做概率、极性字二元组、槽位集合、状态转移、半双工。新坏例禁止用业务词、补丁词或字面量正则去改 `.cjs`。
+- 口令、否定窗口、元词、超参进 `desktop/knowledge/schema/`。业务说法进 FAQ / Wiki。会中不改知识库文件。
+- 流水线固定：转写 → `meetingSession` → 知识库召回 → `decideSpeak` → 写回 `lastDesign` / `lastOpenAsk` → 合成。知识库不决定开口。`desktop/renderer/` 不做策略。不要改仓库根目录的 React 示例。
+- 现存 `slotOk`、`DROP`、口令正则、意图覆盖是迁移债。对应算子落地且场景冒烟与变体评测仍全绿之前，禁止整段重写 `decideSpeak`，也禁止为了零字面量先删这些分支。
+- 主进程或 `faq-meeting.txt` 改完后，会场要重新执行 `npm run desktop` 才生效。

@@ -51,14 +51,15 @@ function todosFromRetrieval(retrieval, askText) {
     .map((h) => h.title || h.slug)
     .filter(Boolean);
   const todos = [];
-  if (cites.length) todos.push(`依据：${cites.join("、")}`);
-  else todos.push("依据：本场知识库（弱相关，已谨慎作答）");
-  if (/回本|值得|投资|盈利|赚钱|测算|三笔账|一点八/.test(String(askText || ""))) {
-    todos.push("边界：测算/参考口径，不保证招满或包赚");
+  const { speakLine, speakFill, rx } = require("../../knowledge/schemaStore.cjs");
+  if (cites.length) todos.push(speakFill("todoCite", { cites: cites.join("、") }));
+  else todos.push(speakLine("todoWeak"));
+  if (rx("faq", "todoMoney").test(String(askText || ""))) {
+    todos.push(speakLine("todoMoney"));
   } else {
-    todos.push("口径以知识库为准，数字不编造");
+    todos.push(speakLine("todoDefault"));
   }
-  todos.push("可追问：怎么算 / 落地准备 / 收费");
+  todos.push(speakLine("todoFollow"));
   return todos;
 }
 

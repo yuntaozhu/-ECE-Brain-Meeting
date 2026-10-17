@@ -1,5 +1,6 @@
 /**
  * 规则改写：去回灌、选题、多轮追问粘连。
+ * 句式只读 knowledge/schema/query-classify.json。
  */
 const { isQuestionForm } = require("../../duplex");
 const {
@@ -9,9 +10,8 @@ const {
   isBizDeicticFollowUp,
   peelWakePayload
 } = require("../../meetingSession");
+const { load, rx } = require("../../knowledge/schemaStore.cjs");
 const {
-  CLOSED_FAQ_RE,
-  FOLLOW_UP_RE,
   peelClosedFaqCore,
   isResidualUtterance,
   isClosedFaqQuestion,
@@ -19,122 +19,122 @@ const {
   isBusinessIntent
 } = require("./classify.cjs");
 
-/** 上一答在让用户选题（「想先听哪一块」） */
-const CHOICE_INVITE_RE = /想先听|先听哪|听哪一块|哪一块|先说哪|选哪|听哪一/;
+function lim(name) {
+  const value = load().classify.limits[name];
+  if (value == null) throw new Error("missing classify limit " + name);
+  return value;
+}
+
+function pat(name) {
+  return rx("classify", name);
+}
+
+function choiceInviteRe() {
+  return pat("choiceInvite");
+}
 
 function extractOfferedChoices(hostText) {
   const h = String(hostText || "").trim();
-  if (!h || !CHOICE_INVITE_RE.test(h)) return [];
+  if (!h || !choiceInviteRe().test(h)) return [];
   let chunk = "";
-  const colon = h.match(/[：:]([^。！？?\n]{4,80})/);
+  const colon = h.match(pat("choiceColon"));
   if (colon) chunk = colon[1];
   else {
-    const idx = h.search(CHOICE_INVITE_RE);
-    if (idx > 4) chunk = h.slice(Math.max(0, idx - 48), idx);
+    const idx = h.search(choiceInviteRe());
+    if (idx > 4) chunk = h.slice(Math.max(0, idx - lim("choiceLookback")), idx);
   }
   chunk = chunk.replace(/与/g, "、");
   const parts = chunk
     .split(/[、，,/／]/)
     .map((s) =>
       String(s || "")
-        .replace(/^(今天主题是|本场围绕|全园美语系统教研)/, "")
+        .replace(pat("choiceNoisePrefix"), "")
         .replace(/[的呢啊哦呀\s]/g, "")
         .trim()
     )
-    .filter((s) => s.length >= 2 && s.length <= 12)
-    .filter((s) => !/系统教研|今天主题|想先听|哪一块/.test(s));
+    .filter((s) => s.length >= lim("choicePartMin") && s.length <= lim("choicePartMax"))
+    .filter((s) => !pat("choiceNoiseFilter").test(s));
   return [...new Set(parts)];
+}
+
+function rewriteChoiceLabel(cb) {
+  for (const row of load().classify.choiceRewrite || []) {
+    if (row && row.test && new RegExp(row.test).test(cb)) return row.rewritten;
+  }
+  return `${cb}是什么`;
 }
 
 /**
  * 会场短句是否在选上一答给出的选项。命中则改写成可秒答问句。
- * @param {string} floor
- * @param {string} lastHostAnswer
- * @returns {{ choice: string, rewritten: string } | null}
  */
 function matchOfferedChoice(floor, lastHostAnswer) {
   const raw = normalizeDazhiAliases(String(floor || "").trim());
   const bare = raw.replace(/[，,。．.!！？?\s]/g, "");
-  if (!bare || bare.length < 2 || bare.length > 14) return null;
-  if (/(大智|谢谢|会议开始|会议结束|听我说|我说完了)/.test(bare)) return null;
+  if (!bare || bare.length < lim("choiceBareMin") || bare.length > lim("choiceBareMax")) return null;
+  if (pat("choiceCommand").test(bare)) return null;
   const choices = extractOfferedChoices(lastHostAnswer);
   if (!choices.length) return null;
   for (const c of choices) {
     const cb = String(c || "").replace(/\s+/g, "");
     if (!cb) continue;
     if (bare === cb || bare.includes(cb) || cb.includes(bare)) {
-      let rewritten = `${cb}是什么`;
-      if (/家园共育|家庭端|Family说/.test(cb)) rewritten = "家园共育怎么做";
-      else if (/校园经营|园所经营|经营/.test(cb)) rewritten = "校园经营怎么做";
-      else if (/四端/.test(cb)) rewritten = "四端联动是什么";
-      return { choice: cb, rewritten };
+      return { choice: cb, rewritten: rewriteChoiceLabel(cb) };
     }
   }
   return null;
 }
 
-/**
- * 去掉回灌半句前缀（Host 尾句粘连）。
- * @param {string} text
- * @param {string} [lastHostAnswer]
- */
 function stripEchoPrefix(text, lastHostAnswer) {
   let t = String(text || "").trim();
   if (!t) return "";
   const host = String(lastHostAnswer || "").replace(/\s+/g, "");
-  if (host.length >= 12) {
-    // 若问句前半与 Host 尾部重叠，裁掉重叠前缀
+  if (host.length >= lim("echoHostMin")) {
     const tn = t.replace(/\s+/g, "");
-    for (let len = Math.min(40, Math.floor(host.length / 2)); len >= 8; len -= 2) {
+    for (
+      let len = Math.min(lim("echoOverlapMax"), Math.floor(host.length / 2));
+      len >= lim("echoOverlapMin");
+      len -= 2
+    ) {
       const tail = host.slice(-len);
       if (tn.startsWith(tail)) {
         t = t.replace(/\s+/g, "").slice(len);
         break;
       }
-      // 模糊：问句开头像 Host 中间碎片
       const idx = tn.indexOf(tail);
-      if (idx >= 0 && idx < 8 && tn.length - idx > 10) {
+      if (idx >= 0 && idx < lim("echoFuzzyIdxMax") && tn.length - idx > lim("echoAfterMin")) {
         const after = tn.slice(idx + len);
-        if (/(还有|其他|怎么|如何|第一步|怎么办)/.test(after) || /[？?]/.test(text)) {
+        if (pat("echoAfterCue").test(after) || /[？?]/.test(text)) {
           t = after;
           break;
         }
       }
     }
   }
-  // 常见回灌碎片开头
   t = t.replace(/^[，,。.\s]+/, "");
   t = t.replace(/^(面|看|对|用|再|把)[，,、]?\s*/, (m) =>
-    /还有|其他|怎么|如何/.test(t.slice(m.length)) ? "" : m
+    pat("echoLeadKeep").test(t.slice(m.length)) ? "" : m
   );
   return normalizeDazhiAliases(t).trim() || String(text || "").trim();
 }
 
-/**
- * 规则改写：清洗 + 多轮继承（不强制调 LLM，降低延迟）。
- * @param {{ lastFloor: string, recentFloors?: string[], lastHostAnswer?: string }} opts
- */
 function rewriteQueryRuleBased(opts = {}) {
   const lastFloor = String(opts.lastFloor || "").trim();
   const recent = (opts.recentFloors || []).map((x) => String(x || "").trim()).filter(Boolean);
   const lastHost = String(opts.lastHostAnswer || "").trim();
-  // 口令/闲聊：禁止「针对上一答…追问」污染
   const skipFollowGlue =
     opts.skipFollowGlue === true ||
     isCasualChitchat(lastFloor) ||
-    /谢谢大智|停止大智|听我说|请继续|回复刚才|回到刚才|刚才的问题/.test(lastFloor);
+    pat("skipFollowGlue").test(lastFloor);
   let cleaned = stripEchoPrefix(lastFloor, lastHost);
   cleaned = normalizeDazhiAliases(cleaned);
-  // 长粘连：优先用 peel 后的唤醒正文
   if (opts.preferPeeled && opts.peeledPayload) {
     const peeled = normalizeDazhiAliases(String(opts.peeledPayload || "").trim());
-    if (peeled.length >= 4) cleaned = peeled;
-  } else if (cleaned.length > 60 && /大智/.test(cleaned)) {
+    if (peeled.length >= lim("peelPreferMin")) cleaned = peeled;
+  } else if (cleaned.length > lim("peelWakeLen") && /大智/.test(cleaned)) {
     const peeled = peelWakePayload(cleaned);
-    if (peeled.length >= 4 && peeled.length < cleaned.length) cleaned = peeled;
+    if (peeled.length >= lim("peelPreferMin") && peeled.length < cleaned.length) cleaned = peeled;
   }
 
-  // 上一答「想先听哪一块」→ 用户只回选项名，直接改写成可秒答问句
   const choiceHit = matchOfferedChoice(cleaned, lastHost) || matchOfferedChoice(lastFloor, lastHost);
   if (choiceHit) {
     return {
@@ -151,39 +151,35 @@ function rewriteQueryRuleBased(opts = {}) {
     };
   }
 
-  // 闭题优先：从粘连句抠出「XXX是什么 / 什么是XXX」
   const closedCore = peelClosedFaqCore(cleaned) || peelClosedFaqCore(lastFloor);
   if (closedCore) cleaned = closedCore;
-  if (cleaned.length > 80) {
+  if (cleaned.length > lim("splitLongMin")) {
     const parts = cleaned.split(/[。！？!?；;]/).map((p) => p.trim()).filter(Boolean);
-    const last = parts[parts.length - 1] || cleaned.slice(-80);
-    if (isQuestionForm(last) || CLOSED_FAQ_RE.test(last) || last.length >= 8) {
+    const last = parts[parts.length - 1] || cleaned.slice(-lim("splitLongMin"));
+    if (isQuestionForm(last) || pat("closedFaq").test(last) || last.length >= lim("splitLastMin")) {
       cleaned = last;
     }
   }
-  // 「是谁」按定义闭题处理，便于命中 FAQ
-  cleaned = cleaned.replace(/是谁([？?]?)\s*$/, "是什么$1");
+  cleaned = cleaned.replace(pat("whoToWhat"), "是什么$1");
 
   const residual =
     isResidualUtterance(cleaned) ||
     isResidualUtterance(lastFloor) ||
     isCasualChitchat(cleaned);
   const closed = !residual && isClosedFaqQuestion(cleaned);
-  const hostLooksBiz =
-    lastHost &&
-    /(三笔账|一点八|五点四|三万九|盈利|样板|招生|收费|非教|美语|延时|分层|测算)/.test(lastHost);
+  const hostLooksBiz = lastHost && pat("hostLooksBiz").test(lastHost);
   const deictic = !residual && isBizDeicticFollowUp(cleaned);
   const isFollow =
     !skipFollowGlue &&
     !residual &&
     (!closed || deictic) &&
     isBizStickyFollowUp(cleaned) &&
-    (FOLLOW_UP_RE.test(cleaned) ||
+    (pat("followUp").test(cleaned) ||
       deictic ||
       (isQuestionForm(cleaned) &&
-        cleaned.length < 28 &&
-        /(方案|步骤|怎么走|下一步|具体点|计算|测算|理由)/.test(cleaned) &&
-        !/(开展|实施|倒闭|重生|起死回生|多少钱|全园美语课程)/.test(cleaned)));
+        cleaned.length < lim("followShortMax") &&
+        pat("followShortCue").test(cleaned) &&
+        !pat("followShortBlock").test(cleaned)));
 
   let contextHint = "";
   if (isFollow) {
@@ -192,14 +188,14 @@ function rewriteQueryRuleBased(opts = {}) {
       .find(
         (l) =>
           l !== lastFloor &&
-          (/(倒闭|重生|起死回生|招生|实施|开展|美语|经营|盈利|赚钱)/.test(l) || l.length >= 16)
+          (pat("priorUserCue").test(l) || l.length >= lim("priorUserMin"))
       );
     if (priorUser) {
       contextHint = priorUser.slice(0, 80);
       if (
-        cleaned.length < 40 ||
+        cleaned.length < lim("followGlueShort") ||
         deictic ||
-        /还有|其他方案|第一步|怎么走|0.?1|怎么算|计算|理由/.test(cleaned)
+        pat("followGlueCue").test(cleaned)
       ) {
         cleaned = `${contextHint}。追问：${cleaned}`;
       }
@@ -209,12 +205,14 @@ function rewriteQueryRuleBased(opts = {}) {
   } else if (
     !skipFollowGlue &&
     !residual &&
-    cleaned.length < 32 &&
-    (hostLooksBiz || FOLLOW_UP_RE.test(lastFloor)) &&
+    cleaned.length < lim("followHostAltMax") &&
+    (hostLooksBiz || pat("followUp").test(lastFloor)) &&
     (isBizStickyFollowUp(cleaned) || deictic) &&
     (recent.length || hostLooksBiz)
   ) {
-    const priorUser = [...recent].reverse().find((l) => l !== lastFloor && l.length >= 12);
+    const priorUser = [...recent]
+      .reverse()
+      .find((l) => l !== lastFloor && l.length >= lim("priorAltMin"));
     if (priorUser) {
       contextHint = priorUser.slice(0, 80);
       cleaned = `${contextHint}。追问：${cleaned}`;
@@ -246,7 +244,9 @@ function rewriteQueryRuleBased(opts = {}) {
 }
 
 module.exports = {
-  CHOICE_INVITE_RE,
+  get CHOICE_INVITE_RE() {
+    return choiceInviteRe();
+  },
   extractOfferedChoices,
   matchOfferedChoice,
   stripEchoPrefix,

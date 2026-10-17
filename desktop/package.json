@@ -6,6 +6,7 @@
   "main": "main.cjs",
   "scripts": {
     "start": "chcp 65001>nul & electron .",
+    "build:kb": "node scripts/build-kb.cjs",
     "rag:index": "node scripts/build-rag-index.cjs",
     "rag:index:force": "node scripts/build-rag-index.cjs --force",
     "knowledge:promote": "node scripts/promote-inbox.cjs",
@@ -26,6 +27,8 @@
     "agent:eval": "node scripts/eval-agent-variants.cjs",
     "agent:eval:live": "node scripts/eval-agent-variants.cjs --live",
     "smoke": "node scripts/smoke-regression.cjs",
+    "test:bench": "node test/benchmarkRunner.cjs",
+    "test:lint:hardcode": "node test/no-hardcode-lint.cjs",
     "pack": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --win nsis --config.win.signAndEditExecutable=false",
     "pack:portable": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --win portable --config.win.signAndEditExecutable=false"
   },

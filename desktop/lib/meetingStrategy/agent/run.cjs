@@ -10,11 +10,12 @@ const {
   topScore,
   isAnswerable,
   repeatLine,
-  decideSpeak,
   focusAsk,
   localAsk,
   hostRest
 } = require("./relevance.cjs");
+const { decideSpeak } = require("../decideSpeak.cjs");
+const { validateSlots } = require("../../text/universalOperators.cjs");
 
 function speakDecision(intentObj, askText, retrieval, state, lastHost) {
   return decideSpeak({
@@ -28,29 +29,16 @@ function speakDecision(intentObj, askText, retrieval, state, lastHost) {
 }
 
 function composeSystem(intentObj, agenda, kbBite, dialogBlock, mode) {
+  const { load, speakLine } = require("../../knowledge/schemaStore.cjs");
   const intent = intentObj?.intent || "other";
   const must = intentObj?.must_answer || "";
   const mustNot = (intentObj?.must_not || []).join("、") || "保证招满、议程菜单";
-  const fit =
-    intent === "loss_fear" || intent === "roi_confirm"
-      ? "用户担心亏损/回本：先表态不保证包回本，再给资料里的测算。禁止第二条路和样板班开场。"
-      : intent === "profit_how"
-        ? "讲三笔账如何扭亏或盈利。禁止第二条路，禁止用样板班开口实拍当整句答案。"
-        : intent === "pricing_follow"
-          ? "只答收费盘面：先保住现有收费，再谈加收。禁止第二条路。"
-          : intent === "hq_support"
-            ? "只答总部支持：课件、Teacher说、菲教、行事历。禁止样板班开场。"
-            : intent === "how_calc"
-              ? "拆测算数字，声明参考非承诺。数字只能来自事实。"
-              : intent === "parent_reason"
-                ? "讲开口实拍、测评、成果展证据。"
-                : intent === "alternate_path"
-                  ? "用户明确要换一条路径时，才可以说第二条路。"
-                  : "直接回答园长这一句。资料不够就请对方把问题说完整，不要改问扭亏、收费或总部支持。";
+  const fitMap = load().speak.composeFit || {};
+  const fit = fitMap[intent] || fitMap.default || "";
   const base = mode === S.INTERACTION_MODE.HA_TALK ? S.CHAT_TALK_SYSTEM : S.CHAT_ASK_SYSTEM;
   return (
     `${base}\n【意图】${intent}\n【必须回答】${must}\n【禁止】${mustNot}\n【契合】${fit}\n` +
-    `数字只能来自下面的事实或口播，没有依据的金额不要写。禁止保证不亏、包赚、一定回本。\n` +
+    `${speakLine("composeNumberRule")}\n` +
     `【议程】${agenda}\n${dialogBlock}\n【本次工具结果】\n${kbBite || "（没有够格的资料，不要编造）"}`
   );
 }
@@ -313,7 +301,11 @@ async function runMeetingAgent(ctx) {
   const probeFocus = String(grounded.design?.segments?.[0] || "");
   const userTask = probe
     ? grounded.design?.depth === "final"
-      ? `根据资料和对方刚才的话，口头回复60到90字，适合朗读。只使用资料和对话里出现的内容，没写到的不编。禁止出现：现在是什么情况、我们一起往下看、写成固定步骤、你是说。不要复读上一句问句。\n【上一句】${lastHost || "（无）"}\n【对方刚才】${askText}\n【焦点】${probeFocus || "（无）"}`
+      ? require("../../knowledge/schemaStore.cjs").speakFill("composeProbe", {
+          lastHost: lastHost || "（无）",
+          askText,
+          probeFocus: probeFocus || "（无）"
+        })
       : `只输出一个问句，20个字以内。问对方还没说清的那一块，接上上一句已经说过的做法。不要复述资料。禁止出现：现在是什么情况、我们一起往下看、写成固定步骤、你是说。\n【上一句】${lastHost || "（无）"}\n【这一句】${askText}\n【焦点】${probeFocus || "（无）"}`
     : `针对园长这一句作答，并接上上一句，不要改问别的话题。` +
       `只使用【本次工具结果】里的事实和口播；没有依据的金额不要写。` +
@@ -342,8 +334,13 @@ async function runMeetingAgent(ctx) {
       fallback: knowledgeLine,
       onClause: (clause) => {
         if (streamed || S.isDefinitionSpeak(clause)) return;
-        if (intentObj.intent !== "alternate_path" && /第二条路|保证不亏|包赚|一定回本/.test(clause)) return;
-        if (blockSample && /样板班开口实拍/.test(clause)) return;
+        if (
+          intentObj.intent !== "alternate_path" &&
+          new RegExp(require("../../knowledge/schemaStore.cjs").speakLine("alternateBlock")).test(clause)
+        ) {
+          return;
+        }
+        if (blockSample && require("../../knowledge/schemaStore.cjs").rx("operators", "sampleLead").test(clause)) return;
         streamed = S.emitLead(opts, S.leadClause(clause, 36));
       }
     },
@@ -373,11 +370,23 @@ async function runMeetingAgent(ctx) {
   let finalAnswer = chat.answer || "";
   let doubaoSpeak = chat.arkMode === "llm" && Boolean(chat.answer);
   let riskRewrite = false;
+  let fallbackGate = "";
   const probeTurn = grounded.design?.hypothesisId === "probe";
+  if (doubaoSpeak && !validateSlots(askText, finalAnswer)) {
+    const local = hostRest(lastHost) || localAsk(probeFocus);
+    const kbOk = knowledgeLine && validateSlots(askText, knowledgeLine) ? knowledgeLine : "";
+    finalAnswer = kbOk || local || repeatLine();
+    doubaoSpeak = false;
+    fallbackGate = "slot-critic";
+    streamed = "";
+  }
   const check = doubaoSpeak
     ? probeTurn
       ? {
-          pass: !/保证不亏|包赚|一定回本|今天主题是|您可以问全园美语是什么/.test(finalAnswer),
+          pass: !(
+            new RegExp(require("../../knowledge/schemaStore.cjs").speakLine("promiseBlock")).test(finalAnswer) ||
+            new RegExp(require("../../knowledge/schemaStore.cjs").speakLine("agendaBlock")).test(finalAnswer)
+          ),
           reason: "probe",
           source: "probe"
         }
@@ -387,7 +396,6 @@ async function runMeetingAgent(ctx) {
         })
     : { pass: false, reason: "llm_silent", source: "local" };
   const risk = doubaoSpeak && !check.pass && isRiskRewrite(check.reason);
-  let fallbackGate = "";
   if (risk) {
     const fixed = knowledgeLine || repeatLine();
     riskRewrite = fixed !== finalAnswer;

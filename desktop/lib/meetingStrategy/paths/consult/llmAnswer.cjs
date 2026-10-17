@@ -2,6 +2,7 @@
  * HA_ASK / HA_TALK：Wiki 先开口或语义 RAG + Chat
  */
 const S = require("./kit.cjs");
+const { rx, speakFill, load } = require("../../../knowledge/schemaStore.cjs");
 
 /**
  * @returns {Promise<object>}
@@ -13,13 +14,11 @@ async function runLlmAnswer(ctx) {
   const wikiNow = S.queryWiki(askText, 1);
   const pageSpeak = wikiNow.hits?.[0]?.speak || "";
   const lastHost = String(opts.lastHostSpeakText || "").trim();
-  const wantDetail =
-    S.isComplexQuestion(askText) ||
-    /追问|具体|更多|详细|展开|盈利|赚钱|怎么走|第一步|怎么算|计算|测算|理由/.test(askText);
+  const wantDetail = S.isComplexQuestion(askText) || rx("faq", "wantDetail").test(askText);
   const tautologyReason =
-    /理由/.test(askText) &&
-    /要成为家长选择|成为家长选择园所的理由/.test(pageSpeak) &&
-    !/(开口|测评|成果展|实拍)/.test(pageSpeak);
+    rx("faq", "reasonAsk").test(askText) &&
+    rx("faq", "tautology").test(pageSpeak) &&
+    !rx("faq", "evidence").test(pageSpeak);
   const wikiLeadOk =
     pageSpeak &&
     (wikiNow.hits?.[0]?.score || 0) >= 6 &&
@@ -41,7 +40,7 @@ async function runLlmAnswer(ctx) {
         if (signal?.aborted) return;
         const chat = await S.speakViaChat(
           `${S.CHAT_ASK_SYSTEM}\n【议程】${agenda}`,
-          `请对下面问题做咨询短答（一句，勿前缀；禁止复读「${spokenNow.slice(0, 24)}」）：\n${askText}`,
+          speakFill("llmShortAsk", { spoken: spokenNow.slice(0, 24), ask: askText }),
           {
             ...opts,
             signal,
@@ -145,7 +144,10 @@ async function runLlmAnswer(ctx) {
   const userTask =
     state.mode === S.INTERACTION_MODE.HA_TALK
       ? `园长说：${askText}\n请按探讨结构短复（勿前缀「大智：」）。可参照近场对话，勿编造未出现的提问。`
-      : `请对下面问题做咨询短答（抓手+金句，约60–90字，勿前缀）。结合知识片段作答，禁止说「词条对不上」。若与议程/全园美语明显无关，一句拉回议程。若是追问「再具体/更多/还有其他方案」，禁止复读上一答「${String(opts.lastHostSpeakText || "").slice(0, 40)}」，必须补阶段细节或招生测算；若问刚才问了什么，据近场对话/上一实质问复述：\n${askText}`;
+      : speakFill("llmLongAsk", {
+          last: String(opts.lastHostSpeakText || "").slice(0, 40),
+          ask: askText
+        });
 
   let streamed = "";
   const bridge =
@@ -217,7 +219,7 @@ async function runLlmAnswer(ctx) {
     earlyCovered: Boolean(streamed),
     earlySpoken: Boolean(streamed),
     reason: "WAKE_ANSWER",
-    latestToDos: ["1. 对照全园美语落地抓手", "2. 需要时再呼叫大智", "3. 口径以知识库为准"],
+    latestToDos: load().speak.llmTodos,
     nextStageRecommendation: "MainDiscussion",
     a2aTrace,
     arkConfigured: true,

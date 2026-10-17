@@ -6,10 +6,12 @@ const corpus = require("./corpus.cjs");
 const wiki = require("./wiki");
 const sink = require("./sink");
 const rag = require("./rag");
+const schemaStore = require("./schemaStore.cjs");
 
 module.exports = {
   ...corpus,
   ...wiki,
   ...sink,
-  ...rag
+  ...rag,
+  schemaStore
 };

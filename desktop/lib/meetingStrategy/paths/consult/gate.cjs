@@ -110,7 +110,7 @@ function handleGate(ctx) {
     const prevFresh = prev && Date.now() - (state.lastRealAskAt || 0) < 30 * 60 * 1000;
     if (prevFresh) {
       return S.playAnswer(
-        `刚才您问的是：${S.clipUtterance(prev, 80)}`,
+        S.speakFill("recallPrevNow", { prev: S.clipUtterance(prev, 80) }),
         "WAKE_ANSWER",
         state,
         a2aTrace,
@@ -128,11 +128,11 @@ function handleGate(ctx) {
           !S.isRecallLastAsk(l) &&
           !S.isSessionMemoryMeta(l) &&
           l.length >= 8 &&
-          !/^(大智|谢谢大智|我在)/.test(l)
+          !S.rx("speak", "realAskSkip").test(l)
       );
     if (priorFloor) {
       return S.playAnswer(
-        `刚才会场提到：${S.clipUtterance(priorFloor, 80)}`,
+        S.speakFill("recallFloor", { prev: S.clipUtterance(priorFloor, 80) }),
         "WAKE_ANSWER",
         state,
         a2aTrace,
@@ -142,7 +142,7 @@ function handleGate(ctx) {
       );
     }
     return S.playAnswer(
-      "我这边还没记下您上一句实质问题。请再说一遍，我马上答。",
+      S.speakLine("recallEmptyNow"),
       "WAKE_ANSWER",
       state,
       a2aTrace,
@@ -157,13 +157,13 @@ function handleGate(ctx) {
     state.haLockedUntil = Date.now() + 90000;
     const prev = String(state.lastRealAsk || "").trim();
     const tip = prev
-      ? `上一问我记着：${S.clipUtterance(prev, 60)}。也可以说「大智总结一下」听本场要点。`
-      : "本场转写有记。您可以说「大智总结一下」听要点，或把问题再说一遍我马上答。";
+      ? S.speakFill("memoryPrevLong", { prev: S.clipUtterance(prev, 60) })
+      : S.speakLine("memoryEmptyLong");
     return S.playAnswer(tip, "WAKE_ANSWER", state, a2aTrace, kbStatus, qFp, "template");
   }
 
   const lvl = S.bumpObjectionLevel(state, lastFloor);
-  if (/(抵触|不愿意做|不愿意额外|执行不下去|加负担|崩溃|加班|只能先做)/.test(lastFloor)) {
+  if (S.rx("speak", "objectionCue").test(lastFloor)) {
     const talk = S.classifyHaIntent(lastFloor, state.mode) === "HA_TALK";
     S.setMode(state, talk ? S.INTERACTION_MODE.HA_TALK : S.INTERACTION_MODE.HA_ASK);
     return S.playAnswer(S.objectionAnswer(lvl), "WAKE_ANSWER", state, a2aTrace, kbStatus, qFp, "template");

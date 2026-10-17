@@ -1,4 +1,5 @@
 const S = require("./kit.cjs");
+const { rx } = require("../../knowledge/schemaStore.cjs");
 
 /**
  * INTERRUPT / CONTINUE / HOLD / 我说完了
@@ -44,9 +45,9 @@ async function handle(ctx) {
     ).trim();
     state.interruptBuffer = null;
     let floorNote = S.peelWakePayload(lastFloor)
-      .replace(/^(请继续|你继续|接着说|继续说|继续答|继续讲)[，,。.\s]*/g, "")
+      .replace(rx("operators", "continuePeel", "g"), "")
       .trim();
-    if (/^(请继续|你继续|接着说|继续)[。.!！？?\s]*$/.test(floorNote)) floorNote = "";
+    if (rx("operators", "continueOnly").test(floorNote)) floorNote = "";
 
     const reask = (holdNote.length >= 8 ? holdNote : "") || (floorNote.length >= 8 ? floorNote : "");
     if (reask) {
@@ -54,7 +55,7 @@ async function handle(ctx) {
       S.setLifecycle(state, S.MEETING_LIFE.CONSULT);
       ctx.lastFloor = reask;
       ctx.continuePayload = reask;
-      S.debugLog.info("Strategy", "请继续：按打断后补充重答", {
+      S.debugLog.info("Strategy", "请继续：按占麦后补充重答", {
         sticky: true,
         until: state.haLockedUntil,
         payload: reask.slice(0, 40)
@@ -119,7 +120,7 @@ async function handle(ctx) {
         state.holdFloorLines.push(note.slice(0, 120));
         if (state.holdFloorLines.length > 8) state.holdFloorLines.shift();
       }
-      S.debugLog.info("Strategy", "打断中收听补充", { note: note.slice(0, 40), n: state.holdFloorLines.length });
+      S.debugLog.info("Strategy", "占麦中收听补充", { note: note.slice(0, 40), n: state.holdFloorLines.length });
     }
     return S.baseResult({ reason: "HOLDING", a2aTrace, agentMode: state.mode, kbStatus, holdToEnd: true });
   }

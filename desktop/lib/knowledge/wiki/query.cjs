@@ -2,25 +2,12 @@
 const { normalizeText } = require("./parse.cjs");
 const { listConceptPages, parseIndexEntries, getPageBySlug } = require("./catalog.cjs");
 
-const DEFINITION_FOCUS = [
-  "ai测评",
-  "abcmouse",
-  "abc说",
-  "teacher说",
-  "family说",
-  "四端联动",
-  "一园两制",
-  "收益保障",
-  "八大核心权益",
-  "八大权益",
-  "全园美语",
-  "菲教",
-  "成果展"
-].sort((a, b) => b.length - a.length);
+const { load, rx } = require("../schemaStore.cjs");
 
 function definitionFocus(qn) {
-  if (!/(什么是|是什么|介绍一下|介绍下|能介绍)/.test(qn)) return "";
-  for (const e of DEFINITION_FOCUS) {
+  if (!rx("faq", "wikiDefinition").test(qn)) return "";
+  const focus = (load().faq.definitionFocus || []).slice().sort((a, b) => b.length - a.length);
+  for (const e of focus) {
     if (qn.includes(e)) return e;
   }
   return "";

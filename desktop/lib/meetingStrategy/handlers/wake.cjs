@@ -1,4 +1,5 @@
 const S = require("./kit.cjs");
+const { rx } = require("../../knowledge/schemaStore.cjs");
 
 /**
  * 唤醒 / 点名。仅问候则返回；有实质问题则设 HA 模式后 fallthrough（return null）
@@ -12,7 +13,7 @@ function resolveReask(state, floors, current) {
   for (let i = list.length - 1; i >= 0; i -= 1) {
     const line = String(list[i] || "").trim();
     if (!line || line === current) continue;
-    if (/^(大智|谢谢大智|听我说)/.test(line)) continue;
+    if (rx("speak", "wakeFloorSkip").test(line)) continue;
     if (line.length >= 8) return line;
   }
   return "";
@@ -34,7 +35,7 @@ async function handle(ctx) {
       state.haLockedUntil = Date.now() + 90000;
       S.setMode(state, S.INTERACTION_MODE.HA_ASK);
       S.setLifecycle(state, S.MEETING_LIFE.CONSULT);
-      S.debugLog.info("Strategy", "回到刚才的问题", { text: pending.slice(0, 40) });
+      S.debugLog.info("Strategy", "回到未完成提问", { text: pending.slice(0, 40) });
       return null;
     }
   }
@@ -49,17 +50,16 @@ async function handle(ctx) {
 
   S.ensureMeetingOpen(state, agenda);
   const ha = S.classifyHaIntent(lastFloor, state.mode);
+  const compact = lastFloor.replace(/\s/g, "");
   const onlyGreeting =
-    /^(大智|大致)?\s*(你好|在吗|您在吗|听得到)?[。.!！？?\s]*$/.test(lastFloor.replace(/\s/g, "")) ||
+    rx("speak", "wakeGreeting").test(compact) ||
     cmd.presence ||
-    (cmd.command === "WAKE" && !/吗|呢|什么|怎么|为何|多少/.test(lastFloor) && lastFloor.length < 14);
+    (cmd.command === "WAKE" && !rx("speak", "wakeNotOnly").test(lastFloor) && lastFloor.length < 14);
   const alreadyConsult = S.isConsultMode(state.mode) && Date.now() < (state.haLockedUntil || 0);
   S.setMode(state, ha === "HA_TALK" ? S.INTERACTION_MODE.HA_TALK : S.INTERACTION_MODE.HA_ASK);
 
   if (onlyGreeting) {
-    const pending = (state.listenNotes || []).filter((n) =>
-      /[？?]|什么|怎么|多少|哪些|吗|条件|收费|支持/.test(n)
-    );
+    const pending = (state.listenNotes || []).filter((n) => rx("speak", "wakePending").test(n));
     const lastPending = pending[pending.length - 1];
     if (lastPending) {
       state.listenNotes = [];

@@ -4,7 +4,8 @@
  * 出口只消费 decideSpeak 的类型与句子（含经营档），不因 useBiz 跳过澄清/复述/脚本。
  */
 const S = require("./kit.cjs");
-const { isTruncatedAsk, decideSpeak, focusAsk, localAsk, hostRest } = require("../../agent/relevance.cjs");
+const { isTruncatedAsk, focusAsk, localAsk, hostRest } = require("../../agent/relevance.cjs");
+const { decideSpeak } = require("../../decideSpeak.cjs");
 
 function hasDoubaoKey() {
   return Boolean((process.env.DOUBAO_API_KEY || process.env.ARK_API_KEY || "").trim());
@@ -12,13 +13,13 @@ function hasDoubaoKey() {
 
 function tryIdentityOrAgenda(ctx) {
   const { agenda, state, a2aTrace, kbStatus, qFp, askText } = ctx;
-  if (/(你是谁|你是什么|你叫什么)/.test(askText)) {
+  if (S.rx("speak", "identityAsk").test(askText)) {
     return S.playAnswer(S.IDENTITY_LINE, "WAKE_ANSWER", state, a2aTrace, kbStatus, qFp, "identity", {
       cacheQuestion: askText
     });
   }
-  if (/(会议主题|开什么会|今天.*主题|这次会议的主题)/.test(askText)) {
-    const theme = S.matchFaqInstant("今天会议主题是什么")?.answer || `今天主题是${agenda}。`;
+  if (S.rx("speak", "localAgenda").test(askText)) {
+    const theme = S.matchFaqInstant("今天会议主题是什么")?.answer || S.speakFill("agendaToday", { agenda });
     return S.playAnswer(theme, "WAKE_ANSWER", state, a2aTrace, kbStatus, qFp, "agenda", {
       cacheQuestion: askText
     });
@@ -84,7 +85,7 @@ function tryLocalAnswer(ctx) {
     lastHost
   });
   const definitionMismatch =
-    bayes.action === "answer" && S.isDefinitionSpeak(bayes.speak) && !/(是什么|什么是)/.test(askText);
+    bayes.action === "answer" && S.isDefinitionSpeak(bayes.speak) && !S.rx("faq", "defMark").test(askText);
 
   if (bayes.action === "answer" && bayes.speak && !definitionMismatch) {
     const answer = S.stripIntroBoilerplate(S.clipUtterance(bayes.speak, 160));

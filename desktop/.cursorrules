@@ -1,0 +1,77 @@
+# ece-brain-meeting-bridge 架构宪法
+
+本文件约束 `desktop/`（包名 `ece-brain-meeting-bridge`，CommonJS）。仓库根目录的 React 示例不参与听会、口播和知识库，禁止修改或引用。
+
+## 1. 机制与策略分离
+
+引擎只做算子和状态转移。词、槽位、口令和业务句子放在数据和配置里。
+
+- **引擎** `desktop/lib/**/*.cjs`：概率、极性加权字二元组、槽位集合运算、状态转移、半双工。不决定某句业务该怎么说。
+- **策略** `desktop/knowledge/schema/*.json`：口令表、槽位本体、否定与残句算子、会话元词、算法超参。目标目录；尚未建齐前，不要在 `.cjs` 里新增一份平行词表。
+- **知识** `desktop/knowledge/`：`faq-meeting.txt`、`wiki/`、`quan-yuan-meiyu.txt`、`distilled/`、离线索引 `.rag-index.json`。会中只读内存。FAQ 在主进程启动时缓存，改文件或主进程后必须重新 `npm run desktop`。
+
+字面量分三层迁出，禁止混成一条「代码里不许有任何汉字」：
+
+| 层 | 归宿 | 例子 |
+| --- | --- | --- |
+| 领域内容 | 卡片正文与编译标签 | 园所、回本、收费、全园美语 |
+| 会场口令 | `schema/session-commands.json` | 听我说、我说完了、回复刚才 |
+| 汉语算子 | `schema/linguistic-operators.json` | 不/没/未、句尾悬空、口水词 |
+
+口令字符串可以留在 JSON 里。引擎只做匹配和转移。
+
+## 2. 红线
+
+### A. 不再往引擎里加词
+
+`desktop/lib/` 的新增或修改禁止出现：
+
+- 新的业务词、测试补丁词、句式正则（用来修某一个坏例的 `if` / `switch` / 字面量正则）。
+- 新的停用词数组、骨架词表、按意图名写的覆盖分支。
+
+现存硬编码是迁移债，不是立刻删除的对象。`relevance.cjs` 的 `slotOk`、`zhSegment.cjs` 的 `DROP`、`mentionedIn`、`detectCommand.cjs`、`intent.cjs` 里的句式，只能在对应算子或 schema 落地、并且下面两条基线仍全绿时删掉。禁止为了「看起来零字面量」一次重写 `decideSpeak`。
+
+`desktop/test/no-hardcode-lint.cjs` 存在之后，改 `desktop/lib/` 必须跑通它。文件尚不存在时，以本节为准，不要先发明一个会误伤迁移债的扫描器。
+
+### B. 单向流水线
+
+```
+转写 → 模型(meetingSession + duplex) → 知识库 → decideSpeak → 写回模型 → 合成
+```
+
+- **模型**管姿态、生命周期、口令、半双工（空闲 / 正在说 / 冷却）、咨询粘滞，以及 `lastDesign`、`lastOpenAsk`、`lastRealAsk`、上一句口播。静默、占麦、播报中的非放行输入不到检索。咨询中的实质问句才进知识库。
+- **知识库**只召回候选和特征分。不决定开口，会中不改文件。
+- **`decideSpeak`**（入口 `desktop/lib/meetingStrategy/decideSpeak.cjs`，比较仍在 `agent/relevance.cjs`）把「没有证据」、召回卡片、意图脚本放进同一假设空间。出口只有作答、确认、复述。结果写回 `lastDesign` / `lastOpenAsk`。
+- **渲染进程** `desktop/renderer/` 只采音、播放、画状态。禁止口令、检索和策略。
+- `desktop/lib/` 必须能被纯 Node 冒烟调用，不依赖 Electron。
+
+责任链顺序保持：回声 → 停止 → 会议起止 → 占麦 → 唤醒 → 总结 → 咨询 → 静默。
+
+### C. 对齐、焦点、失败回退
+
+- 主路径对齐用字二元组。IDF 权重和极性内积先与现有对齐并列记日志；评测不掉点之前，不得替换现有作答线（后验 ≥ 0.42、对齐 ≥ 0.28、闭题放宽对齐 ≥ 0.18）。
+- 反问焦点取高信息连续片段。结巴只允许留在尚未替换的焦点路径上，不得进入检索对齐。
+- 豆包超时、失败，或槽位不满足时，回退到上一句后半句或单步焦点反问。禁止再念无依据套话。
+- 槽位标签必须可复现（人写或由 schema 规则编译）。禁止用在线模型在每次构建时改写标签。
+- 句尾完备度用通用语料的转移分布，不从这批 FAQ 里现估。已高置信命中的闭题优先作答。
+
+## 3. 坏例协议
+
+新失败句按这个顺序处理，禁止直接改 `.cjs` 加词：
+
+1. 把句子、前置状态、预期口播写入回归集（目标 `desktop/test/cases.jsonl`；现用 `desktop/scripts/smoke-scene-faq.cjs` 与 `desktop/scripts/eval-agent-variants.cjs`）。
+2. 先打诊断再改：对齐、窄度、槽位差、各假设后验、续播原因。算子未落地时，用现有日志里的 `align`、`extra`、`posterior`、`slotOk`、`reason`。
+3. 分流：
+   - 缺说法或槽位 → 改 FAQ / Wiki，再编译索引。
+   - 口令、否定窗口、元词、超参 → 改 `desktop/knowledge/schema/`。
+   - 算子公式本身不够 → 改通用公式或超参，并让全量回归仍为 **场景冒烟 23/23、变体评测 22/22**。条数增加后，新基线是全部通过，不是放宽旧断言。
+
+## 4. 迁移顺序
+
+1. 冻结：新坏例只进回归集。
+2. 口令与算子搬进 schema，行为与现在逐条一致。
+3. 离线编译 IDF 与 `providedSlots`，运行时仍走现有决策，只加日志。
+4. 按焦点 → 极性续播 → 槽位门 → 句尾完备度切换，每步全绿才进入下一步。
+5. 意图脚本降成假设池里的宽卡片，用特异度压低似然峰值，再删除按意图名写的覆盖。
+
+换行业时替换 `desktop/knowledge/` 与 `schema/`。半双工、责任链和决策引擎保持不动。

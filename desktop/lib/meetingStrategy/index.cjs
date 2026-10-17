@@ -17,10 +17,12 @@ const impl = require("./engine.cjs");
 const query = require("./query");
 const advisors = require("./advisors");
 const agent = require("./agent/index.cjs");
+const { decideSpeak } = require("./decideSpeak.cjs");
 
 module.exports = {
   ...impl,
   query,
   advisors,
-  agent
+  agent,
+  decideSpeak
 };

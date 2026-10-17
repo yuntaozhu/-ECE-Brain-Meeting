@@ -7,25 +7,17 @@
  */
 const { bestTitleView, buildDf } = require("../../knowledge/align.cjs");
 const { isDefinitionSpeak } = require("../advisors/speakGuards.cjs");
+const { load, rx, words, hp, fill } = require("../../knowledge/schemaStore.cjs");
 
-const FAQ_KEYWORD_ANSWERABLE = 45;
-const WIKI_KEYWORD_ANSWERABLE = 5;
-const SEMANTIC_ANSWERABLE = 0.62;
-const CLARIFY_CONFIDENCE = 0.5;
+function H() {
+  return load().hyper;
+}
 
-const GROUNDED_INTENTS = new Set([
-  "loss_fear",
-  "roi_confirm",
-  "profit_how",
-  "how_calc",
-  "parent_reason",
-  "alternate_path",
-  "operate",
-  "teacher",
-  "rollout",
-  "hq_support",
-  "pricing_follow"
-]);
+const FAQ_KEYWORD_ANSWERABLE = hp("faqKeywordAnswerable");
+const WIKI_KEYWORD_ANSWERABLE = hp("wikiKeywordAnswerable");
+const SEMANTIC_ANSWERABLE = hp("semanticAnswerable");
+const CLARIFY_CONFIDENCE = hp("clarifyConfidence");
+const GROUNDED_INTENTS = new Set(hp("groundedIntents"));
 
 function topScore(retrieval) {
   const hits = retrieval?.hits || [];
@@ -46,23 +38,24 @@ function isAnswerable(retrieval) {
   const score = topScore(retrieval);
   const source = topSource(retrieval);
   const mode = String(retrieval.mode || "");
-  if (retrieval.instantAnswer && source === "faq" && score >= 0.72 && score <= 1.2) return true;
+  const cfg = H();
+  if (retrieval.instantAnswer && source === "faq" && score >= cfg.instantFaqLow && score <= cfg.instantFaqHigh) return true;
   if (retrieval.instantAnswer && source === "faq" && score >= FAQ_KEYWORD_ANSWERABLE) return true;
   if (source === "faq" && score >= FAQ_KEYWORD_ANSWERABLE) return true;
   if (mode === "wiki" || mode === "wiki+semantic") {
-    if (score >= WIKI_KEYWORD_ANSWERABLE || score >= 0.85) return Boolean(retrieval.instantAnswer || retrieval.preview);
+    if (score >= WIKI_KEYWORD_ANSWERABLE || score >= cfg.wikiLifted) return Boolean(retrieval.instantAnswer || retrieval.preview);
   }
-  if (source === "wiki" && score >= WIKI_KEYWORD_ANSWERABLE && score < 2) return true;
-  if (score > 0 && score <= 1.2 && score >= SEMANTIC_ANSWERABLE && source === "wiki") return true;
+  if (source === "wiki" && score >= WIKI_KEYWORD_ANSWERABLE && score < cfg.wikiKeywordUpper) return true;
+  if (score > 0 && score <= cfg.instantFaqHigh && score >= SEMANTIC_ANSWERABLE && source === "wiki") return true;
   return false;
 }
 
 /** 粘滞改写只留下本句，供检索和似然共用。 */
 function focusAsk(askText) {
   let q = String(askText || "").trim();
-  q = q.replace(/^(大智|大致)[，,：:\s]*/, "");
-  const quoted = q.match(/(?:针对上一答|追问)「[\s\S]{0,240}」[：:]\s*(.{2,120})$/);
-  const plain = q.match(/追问[：:]\s*(.{2,120})$/);
+  q = q.replace(rx("operators", "wakePrefix"), "");
+  const quoted = q.match(rx("operators", "quotedTail"));
+  const plain = q.match(rx("operators", "plainTail"));
   if (quoted) q = quoted[1].trim();
   else if (plain) q = plain[1].trim();
   return q;
@@ -73,66 +66,35 @@ function stripAsk(askText) {
 }
 
 /**
- * 残句后验。先验偏低；句末裸疑问词抬高，句末语气词或已有谓语压低。
- * 「你如何做」有谓语，不是残句；「如何通」疑问词后缺谓语，是残句。
+ * 句尾完备度。低于阈值且不是高置信闭题时，按残句复述。
  */
 function truncationPosterior(askText) {
-  const q = stripAsk(askText);
-  if (!q || q.length > 18) return 0.02;
-  let logOdds = q.length <= 8 ? Math.log(0.22 / 0.78) : Math.log(0.06 / 0.94);
-  if (/[吗嘛呢吧]$/.test(q)) logOdds -= 2.4;
-  // 只有疑问词本身，或疑问词后面没接上谓语，才像半句。「会议主题是什么」是完整特指问。
-  if (/^(什么|哪些|为什么|如何|怎么|怎样)$/.test(q)) logOdds += 2.8;
-  if (/^(如何|怎么|怎样).{0,1}$/.test(q) && !/[做办算用学看讲说买开吗嘛呢吧]$/.test(q)) logOdds += 2.4;
-  // 「我如何能够通」：疑问词前有短前缀，后面只剩「能够/可以」加一个残字。
-  if (q.length <= 8 && /(如何|怎么|怎样)/.test(q)) {
-    const after = q.replace(/^.*?(如何|怎么|怎样)/, "");
-    if (/^(能够|可以).{1}$/.test(after) && !/[做办算]/.test(after)) logOdds += 2.6;
-  }
-  if (/(做|办|算|落地|收费|准备|什么)$/.test(q) && q.length >= 4) logOdds -= 1.6;
-  return 1 / (1 + Math.exp(-logOdds));
+  const { evaluateSyntacticCompleteness } = require("../../text/universalOperators.cjs");
+  const score = evaluateSyntacticCompleteness(stripAsk(askText));
+  return 1 - score;
 }
 
 function isTruncatedAsk(askText) {
-  return truncationPosterior(askText) >= 0.7;
+  const q = stripAsk(askText);
+  if (!q || q.length > H().truncMaxLen) return false;
+  const { evaluateSyntacticCompleteness } = require("../../text/universalOperators.cjs");
+  if (evaluateSyntacticCompleteness(q) >= H().completenessIncomplete) return false;
+  try {
+    const { isClosedFaqQuestion } = require("../query/classify.cjs");
+    if (isClosedFaqQuestion(q)) return false;
+  } catch (_) {
+    /* 闭题模块未就绪时只看完备度 */
+  }
+  return true;
 }
 
 function repeatLine() {
-  return "后半句没听清，请再说一遍。";
+  return fill("repeat");
 }
 
 function clarifyLine() {
-  return "这句我还没对上，请再说具体一点。";
+  return fill("clarify");
 }
-
-/** 虚词二元组：不算问句内容锚点 */
-const STOP_BIGRAM = new Set([
-  "什么",
-  "怎么",
-  "如何",
-  "怎样",
-  "可以",
-  "是否",
-  "你们",
-  "我们",
-  "这个",
-  "那个",
-  "一下",
-  "还有",
-  "以及",
-  "或者",
-  "因为",
-  "所以",
-  "如果",
-  "那么",
-  "一个",
-  "一些",
-  "没有",
-  "不是",
-  "能不能",
-  "大智",
-  "大致"
-]);
 
 function contentBigrams(text) {
   const s = String(text || "")
@@ -151,7 +113,7 @@ function askSpeakOverlap(askText, speakText) {
   const askRaw = contentBigrams(stripAsk(askText));
   const speakSet = new Set(contentBigrams(speakText));
   if (!askRaw.length || !speakSet.size) return 0;
-  const pool = askRaw.filter((b) => !STOP_BIGRAM.has(b));
+  const pool = askRaw.filter((b) => !words("operators", "stopBigram").has(b));
   const use = pool.length ? pool : askRaw;
   let hit = 0;
   for (const b of use) {
@@ -166,8 +128,9 @@ function askSpeakOverlap(askText, speakText) {
 function isAlignedSpeak(askText, speakText, opts = {}) {
   const speak = String(speakText || "").trim();
   if (!speak) return false;
+  const cfg = H();
   const askLen = stripAsk(askText).length;
-  const min = opts.minOverlap != null ? opts.minOverlap : askLen <= 8 ? 0.2 : 0.12;
+  const min = opts.minOverlap != null ? opts.minOverlap : askLen <= cfg.alignShortLen ? cfg.alignShortMin : cfg.alignLongMin;
   return askSpeakOverlap(askText, speak) >= min;
 }
 
@@ -175,12 +138,16 @@ function isAlignedSpeak(askText, speakText, opts = {}) {
  * 经营万能软句指纹（样板开口 + 护收费/三笔账），禁止当任意问句兜底。
  * 不扫业务关键词表，只认这条模板结构。
  */
+function softRx(name) {
+  return new RegExp(load().operators.universalSoft[name]);
+}
+
 function isUniversalOperateSoft(text) {
   const t = String(text || "");
   if (!t) return false;
-  const hasSample = /样板班开口实拍|月度测评.*成果展|开口实拍/.test(t);
-  const hasLedger = /先护收费|护收费盘面|对照三笔账|三笔账里招生/.test(t);
-  const hasLead = /把美语做成家长看得见的选择理由/.test(t);
+  const hasSample = softRx("sample").test(t);
+  const hasLedger = softRx("ledger").test(t);
+  const hasLead = softRx("lead").test(t);
   return (hasLead && (hasSample || hasLedger)) || (hasSample && hasLedger);
 }
 
@@ -222,18 +189,16 @@ function faqAlignModel() {
 function hitSpeak(hit) {
   const raw = String(hit?.speak || hit?.snippet || hit?.body || "");
   const m = raw.match(/A[:：]\s*([\s\S]+)/);
-  return (m ? m[1] : raw).replace(/\s+/g, " ").trim().slice(0, 160);
+  return (m ? m[1] : raw).replace(/\s+/g, " ").trim().slice(0, H().hitSpeakMax);
 }
 
 function scriptEligible(intent, script) {
   const name = String(intent?.intent || "");
   const conf = Number(intent?.confidence) || 0;
-  return GROUNDED_INTENTS.has(name) && conf >= 0.75 && String(script || "").trim().length > 12;
+  const cfg = H();
+  return GROUNDED_INTENTS.has(name) && conf >= cfg.scriptConfidenceMin && String(script || "").trim().length > cfg.scriptMinChars;
 }
 
-const MATCH_KEEP = 0.3;
-const PAIR_MIN_P = 0.08;
-const EIG_MIN_BITS = 0.05;
 
 function sigmoid(x) {
   if (x >= 20) return 1;
@@ -267,15 +232,10 @@ function probeLine(focus) {
   return localAsk(focus);
 }
 
-const TOPIC_DROP = new Set([
-  "什么", "怎么", "如何", "怎样", "可以", "能够", "现在", "这个", "那个", "我们", "你们",
-  "一下", "告诉", "想要", "需要", "进行", "实施", "知道", "请问", "能不能"
-]);
-
 function usableHost(text) {
   const t = String(text || "").trim();
-  if (t.length < 12) return "";
-  if (/现在是什么情况|写成固定步骤|你想先听哪一步|后半句没听清/.test(t)) return "";
+  if (t.length < H().hostMinLen) return "";
+  if (new RegExp(load().operators.templates.hostReject).test(t)) return "";
   return t;
 }
 
@@ -283,27 +243,15 @@ function usableHost(text) {
 function hostRest(lastHost) {
   const raw = usableHost(lastHost);
   if (!raw) return "";
-  const parts = raw.split(/[。！？]/).map((s) => s.trim()).filter((s) => s.length >= 8);
+  const parts = raw.split(/[。！？]/).map((s) => s.trim()).filter((s) => s.length >= H().hostClauseMin);
   if (parts.length < 2) return "";
-  return parts.slice(1).join("。").slice(0, 80);
+  return parts.slice(1).join("。").slice(0, H().hostRestMax);
 }
 
-const GENERIC_TOPIC = new Set(["家长", "老师", "系统", "园所", "课程", "孩子", "学生", "英语", "美语"]);
-
-/** 共有片段必须是正面出现。「不执行」里的「执行」不算同一主题。 */
+/** 共有片段必须是正面出现。否定窗口内的片段不算同一主题。 */
 function mentionedIn(host, topic) {
-  const h = String(host || "");
-  const t = String(topic || "");
-  if (!h || !t) return false;
-  let from = 0;
-  while (from <= h.length - t.length) {
-    const i = h.indexOf(t, from);
-    if (i < 0) return false;
-    const prev = i > 0 ? h[i - 1] : "";
-    if (!"不没别非".includes(prev)) return true;
-    from = i + 1;
-  }
-  return false;
+  const { topicMentionedPositively } = require("../../text/universalOperators.cjs");
+  return topicMentionedPositively(host, topic);
 }
 
 /** 本句和上一句口播共有的内容。优先句中焦点，其次更长的共有片段。 */
@@ -314,12 +262,13 @@ function sharedTopic(ask, lastHost) {
   const focus = contentFocus(ask);
   if (focus && mentionedIn(host, focus)) return focus;
   let best = "";
-  const nMax = Math.min(6, q.length);
-  for (let n = 2; n <= nMax; n += 1) {
+  const cfg = H();
+  const nMax = Math.min(cfg.sharedTopicMax, q.length);
+  for (let n = cfg.sharedTopicMin; n <= nMax; n += 1) {
     for (let i = 0; i + n <= q.length; i += 1) {
       const s = q.slice(i, i + n);
-      if (TOPIC_DROP.has(s) || !mentionedIn(host, s)) continue;
-      if (s.length < 3 && GENERIC_TOPIC.has(s)) continue;
+      if (words("operators", "topicDrop").has(s) || !mentionedIn(host, s)) continue;
+      if (s.length < cfg.genericTopicMax && words("operators", "genericTopic").has(s)) continue;
       if (s.length >= best.length) best = s;
     }
   }
@@ -328,17 +277,17 @@ function sharedTopic(ask, lastHost) {
 
 function localAsk(focus) {
   const f = String(focus || "").trim();
-  if (!f) return "你想先听哪一步？";
-  return `${f}你想先听哪一步？`;
+  if (!f) return fill("localAskEmpty");
+  return fill("localAsk", { focus: f });
 }
 
 function boundaryFor(focus) {
   const f = String(focus || "").trim();
-  if (!f) return "资料没有把这一步写成固定步骤。能答的按已有说明说，没写到的不编。";
-  if (/成果展/.test(f)) {
-    return "资料没有把成果展写成固定场次或台本。能做的是开口、测评和阶段性活动，不要承诺每月一场。";
+  if (!f) return fill("boundaryEmpty");
+  for (const row of load().operators.boundarySpecial || []) {
+    if (row && row.pattern && new RegExp(row.pattern).test(f)) return row.line;
   }
-  return `资料没有把「${f}」写成固定步骤。能答的按已有说明说，没写到的不编。`;
+  return fill("boundaryDefault", { focus: f });
 }
 
 function sameProbe(prev, focus) {
@@ -354,58 +303,22 @@ function pairKey(a, b) {
 }
 
 function splitQuestion(segA, segB) {
-  return `你是在问「${segA}」还是「${segB}」？`;
-}
-
-/** 问的是期限时，句子里要有「几个月」这种跨度。账期里的「一年/三年」不算。 */
-function asksWhen(text) {
-  return /多久|多长时间|什么时候/.test(String(text || ""));
-}
-
-function answersWhen(text) {
-  return /[0-9一二两三四五六七八九十]+\s*个?月|个月/.test(String(text || ""));
-}
-
-/** 确认能不能回本：答句要同时有回本和边界，不能只念三笔账开场。 */
-function asksReturnBoundary(text) {
-  const q = String(text || "");
-  if (asksWhen(q) || /(如何|怎么|怎样)/.test(q)) return false;
-  return /回本|会不会亏|亏损|亏本/.test(q);
-}
-
-function answersReturnBoundary(text) {
-  const s = String(text || "");
-  return /回本/.test(s) && /不保证|参考测算|不是承诺/.test(s);
-}
-
-/** 问怎么赚/怎么扭亏：答句要有测算结构，月份时间表不算。 */
-function asksHowLedger(text) {
-  const q = String(text || "");
-  if (asksWhen(q) || asksReturnBoundary(q)) return false;
-  return /(如何|怎么|怎样)/.test(q) && /盈利|赚钱|扭亏|回本/.test(q);
-}
-
-function answersHowLedger(text) {
-  return /三笔账|测算|一点八|延时/.test(String(text || ""));
+  return fill("split", { a: segA, b: segB });
 }
 
 function slotOk(ask, speak) {
-  if (asksWhen(ask) && !answersWhen(speak)) return false;
-  if (asksReturnBoundary(ask) && !answersReturnBoundary(speak)) return false;
-  if (asksHowLedger(ask) && !answersHowLedger(speak)) return false;
-  return true;
+  const { validateSlots } = require("../../text/universalOperators.cjs");
+  return validateSlots(ask, speak);
 }
 
 function isInterrogative(text) {
-  return /[？?]|(如何|怎么|怎样|吗|呢|嘛|能否|会不会|能不能|是不是|什么|哪些|为什么|多久|多长时间|什么时候|可不可以)/.test(
-    String(text || "")
-  );
+  return rx("operators", "interrogative").test(String(text || ""));
 }
 
 /** 句末感叹、且没有疑问形态：表态，不出口播脚本。 */
 function isExclamation(text) {
   const s = focusAsk(text).trim();
-  return /[！!]$/.test(s) && !isInterrogative(s);
+  return rx("operators", "exclamationEnd").test(s) && !isInterrogative(s);
 }
 
 /** 澄清句只含两个分段，不夹进任一条正文。 */
@@ -426,7 +339,7 @@ function clarifyCommitOk(speak, bodies) {
  *
  * @returns {{ action: "answer"|"clarify"|"repeat", speak: string, reason: string, posterior?: number, title?: string, hypotheses?: object[], eig?: number, design?: object, downgraded?: boolean }}
  */
-function decideSpeak({ ask, hits, intent, script, prevDesign, lastHost } = {}) {
+function decideCore({ ask, hits, intent, script, prevDesign, lastHost } = {}) {
   const focused = focusAsk(ask);
   if (isTruncatedAsk(focused)) {
     return {
@@ -444,7 +357,7 @@ function decideSpeak({ ask, hits, intent, script, prevDesign, lastHost } = {}) {
   if (isExclamation(focused)) {
     return {
       action: "clarify",
-      speak: "听到了。若要问怎么做，请把问题说完整。",
+      speak: fill("statement"),
       reason: "statement",
       posterior: 0,
       hypotheses: [],
@@ -454,19 +367,26 @@ function decideSpeak({ ask, hits, intent, script, prevDesign, lastHost } = {}) {
     };
   }
 
+  const cfg = H();
   const model = faqAlignModel();
   const askLen = stripAsk(focused).length;
-  const short = askLen > 0 && askLen <= 6;
+  const short = askLen > 0 && askLen <= cfg.shortAskLen;
   const list = (hits || []).filter((h) => h && (h.title || h.snippet || h.speak));
 
-  const prior0 = 0.62;
-  const priorScript = scriptEligible(intent, script) ? 0.22 : 0;
-  const priorDocMass = Math.max(0.05, 1 - prior0 - priorScript);
+  const markovKey = prevDesign && (prevDesign.hypothesisId || prevDesign.type);
+  const markov = (cfg.markov && (cfg.markov[markovKey] || cfg.markov.default)) || { absent: 1, script: 1, doc: 1 };
+  const absentScale = Number(markov.absent) || 1;
+  const scriptScale = Number(markov.script) || 1;
+  const docScale = Number(markov.doc) || 1;
+  const prior0 = cfg.priorAbsent * absentScale;
+  const scriptBase = scriptEligible(intent, script) ? cfg.priorScript * scriptScale : 0;
+  const priorScript = scriptBase;
+  const priorDocMass = Math.max(cfg.priorDocFloor, (1 - cfg.priorAbsent - (scriptEligible(intent, script) ? cfg.priorScript : 0)) * docScale);
 
-  // score 底分 16–18 几乎是 FAQ 常数，不给先验
+  // score 底分几乎是 FAQ 常数，不给先验
   const lifted = list.map((h) => {
     const s = Number(h.score) || 0;
-    return s > 22 ? Math.log1p(s - 18) : 0;
+    return s > cfg.scoreLiftAbove ? Math.log1p(s - cfg.scoreLiftBase) : 0;
   });
   const sumW = lifted.reduce((a, b) => a + b, 0) || 1;
 
@@ -477,9 +397,13 @@ function decideSpeak({ ask, hits, intent, script, prevDesign, lastHost } = {}) {
     const view = bestTitleView(focused, title, model);
     const a = view.align;
     const e = view.extra;
-    const llrAlign = logBetaPdf(a, 3, 2.2) - logBetaPdf(a, 1.2, 5);
+    const ba = cfg.betaAlignYes;
+    const bn = cfg.betaAlignNo;
+    const ea = cfg.betaExtraYes;
+    const en = cfg.betaExtraNo;
+    const llrAlign = logBetaPdf(a, ba[0], ba[1]) - logBetaPdf(a, bn[0], bn[1]);
     // 窄度只进入后验，不进入相容过滤。短问的过窄标题靠停止规则挡住，避免似然把假设滤成空集。
-    const llrExtra = logBetaPdf(e, 2, 3) - logBetaPdf(e, 2.5, 2);
+    const llrExtra = logBetaPdf(e, ea[0], ea[1]) - logBetaPdf(e, en[0], en[1]);
     const prior = priorDocMass * (sumW > 0 && lifted[i] > 0 ? lifted[i] / sumW : 1 / Math.max(1, list.length));
     const m = sigmoid(llrAlign);
     logUnnorm.push({
@@ -500,9 +424,11 @@ function decideSpeak({ ask, hits, intent, script, prevDesign, lastHost } = {}) {
       ? pairKey(prevDesign.segments[0], prevDesign.segments[1])
       : "";
 
-  const logU0 = Math.log(prior0);
-  const logUScript = priorScript > 0 ? Math.log(priorScript) + Math.log(3) : -Infinity;
-  const keptRaw = logUnnorm.filter((x) => x.m >= MATCH_KEEP);
+  const logU0 = Math.log(Math.max(prior0, 1e-8));
+  const specScale = priorScript > 0 ? scriptLikelihoodScale(intent, cfg) : 1;
+  // 特异度只约束「脚本 vs 卡片」，不削弱脚本相对「没有证据」的加成。
+  const logUScript = priorScript > 0 ? Math.log(priorScript) + Math.log(cfg.scriptLogBoost) : -Infinity;
+  const keptRaw = logUnnorm.filter((x) => x.m >= cfg.matchKeep);
   const terms = [...keptRaw.map((x) => x.logU), logU0, logUScript].filter((x) => Number.isFinite(x));
   const maxL = Math.max(...terms, -1e9);
   const Z = terms.reduce((acc, x) => acc + Math.exp(x - maxL), 0) || 1;
@@ -515,8 +441,8 @@ function decideSpeak({ ask, hits, intent, script, prevDesign, lastHost } = {}) {
       id: x.title || x.id,
       segment: x.segment,
       m: x.m,
-      kept: x.m >= MATCH_KEEP,
-      p: x.m >= MATCH_KEEP ? post(x.logU) : 0,
+      kept: x.m >= cfg.matchKeep,
+      p: x.m >= cfg.matchKeep ? post(x.logU) : 0,
       align: x.align,
       extra: x.extra
     }))
@@ -541,7 +467,7 @@ function decideSpeak({ ask, hits, intent, script, prevDesign, lastHost } = {}) {
     let py = 0;
     let cond = 0;
     for (const mass of pairMass) {
-      const pyA = mass.id === a.id ? 0.85 : mass.id === b.id ? 0.15 : 0.5;
+      const pyA = mass.id === a.id ? cfg.eigHit : mass.id === b.id ? cfg.eigMiss : cfg.eigOther;
       py += pyA * mass.p;
       cond += mass.p * binaryEntropy(pyA);
     }
@@ -551,16 +477,16 @@ function decideSpeak({ ask, hits, intent, script, prevDesign, lastHost } = {}) {
   function bestSplit() {
     let win = null;
     for (let i = 0; i < ranked.length; i += 1) {
-      if (ranked[i].p < PAIR_MIN_P || !ranked[i].segment) continue;
+      if (ranked[i].p < cfg.pairMinP || !ranked[i].segment) continue;
       for (let j = i + 1; j < ranked.length; j += 1) {
-        if (ranked[j].p < PAIR_MIN_P || !ranked[j].segment) continue;
+        if (ranked[j].p < cfg.pairMinP || !ranked[j].segment) continue;
         if (ranked[i].segment === ranked[j].segment) continue;
         if (askedPair && pairKey(ranked[i].segment, ranked[j].segment) === askedPair) continue;
         const eig = eigOf(ranked[i], ranked[j]);
         if (!win || eig > win.eig) win = { a: ranked[i], b: ranked[j], eig };
       }
     }
-    if (!win || win.eig < EIG_MIN_BITS) return null;
+    if (!win || win.eig < cfg.eigMinBits) return null;
     const speak = splitQuestion(win.a.segment, win.b.segment);
     if (!clarifyCommitOk(speak, bodies) || operateBlocked(speak, "clarify")) return null;
     return win;
@@ -579,8 +505,8 @@ function decideSpeak({ ask, hits, intent, script, prevDesign, lastHost } = {}) {
       ? ranked.find(
           (h) =>
             h.speak &&
-            h.align >= 0.4 &&
-            h.extra < 0.55 &&
+            h.align >= cfg.probeAlignMin &&
+            h.extra < cfg.probeExtraMax &&
             String(h.segment || "").includes(focus) &&
             slotOk(focused, h.speak)
         )
@@ -605,10 +531,20 @@ function decideSpeak({ ask, hits, intent, script, prevDesign, lastHost } = {}) {
   const answerable = ranked.find((h) => h.speak && slotOk(focused, h.speak)) || null;
   const bestSlot = answerable && best && answerable.i === best.i ? best : answerable;
 
-  if (bestSlot && bestSlot.p >= 0.42 && bestSlot.p > p0 && (bestSlot.i === best?.i ? bfSecond >= 3 : true) && bestSlot.align >= 0.28 && bestSlot.speak) {
+  if (
+    bestSlot &&
+    bestSlot.p >= cfg.posteriorMin &&
+    bestSlot.p > p0 &&
+    (bestSlot.i === best?.i ? bfSecond >= cfg.bayesFactor : true) &&
+    bestSlot.align >= cfg.alignMin &&
+    bestSlot.speak
+  ) {
     const alignFail = bestSlot.i === best?.i && second && second.align > bestSlot.align;
-    const tooNarrow = (short && bestSlot.extra >= 0.7) || (bestSlot.extra >= 0.55 && bestSlot.align < 0.72);
-    const definitionMismatch = isDefinitionSpeak(bestSlot.speak) && !/(是什么|什么是)/.test(focused);
+    const tooNarrow =
+      (short && bestSlot.extra >= cfg.tooNarrowShortExtra) ||
+      (bestSlot.extra >= cfg.tooNarrowExtra && bestSlot.align < cfg.tooNarrowAlign);
+    const definitionMismatch =
+      isDefinitionSpeak(bestSlot.speak) && !rx("operators", "definitionAsk").test(focused);
     if (!alignFail && !tooNarrow && !definitionMismatch && !operateBlocked(bestSlot.speak, "posterior")) {
       return {
         action: "answer",
@@ -626,13 +562,15 @@ function decideSpeak({ ask, hits, intent, script, prevDesign, lastHost } = {}) {
     }
   }
 
-  const scriptSpeak = String(script || "").trim().slice(0, 160);
+  const scriptSpeak = String(script || "").trim().slice(0, cfg.scriptSpeakMax);
+  const overlapIntents = new Set(cfg.scriptOverlapIntents || []);
+  const scriptBeatsCard = !bestSlot || pScript * specScale >= bestSlot.p;
   if (
     pScript > p0 &&
-    (!bestSlot || pScript >= bestSlot.p) &&
+    scriptBeatsCard &&
     scriptSpeak &&
     slotOk(focused, scriptSpeak) &&
-    !((intent?.intent === "rollout" || intent?.intent === "teacher") && askSpeakOverlap(focused, scriptSpeak) < 0.12) &&
+    !(overlapIntents.has(intent?.intent) && askSpeakOverlap(focused, scriptSpeak) < cfg.scriptOverlapMin) &&
     !operateBlocked(scriptSpeak, "script")
   ) {
     return {
@@ -647,12 +585,12 @@ function decideSpeak({ ask, hits, intent, script, prevDesign, lastHost } = {}) {
     };
   }
 
-  const downgraded = Boolean(best && best.p >= 0.42 && best.speak);
+  const downgraded = Boolean(best && best.p >= cfg.posteriorMin && best.speak);
   if (split) {
     return {
       action: "clarify",
       speak: splitQuestion(split.a.segment, split.b.segment),
-      reason: best && bfSecond < 3 ? "ambiguous" : "no_evidence",
+      reason: best && bfSecond < cfg.bayesFactor ? "ambiguous" : "no_evidence",
       posterior: best ? best.p : p0,
       title: best?.title || "",
       hypotheses,
@@ -685,7 +623,7 @@ function decideSpeak({ ask, hits, intent, script, prevDesign, lastHost } = {}) {
 
   // 同一焦点已经问过，或上一句后半句已经说过：交给豆包补一句。
   const focus = topic || ensureFocus();
-  if ((topic || sameProbe(prevDesign, focus)) && !(best && best.align >= 0.28)) {
+  if ((topic || sameProbe(prevDesign, focus)) && !(best && best.align >= cfg.alignMin)) {
     return {
       action: "clarify",
       speak: "",
@@ -714,7 +652,7 @@ function decideSpeak({ ask, hits, intent, script, prevDesign, lastHost } = {}) {
         .filter(
           (h) =>
             h.speak &&
-            h.align >= 0.18 &&
+            h.align >= cfg.closedAlignMin &&
             slotOk(focused, h.speak) &&
             `${h.title || ""}\n${h.segment || ""}`.includes(focusForCard)
         )
@@ -738,20 +676,23 @@ function decideSpeak({ ask, hits, intent, script, prevDesign, lastHost } = {}) {
   }
 
   // 有近义标题但不够作答：先确认那一条。过窄标题改为引导，不念「你是说」。
-  const nearTooNarrow = best && ((short && best.extra >= 0.7) || (best.extra >= 0.55 && best.align < 0.72));
+  const nearTooNarrow =
+    best &&
+    ((short && best.extra >= cfg.tooNarrowShortExtra) ||
+      (best.extra >= cfg.tooNarrowExtra && best.align < cfg.tooNarrowAlign));
   const focusForNear = ensureFocus();
   const nearHoldsFocus =
     !focusForNear ||
     String(best?.segment || "").includes(focusForNear) ||
     String(best?.title || "").includes(focusForNear);
   const near =
-    nearHoldsFocus && !nearTooNarrow && best && best.segment && best.align >= 0.18
-      ? String(best.segment).slice(0, 18)
+    nearHoldsFocus && !nearTooNarrow && best && best.segment && best.align >= cfg.closedAlignMin
+      ? String(best.segment).slice(0, cfg.nearMax)
       : "";
   if (near) {
     return {
       action: "clarify",
-      speak: `你是说「${near}」吗？我们按这个往下看。`,
+      speak: fill("near", { near }),
       reason: best.speak && !slotOk(focused, best.speak) ? "slot" : "near",
       posterior: best.p,
       title: best.title || "",
@@ -787,6 +728,42 @@ function decideSpeak({ ask, hits, intent, script, prevDesign, lastHost } = {}) {
     design: designOf("clarify", "", []),
     downgraded
   };
+}
+
+/** 脚本特异度只读 schema，不按 FAQ 正文反查。宽脚本（经营）天然更弱。 */
+function scriptLikelihoodScale(intent, cfg) {
+  const ref = Number(cfg.scriptSpecificityRef) || 0.35;
+  const floor = Number(cfg.scriptSpecMin) || 1;
+  const by = cfg.scriptSpecificityByIntent || {};
+  const name = String(intent?.intent || "");
+  let spec = Number(by[name]);
+  if (!Number.isFinite(spec)) spec = Number(cfg.scriptSpecificityDefault);
+  if (!Number.isFinite(spec)) spec = ref;
+  return Math.max(floor, Math.min(1, spec / ref));
+}
+
+function attachShadow(args, result) {
+  try {
+    const { diagnoseShadow } = require("../../knowledge/compiler.cjs");
+    const { debugLog } = require("../../platform");
+    const shadow = diagnoseShadow({
+      ask: args && args.ask,
+      title: result && result.title,
+      speak: result && result.speak,
+      align: result && result.align,
+      extra: result && result.extra
+    });
+    if (result && typeof result === "object") result.shadow = shadow;
+    debugLog.info("Strategy", "编译影子", shadow);
+  } catch (_) {
+    /* 影子失败不影响开口 */
+  }
+}
+
+function decideSpeak(args) {
+  const result = decideCore(args);
+  attachShadow(args, result);
+  return result;
 }
 
 module.exports = {
