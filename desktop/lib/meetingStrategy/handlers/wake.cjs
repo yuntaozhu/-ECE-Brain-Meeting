@@ -3,9 +3,41 @@ const S = require("./kit.cjs");
 /**
  * 唤醒 / 点名。仅问候则返回；有实质问题则设 HA 模式后 fallthrough（return null）
  */
+function resolveReask(state, floors, current) {
+  const open = String(state.lastOpenAsk || "").trim();
+  if (open && Date.now() - (state.lastOpenAskAt || 0) < 10 * 60 * 1000) return open;
+  const prev = String(state.lastRealAsk || "").trim();
+  if (prev && Date.now() - (state.lastRealAskAt || 0) < 10 * 60 * 1000 && prev !== current) return prev;
+  const list = Array.isArray(floors) ? floors : [];
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    const line = String(list[i] || "").trim();
+    if (!line || line === current) continue;
+    if (/^(大智|谢谢大智|听我说)/.test(line)) continue;
+    if (line.length >= 8) return line;
+  }
+  return "";
+}
+
 async function handle(ctx) {
   const { cmd, state, agenda, a2aTrace, kbStatus, qFp } = ctx;
   const lastFloor = ctx.lastFloor;
+
+  if (cmd.command === "REASK") {
+    const pending = resolveReask(state, ctx.floors, lastFloor);
+    if (pending) {
+      ctx.lastFloor = pending;
+      cmd.command = null;
+      cmd.named = false;
+      cmd.payload = "";
+      cmd.text = pending;
+      cmd.payload = "";
+      state.haLockedUntil = Date.now() + 90000;
+      S.setMode(state, S.INTERACTION_MODE.HA_ASK);
+      S.setLifecycle(state, S.MEETING_LIFE.CONSULT);
+      S.debugLog.info("Strategy", "回到刚才的问题", { text: pending.slice(0, 40) });
+      return null;
+    }
+  }
 
   const wakeHit =
     cmd.command === "WAKE" ||

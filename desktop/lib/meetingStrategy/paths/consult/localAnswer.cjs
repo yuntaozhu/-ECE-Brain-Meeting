@@ -1,9 +1,10 @@
 /**
  * 本地秒答：缓存 / Wiki / FAQ / 闭题兜底
  * 有豆包 Key 时仍优先 FAQ/Wiki 秒答；未命中再放行 MeetingAgent。
+ * 出口只消费 decideSpeak 的类型与句子（含经营档），不因 useBiz 跳过澄清/复述/脚本。
  */
 const S = require("./kit.cjs");
-const { isTruncatedAsk, decideSpeak, focusAsk } = require("../../agent/relevance.cjs");
+const { isTruncatedAsk, decideSpeak, focusAsk, localAsk, hostRest } = require("../../agent/relevance.cjs");
 
 function hasDoubaoKey() {
   return Boolean((process.env.DOUBAO_API_KEY || process.env.ARK_API_KEY || "").trim());
@@ -25,30 +26,6 @@ function tryIdentityOrAgenda(ctx) {
   return null;
 }
 
-function bestFaqHit(askText) {
-  return S.matchFaqInstant(askText);
-}
-
-/** 贝叶斯放行才允许把这条 FAQ 当秒答，避免词表改写把窄标题送出口。 */
-function bayesAllows(askText, faqHit) {
-  if (!faqHit?.answer) return false;
-  const d = decideSpeak({
-    ask: askText,
-    hits: [
-      {
-        title: faqHit.title,
-        score: faqHit.score,
-        snippet: `A: ${faqHit.answer}`,
-        source: "faq"
-      }
-    ]
-  });
-  return d.action === "answer" && d.reason === "posterior";
-}
-
-/**
- * @returns {object|null}
- */
 function tryLocalAnswer(ctx) {
   const askText = focusAsk(ctx.askText);
   const { agenda, state, a2aTrace, kbStatus, qFp, rw, useBiz, lastFloor } = ctx;
@@ -73,69 +50,102 @@ function tryLocalAnswer(ctx) {
     }
   }
 
-  const retrieved = S.retrieveKnowledge(askText, 4);
-  const bayes = decideSpeak({ ask: askText, hits: retrieved?.hits || [] });
-  if (bayes.action === "answer" && bayes.reason === "posterior" && bayes.speak) {
+  let intent = null;
+  let script = "";
+  try {
+    const { ruleUnderstand, intentSoftAnswer } = require("../../agent/intent.cjs");
+    intent = ruleUnderstand(askText);
+    script = intentSoftAnswer(intent, askText);
+  } catch (_) {
+    /* ignore */
+  }
+
+  const probeSegs = (state?.lastDesign?.segments || []).map((s) => String(s || "").trim()).filter((s) => s && !askText.includes(s));
+  const wide = S.isClosedFaqQuestion(askText);
+  let hits = S.retrieveKnowledge(askText, wide ? 8 : 4)?.hits || [];
+  for (const seg of probeSegs.slice(0, 2)) {
+    const more = S.retrieveKnowledge(seg, 3)?.hits || [];
+    const seen = new Set(hits.map((h) => String(h.title || "")));
+    for (const h of more) {
+      const key = String(h?.title || "");
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      hits.push(h);
+    }
+  }
+  const retrieved = { hits };
+  const lastHost = String(ctx.opts?.lastHostSpeakText || "");
+  const bayes = decideSpeak({
+    ask: askText,
+    hits: retrieved?.hits || [],
+    intent,
+    script,
+    prevDesign: state?.lastDesign || null,
+    lastHost
+  });
+  const definitionMismatch =
+    bayes.action === "answer" && S.isDefinitionSpeak(bayes.speak) && !/(是什么|什么是)/.test(askText);
+
+  if (bayes.action === "answer" && bayes.speak && !definitionMismatch) {
     const answer = S.stripIntroBoilerplate(S.clipUtterance(bayes.speak, 160));
-    if (answer && !(S.isDefinitionSpeak(answer) && !/(是什么|什么是)/.test(askText))) {
-      S.debugLog.info("Strategy", "贝叶斯 FAQ 秒答", {
+    if (answer) {
+      if (state && bayes.design) state.lastDesign = bayes.design;
+      if (state) state.lastOpenAsk = "";
+      const ark =
+        bayes.reason === "script"
+          ? "kb-script"
+          : "faq";
+      S.debugLog.info("Strategy", bayes.reason === "script" ? "意图脚本秒答" : "贝叶斯 FAQ 秒答", {
         text: askText.slice(0, 40),
         title: bayes.title,
-        posterior: bayes.posterior
+        posterior: bayes.posterior,
+        reason: bayes.reason
       });
-      return S.playAnswer(answer, "WAKE_ANSWER", state, a2aTrace, kbStatus, qFp, "faq", {
-        cacheQuestion: askText
-      });
+      return S.playAnswer(
+        answer,
+        useBiz && !S.isClosedFaqQuestion(askText) ? "BIZ_ANSWER" : "WAKE_ANSWER",
+        state,
+        a2aTrace,
+        kbStatus,
+        qFp,
+        ark,
+        { cacheQuestion: askText }
+      );
     }
   }
 
-  const rawFaq = bestFaqHit(askText);
-  const faqHit = bayesAllows(askText, rawFaq) ? rawFaq : null;
-
-  if (!useBiz && (rw.closed || rw.choicePick || S.isClosedFaqQuestion(askText))) {
-    const wikiQ = S.queryWiki(askText, 2);
-    const top = wikiQ.hits?.[0];
-    const wikiOk =
-      top?.speak &&
-      decideSpeak({
-        ask: askText,
-        hits: [{ title: top.title, score: top.score, speak: top.speak, source: "wiki" }]
-      }).action === "answer";
-    if (wikiOk) {
-      const answer = S.stripIntroBoilerplate(S.clipUtterance(top.speak, 160));
-      return S.playAnswer(answer, "WAKE_ANSWER", state, a2aTrace, kbStatus, qFp, "wiki", {
+  if (bayes.action === "clarify" || bayes.action === "repeat" || definitionMismatch) {
+    const spoken = definitionMismatch
+      ? decideSpeak({
+          ask: askText,
+          hits: (retrieved?.hits || []).filter((h) => !S.isDefinitionSpeak(h.speak || h.snippet)),
+          intent,
+          script,
+          prevDesign: state?.lastDesign || null
+        }).speak
+      : bayes.speak;
+    const line = String(spoken || bayes.speak || "").trim();
+    const probeRelease = !line && (bayes.reason === "probe" || bayes.reason === "draft");
+    if (probeRelease) {
+      const live = hasDoubaoKey() && !ctx.opts?.forceRule && bayes.design?.depth === "final";
+      if (live) return null;
+      const focus = String(bayes.design?.segments?.[0] || "");
+      const offline = hostRest(lastHost) || localAsk(focus);
+      if (state && bayes.design) state.lastDesign = bayes.design;
+      return S.playAnswer(offline, useBiz ? "BIZ_ANSWER" : "WAKE_ANSWER", state, a2aTrace, kbStatus, qFp, bayes.reason, {
         cacheQuestion: askText
       });
     }
-  }
-
-  if (!useBiz && rw.choicePick && faqHit?.answer) {
-    S.debugLog.info("Strategy", "选题追问秒答", {
-      choice: rw.choice,
-      rewritten: askText.slice(0, 40),
-      title: faqHit.title
-    });
-    const answer = S.stripIntroBoilerplate(S.clipUtterance(faqHit.answer, 160));
-    return S.playAnswer(answer, "WAKE_ANSWER", state, a2aTrace, kbStatus, qFp, "faq", {
-      cacheQuestion: askText
-    });
-  }
-  if (
-    !useBiz &&
-    (rw.closed || S.isClosedFaqQuestion(askText) || state.mode === S.INTERACTION_MODE.HA_ASK) &&
-    S.shouldFaqInstant(askText, faqHit, {
-      minScore: rw.closed || S.isClosedFaqQuestion(askText) ? 22 : 45
-    })
-  ) {
-    const answer = S.stripIntroBoilerplate(S.clipUtterance(faqHit.answer, 160));
-    S.debugLog.info("Strategy", "闭题 FAQ 秒答", {
-      text: askText.slice(0, 40),
-      title: faqHit?.title,
-      score: faqHit?.score
-    });
-    return S.playAnswer(answer, "WAKE_ANSWER", state, a2aTrace, kbStatus, qFp, "faq", {
-      cacheQuestion: askText
-    });
+    if (line) {
+      if (state && bayes.design) state.lastDesign = bayes.design;
+      if (state && (bayes.reason === "near" || bayes.reason === "probe")) {
+        state.lastOpenAsk = String(askText || "").slice(0, 200);
+        state.lastOpenAskAt = Date.now();
+      }
+      return S.playAnswer(line, useBiz ? "BIZ_ANSWER" : "WAKE_ANSWER", state, a2aTrace, kbStatus, qFp, bayes.action, {
+        cacheQuestion: askText
+      });
+    }
   }
 
   if (!useBiz && (rw.closed || S.isClosedFaqQuestion(askText))) {

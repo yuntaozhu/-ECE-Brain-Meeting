@@ -34,6 +34,7 @@
     "electron-builder": "^25.1.8"
   },
   "dependencies": {
+    "@node-rs/jieba": "^2.0.4",
     "dotenv": "^17.2.3",
     "iconv-lite": "^0.7.3",
     "ws": "^8.20.1"
@@ -56,7 +57,12 @@
       {
         "from": "knowledge",
         "to": "knowledge",
-        "filter": ["**/*", "**/.*", "**/.rag-index.json", "**/.gitkeep"]
+        "filter": [
+          "**/*",
+          "**/.*",
+          "**/.rag-index.json",
+          "**/.gitkeep"
+        ]
       },
       {
         "from": "knowledge/.rag-index.json",

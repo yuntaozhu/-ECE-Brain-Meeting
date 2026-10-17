@@ -9,17 +9,21 @@ const { verifyAnswer, isRiskRewrite } = require("./verify.cjs");
 const {
   topScore,
   isAnswerable,
-  clarifyLine,
+  repeatLine,
   decideSpeak,
-  focusAsk
+  focusAsk,
+  localAsk,
+  hostRest
 } = require("./relevance.cjs");
 
-function speakDecision(intentObj, askText, retrieval) {
+function speakDecision(intentObj, askText, retrieval, state, lastHost) {
   return decideSpeak({
     ask: askText,
     hits: retrieval?.hits || [],
     intent: intentObj,
-    script: intentSoftAnswer(intentObj, askText)
+    script: intentSoftAnswer(intentObj, askText),
+    prevDesign: state?.lastDesign || null,
+    lastHost: lastHost || ""
   });
 }
 
@@ -66,8 +70,11 @@ function mergeHits(into, more) {
   return into;
 }
 
-async function retrieveForIntent(intentObj, askText, opts) {
-  const queries = [focusAsk(askText), ...(intentObj?.retrieve_queries || [])].map((q) => String(q || "").trim()).filter(Boolean);
+async function retrieveForIntent(intentObj, askText, opts, state) {
+  const segs = (state?.lastDesign?.segments || []).map((s) => String(s || "").trim()).filter(Boolean);
+  const queries = [focusAsk(askText), ...segs, ...(intentObj?.retrieve_queries || [])]
+    .map((q) => String(q || "").trim())
+    .filter(Boolean);
   const unique = [...new Set(queries)].slice(0, 3);
   const hits = [];
   let preview = "";
@@ -90,28 +97,45 @@ async function retrieveForIntent(intentObj, askText, opts) {
   return { hits, preview, instantAnswer, tool: "search_faq", mode: "bayes" };
 }
 
-/** 豆包未出口：只采用贝叶斯放行的证据或意图脚本 */
-function knowledgeSpeakLine(intentObj, askText, retrieval) {
-  const d = speakDecision(intentObj, askText, retrieval);
-  if (d.action === "answer" && d.speak) return S.clipUtterance(d.speak, 160);
+/** 豆包未出口：接上一句后半句。没有后半句就当场问一步，不念套话。 */
+function knowledgeSpeakLine(intentObj, askText, retrieval, state, lastHost) {
+  const d = speakDecision(intentObj, askText, retrieval, state, lastHost);
+  if (d.speak) return S.clipUtterance(d.speak, 160);
+  if (d.design?.hypothesisId === "probe") {
+    const focus = String(d.design.segments?.[0] || "");
+    const line = hostRest(lastHost) || localAsk(focus);
+    return S.clipUtterance(line, 160);
+  }
   return "";
 }
 
-function pickGrounded(intentObj, askText, retrieval, live) {
-  const d = speakDecision(intentObj, askText, retrieval);
-  if (d.action === "repeat") return { text: d.speak, decision: "repeat" };
+function pickGrounded(intentObj, askText, retrieval, live, state, lastHost) {
+  const d = speakDecision(intentObj, askText, retrieval, state, lastHost);
+  const base = { text: d.speak, design: d.design, decisionObj: d };
+  if (d.action === "repeat" || d.action === "clarify") {
+    if (!d.speak && d.design?.hypothesisId === "probe") {
+      if (live && d.design.depth === "final") return { text: "", decision: "compose", design: d.design, decisionObj: d };
+      const focus = String(d.design.segments?.[0] || "");
+      const text = hostRest(lastHost) || localAsk(focus);
+      return { ...base, text, decision: d.action };
+    }
+    return { ...base, decision: d.action };
+  }
   if (d.action === "answer" && d.reason === "posterior") {
-    return { text: d.speak, decision: "faq" };
+    return { ...base, decision: "faq" };
   }
-  if (!live) {
-    if (d.action === "answer" && d.reason === "script") return { text: d.speak, decision: "kb-script" };
-    return { text: clarifyLine(), decision: "clarify" };
+  // 意图脚本已是承诺句：有 Key 也不再进慢 Compose，避免超时空取消
+  if (d.action === "answer" && d.reason === "script" && d.speak) {
+    return { ...base, decision: "kb-script" };
   }
-  return { text: "", decision: "compose" };
+  if (live) {
+    return { text: "", decision: "compose", design: d.design, decisionObj: d };
+  }
+  return { ...base, decision: d.action || "repeat", text: d.speak || repeatLine() };
 }
 
 function finishSpoken(ctx, payload) {
-  const { opts, state, a2aTrace, kbStatus, qFp, askText, lastFloor, runId, intentObj, t0 } = ctx;
+  const { opts, state, a2aTrace, kbStatus, qFp, askText, lastFloor, runId, intentObj, t0, useBiz } = ctx;
   const answer = String(payload.answer || "").trim();
   const spoken = answer ? S.emitLead(opts, S.clipUtterance(answer, 160)) : "";
   pushAgent(a2aTrace, {
@@ -150,6 +174,7 @@ function finishSpoken(ctx, payload) {
     S.rememberAnswer(state.meetingId, { question: askText, tts: answer, arkMode: payload.decision });
     S.rememberRealAsk(state, askText);
   }
+  if (state && payload.design) state.lastDesign = payload.design;
   // 全文已由 emitLead/onEarlySpeak 播出：interventionText 留空，避免 strategyEvaluate 再 TTS 一遍
   return {
     shouldIntervene: Boolean(answer),
@@ -158,7 +183,7 @@ function finishSpoken(ctx, payload) {
     spokenPrefix: spoken,
     earlyCovered: Boolean(spoken),
     earlySpoken: Boolean(spoken),
-    reason: "WAKE_ANSWER",
+    reason: useBiz && !S.isClosedFaqQuestion(focusAsk(askText)) ? "BIZ_ANSWER" : "WAKE_ANSWER",
     latestToDos: payload.todos || [],
     nextStageRecommendation: "MainDiscussion",
     a2aTrace,
@@ -216,10 +241,11 @@ async function runMeetingAgent(ctx) {
     }
   });
 
-  const retrieval = await retrieveForIntent(intentObj, askText, opts);
+  const retrieval = await retrieveForIntent(intentObj, askText, opts, state);
   const score = topScore(retrieval);
   const live = hasApiKey() && !opts.forceRule;
-  const grounded = pickGrounded(intentObj, askText, retrieval, live);
+  const lastHost = String(opts.lastHostSpeakText || "").trim();
+  const grounded = pickGrounded(intentObj, askText, retrieval, live, state, lastHost);
   pushAgent(a2aTrace, {
     runId,
     role: "KnowledgeTool",
@@ -246,7 +272,7 @@ async function runMeetingAgent(ctx) {
     let riskRewrite = false;
     const check = await verifyAnswer(askText, intentObj, answer, { skipLlm: true, forceRule: true });
     if (!check.pass) {
-      const fixed = knowledgeSpeakLine(intentObj, askText, retrieval) || clarifyLine();
+      const fixed = knowledgeSpeakLine(intentObj, askText, retrieval, state, lastHost) || repeatLine();
       riskRewrite = fixed !== answer;
       answer = fixed;
       pushAgent(a2aTrace, {
@@ -265,6 +291,7 @@ async function runMeetingAgent(ctx) {
         tool: retrieval.tool,
         topScore: score,
         riskRewrite,
+        design: grounded.design,
         todos: todosFromRetrieval(retrieval, askText)
       }
     );
@@ -282,14 +309,18 @@ async function runMeetingAgent(ctx) {
     .filter(Boolean)
     .join("\n");
   const system = composeSystem(intentObj, agenda, kbBite, dialogBlock, state.mode);
-  const lastHost = String(opts.lastHostSpeakText || "").trim();
-  const userTask =
-    `针对园长这一句作答，并接上上一句，不要改问别的话题。` +
-    `只使用【本次工具结果】里的事实和口播；没有依据的金额不要写。` +
-    `禁止：${(intentObj.must_not || []).join("、") || "议程套话、保证不亏、包赚"}。` +
-    `约60–90字，勿前缀。\n` +
-    `【上一句】${lastHost || "（无）"}\n【这一句】${askText}`;
-  const knowledgeLine = knowledgeSpeakLine(intentObj, askText, retrieval, state, agenda);
+  const probe = grounded.design?.hypothesisId === "probe";
+  const probeFocus = String(grounded.design?.segments?.[0] || "");
+  const userTask = probe
+    ? grounded.design?.depth === "final"
+      ? `根据资料和对方刚才的话，口头回复60到90字，适合朗读。只使用资料和对话里出现的内容，没写到的不编。禁止出现：现在是什么情况、我们一起往下看、写成固定步骤、你是说。不要复读上一句问句。\n【上一句】${lastHost || "（无）"}\n【对方刚才】${askText}\n【焦点】${probeFocus || "（无）"}`
+      : `只输出一个问句，20个字以内。问对方还没说清的那一块，接上上一句已经说过的做法。不要复述资料。禁止出现：现在是什么情况、我们一起往下看、写成固定步骤、你是说。\n【上一句】${lastHost || "（无）"}\n【这一句】${askText}\n【焦点】${probeFocus || "（无）"}`
+    : `针对园长这一句作答，并接上上一句，不要改问别的话题。` +
+      `只使用【本次工具结果】里的事实和口播；没有依据的金额不要写。` +
+      `禁止：${(intentObj.must_not || []).join("、") || "议程套话、保证不亏、包赚"}。` +
+      `约60–90字，勿前缀。\n` +
+      `【上一句】${lastHost || "（无）"}\n【这一句】${askText}`;
+  const knowledgeLine = knowledgeSpeakLine(intentObj, askText, retrieval, state, lastHost);
   const retrievalTitle = String(retrieval?.hits?.[0]?.title || retrieval?.hits?.[0]?.source || "");
   const composeStartedAt = Date.now();
 
@@ -342,16 +373,23 @@ async function runMeetingAgent(ctx) {
   let finalAnswer = chat.answer || "";
   let doubaoSpeak = chat.arkMode === "llm" && Boolean(chat.answer);
   let riskRewrite = false;
+  const probeTurn = grounded.design?.hypothesisId === "probe";
   const check = doubaoSpeak
-    ? await verifyAnswer(askText, intentObj, finalAnswer, {
-        signal: opts.signal,
-        forceRule: opts.forceRule
-      })
+    ? probeTurn
+      ? {
+          pass: !/保证不亏|包赚|一定回本|今天主题是|您可以问全园美语是什么/.test(finalAnswer),
+          reason: "probe",
+          source: "probe"
+        }
+      : await verifyAnswer(askText, intentObj, finalAnswer, {
+          signal: opts.signal,
+          forceRule: opts.forceRule
+        })
     : { pass: false, reason: "llm_silent", source: "local" };
   const risk = doubaoSpeak && !check.pass && isRiskRewrite(check.reason);
   let fallbackGate = "";
   if (risk) {
-    const fixed = knowledgeLine || clarifyLine();
+    const fixed = knowledgeLine || repeatLine();
     riskRewrite = fixed !== finalAnswer;
     fallbackGate = "rewrite";
     pushAgent(a2aTrace, {
@@ -365,13 +403,13 @@ async function runMeetingAgent(ctx) {
     doubaoSpeak = false;
     streamed = "";
   } else if (!doubaoSpeak) {
-    // 豆包失败：对齐 FAQ/知识库；禁止「再说具体一点」软句冒充业务答
-    const softBan = /请再说具体一点，我结合资料答您|这句我还没对上/;
+    // 豆包超时/失败：回放承诺算法句子（FAQ / 脚本 / EIG 澄清 / 复述）
+    const softBan = /请再说具体一点，我结合资料答您/;
     let kb = knowledgeLine;
     if (!kb || softBan.test(kb)) {
-      kb = knowledgeSpeakLine(intentObj, askText, retrieval);
+      kb = knowledgeSpeakLine(intentObj, askText, retrieval, state, lastHost);
     }
-    finalAnswer = (kb && !softBan.test(kb) ? kb : "") || clarifyLine();
+    finalAnswer = (kb && !softBan.test(kb) ? kb : "") || repeatLine();
     fallbackGate = kb && !softBan.test(kb) ? "kb-fallback" : "clarify";
     pushAgent(a2aTrace, {
       runId,
@@ -448,6 +486,8 @@ async function runMeetingAgent(ctx) {
     }
   });
 
+  if (state && grounded.design) state.lastDesign = grounded.design;
+
   return {
     shouldIntervene: Boolean(streamed || tail),
     interventionText: tail,
@@ -455,7 +495,7 @@ async function runMeetingAgent(ctx) {
     spokenPrefix: streamed,
     earlyCovered: Boolean(streamed),
     earlySpoken: Boolean(streamed),
-    reason: "WAKE_ANSWER",
+    reason: ctx.useBiz && !S.isClosedFaqQuestion(focusAsk(askText)) ? "BIZ_ANSWER" : "WAKE_ANSWER",
     latestToDos: todosFromRetrieval(retrieval, askText),
     nextStageRecommendation: "MainDiscussion",
     a2aTrace,

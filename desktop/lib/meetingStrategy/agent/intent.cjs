@@ -157,6 +157,30 @@ function currentUtterance(askText) {
   return q;
 }
 
+/** 有疑问形态才算提问。感叹/陈述不靠业务词收成盈利脚本。 */
+function isInterrogative(q) {
+  return /[？?]|(如何|怎么|怎样|吗|呢|嘛|能否|会不会|能不能|是不是|什么|哪些|为什么|多久|多长时间|什么时候|可不可以)/.test(
+    String(q || "")
+  );
+}
+
+function isExclamation(q) {
+  const s = String(q || "").trim();
+  return /[！!]$/.test(s) && !isInterrogative(s);
+}
+
+/** 问能不能盈利：先表态，不走「如何盈利」三笔账开场，也不因「园所」收成经营万能句。期限问仍留给回报时间卡。 */
+function isProfitConfirmAsk(q) {
+  const s = String(q || "");
+  if (/多久|多长时间|什么时候/.test(s)) return false;
+  if (/(如何|怎么|怎样)/.test(s)) return false;
+  return /(能不能|能否|可不可以|能让|可以让|会让).{0,16}盈利|能盈利|盈利吗/.test(s);
+}
+
+function isExecuteAsk(q) {
+  return /(如何|怎么|怎样).{0,6}执行|执行过程|怎么执行/.test(String(q || ""));
+}
+
 function ruleUnderstand(askText, opts = {}) {
   const q = currentUtterance(askText);
   const lastHost = String(opts.lastHostAnswer || "");
@@ -233,7 +257,23 @@ function ruleUnderstand(askText, opts = {}) {
       q
     );
   }
-  if (isProfitAsk(q) || /扭亏/.test(q)) {
+  // 感叹表态不是提问，不挂盈利/经营脚本
+  if (isExclamation(q)) {
+    return emptyIntent({
+      intent: "other",
+      confidence: 0.35,
+      must_answer: q.slice(0, 40),
+      speak_policy: "wait",
+      source: "rule"
+    });
+  }
+  if (isProfitConfirmAsk(q)) {
+    return normalizeIntent(
+      { intent: "profit_how", confidence: 0.92, must_answer: "能不能盈利", source: "rule" },
+      q
+    );
+  }
+  if (isProfitAsk(q) || (/扭亏/.test(q) && isInterrogative(q))) {
     return normalizeIntent(
       { intent: "profit_how", confidence: 0.9, must_answer: "如何扭亏或盈利", source: "rule" },
       q
@@ -245,13 +285,13 @@ function ruleUnderstand(askText, opts = {}) {
       q
     );
   }
-  if (/落地|实施|行事历|0.?1|第一步|签约|准备/.test(q)) {
+  if (isExecuteAsk(q) || /落地|实施|行事历|0.?1|第一步|签约|准备/.test(q)) {
     return normalizeIntent(
       { intent: "rollout", confidence: 0.85, must_answer: "怎么落地", source: "rule" },
       q
     );
   }
-  if (isOperateBetterAsk(q) || /经营|园所/.test(q)) {
+  if (isOperateBetterAsk(q)) {
     return normalizeIntent(
       { intent: "operate", confidence: 0.8, must_answer: "经营怎么办", source: "rule" },
       q
@@ -324,6 +364,12 @@ async function understandIntent(askText, opts = {}) {
         if (rule.intent === "profit_how" && /扭亏/.test(q) && norm.intent !== "profit_how") {
           return { ...rule, source: "rule-override" };
         }
+        if (isProfitConfirmAsk(q) && rule.intent === "profit_how" && norm.intent !== "profit_how") {
+          return { ...rule, source: "rule-override" };
+        }
+        if (rule.intent === "rollout" && isExecuteAsk(q) && norm.intent !== "rollout") {
+          return { ...rule, source: "rule-override" };
+        }
         if (
           (rule.intent === "hq_support" || rule.intent === "pricing_follow") &&
           norm.intent !== rule.intent &&
@@ -358,6 +404,9 @@ function intentSoftAnswer(intentObj, askText) {
     case "parent_reason":
       return PARENT_REASON_TTS;
     case "profit_how":
+      if (isProfitConfirmAsk(askText) || isProfitConfirmAsk(currentUtterance(askText))) {
+        return "资料不保证引入后就盈利。按说明测算：新增一名幼儿约一年一点八万、在园三年约五点四万，可能盖过三万九；关键是认真执行。这是参考测算，不是承诺招满。";
+      }
       return PROFIT_TTS;
     case "hq_support":
       return "支持在系统里：总部课件、Teacher说师资训练、每班菲教、AI测评和成果活动，还有落地指导和行事历。不是只丢一批账号让园自己扛。";
@@ -370,6 +419,9 @@ function intentSoftAnswer(intentObj, askText) {
     case "teacher":
       return "培育老师先减负再激励：只拍十秒+转发报告，不备课；有美语增量后再给配合者小补贴。";
     case "rollout":
+      if (isExecuteAsk(askText) || isExecuteAsk(currentUtterance(askText))) {
+        return "执行分四步：定班、上非教、拍十秒、转发报告。本周只做定班和第一次开口视频。";
+      }
       return "0到1就四步：定班、上非教、拍十秒、转发报告；本周只做定班和第一次开口视频。";
     case "chitchat":
       return "我在，请讲。";

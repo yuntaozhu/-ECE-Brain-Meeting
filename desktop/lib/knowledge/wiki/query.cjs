@@ -36,7 +36,6 @@ function queryTokens(query) {
   for (let n = 2; n <= 4; n++) {
     for (let i = 0; i + n <= cjk.length; i++) out.add(cjk.slice(i, i + n));
   }
-  // 整句（短问）
   const compact = normalizeText(q);
   if (compact.length >= 4 && compact.length <= 24) out.add(compact);
   return [...out];

@@ -88,6 +88,8 @@ function isParentReasonAsk(question) {
 function isProfitAsk(question) {
   const q = normalizeDazhiAliases(String(question || ""));
   if (!q) return false;
+  // 期限问（多久/什么时候）不是「如何盈利」，留给回报时间卡片
+  if (/多久|多长时间|什么时候/.test(q)) return false;
   // 回本确认 / 测算 / 理由 优先，勿吞进「如何盈利」套路
   if (isRoiConfirmAsk(q) || isHowCalcAsk(q) || isParentReasonAsk(q)) return false;
   if (/是什么|什么是/.test(q) && !/盈利|赚钱|回本/.test(q)) return false;

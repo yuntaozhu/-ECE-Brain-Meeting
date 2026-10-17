@@ -60,7 +60,7 @@ function splitSections(raw) {
   for (const p of parts) {
     const t = p.trim();
     if (t.length < 40) continue;
-    const title = (t.split("\n")[0] || "").replace(/^#+\s*/, "").slice(0, 80);
+    const title = (t.split("\n")[0] || "").replace(/^#+\s*/, "").trim();
     out.push({ title, body: t.slice(0, 2500) });
   }
   return out.length ? out : [{ title: "全库", body: text.slice(0, 4000) }];

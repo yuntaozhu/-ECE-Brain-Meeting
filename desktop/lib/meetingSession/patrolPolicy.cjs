@@ -126,6 +126,12 @@ function shouldImmediatePatrolForUi(text, opts = {}) {
   }
 
   if (isConsultMode(mode)) {
+    try {
+      const { isClosedFaqQuestion } = require("../meetingStrategy/query/classify.cjs");
+      if (isClosedFaqQuestion(last)) return true;
+    } catch (_) {
+      /* 闭题模块未就绪时仍走下面的问句形态 */
+    }
     const isQ =
       /[？?]/.test(last) ||
       /(什么意思|是什么|是谁|怎么[样办]|为什么|为何|能不能|可不可以|是否|真的吗|真的能|行不行|是不是|有没有|值得吗|划算吗)/.test(

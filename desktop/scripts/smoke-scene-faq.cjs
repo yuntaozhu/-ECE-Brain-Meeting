@@ -12,7 +12,7 @@ require("dotenv").config({ path: fs.existsSync(rootEnv) ? rootEnv : deskEnv });
 process.env.DOUBAO_API_KEY = process.env.DOUBAO_API_KEY || "sk-smoke";
 process.env.ARK_API_KEY = process.env.ARK_API_KEY || "";
 
-const { createMeetingSession } = require("../lib/meetingSession");
+const { createMeetingSession, detectAgentCommand } = require("../lib/meetingSession");
 const { runMeetingAnalysis, DEFAULT_AGENDA } = require("../lib/meetingStrategy");
 const { isTruncatedAsk } = require("../lib/meetingStrategy/agent/relevance.cjs");
 
@@ -44,21 +44,99 @@ const cases = [
   {
     id: "how-do",
     q: "你如何做？",
-    need: /样板|开口|课件|落地|准备|开办|执行|四步|行事历|我在|这句我还没对上/,
+    need: /样板|开口|课件|落地|准备|开办|执行|四步|行事历|我在|这句我还没对上|你是在问/,
     forbid: /后半句没听清|请再说具体一点，我结合资料答您/
   },
   // P0：闭题未命中时禁止经营万能句冒充
   {
     id: "diff-no-operate",
     q: "全园美语和其他课程有什么区别？",
-    need: /这句我还没对上|区别|不是单一|生态|四端|体系/,
+    need: /这句我还没对上|你是在问|区别|不是单一|生态|四端|体系/,
     forbid: /把美语做成家长看得见的选择理由|先护收费盘面再做增量/
   },
   {
     id: "confidence-no-operate",
     q: "我有信心办好吗？",
-    need: /这句我还没对上|这句我没抓稳|请再说具体一点|信心|行事历|意愿|样板班/,
+    need: /这句我还没对上|你是在问|这句我没抓稳|请再说具体一点|信心|行事历|意愿|样板班/,
     forbid: /把美语做成家长看得见的选择理由|先护收费盘面再做增量|样板班开口实拍/
+  },
+  {
+    id: "when-earn",
+    q: "引入课程后多久可以赚钱？",
+    need: /个月|不保证/,
+    forbid: /后半句没听清|引入后盈利算三笔账/
+  },
+  {
+    id: "when-profit",
+    q: "我花39,000引入课程后，多久可以盈利？",
+    need: /个月|不保证/,
+    forbid: /后半句没听清|引入后盈利算三笔账/
+  },
+  {
+    id: "how-turnaround",
+    q: "如何扭亏为盈？",
+    need: /三笔账|测算|一点八/,
+    forbid: /后半句没听清|一到两个月|三到六个月/
+  },
+  {
+    id: "statement-turnaround",
+    q: "课程让我的园所扭亏为盈！",
+    need: /听到了|怎么做|请把问题说完整/,
+    forbid: /引入后盈利算三笔账|三笔账是延伸|样板班开口实拍/
+  },
+  {
+    id: "roi-confirm",
+    q: "能回本吗？",
+    need: /不保证|回本|参考测算/,
+    forbid: /引入后盈利算三笔账|一到两个月/
+  },
+  {
+    id: "show-how",
+    q: "如何做学期成果展？",
+    need: /成果展|开放日|开口|家长/,
+    forbid: /后半句没听清/
+  },
+  {
+    id: "show-form",
+    q: "学期成果展示个什么形式？",
+    need: /成果展|开放日|开口|家长/,
+    forbid: /后半句没听清/
+  },
+  {
+    id: "visible",
+    q: "怎么做可以让家长看得见？",
+    need: /看得见|开口|测评|成果展/,
+    forbid: /写死的标准|先对齐/
+  },
+  {
+    id: "month-assess",
+    q: "月度测评如何实施？",
+    need: /测评|报告|机试/,
+    forbid: /定班|0到1|写死的标准/
+  },
+  {
+    id: "open-video",
+    q: "第一次开口视频怎么做？",
+    need: /十秒|开口/,
+    forbid: /写死的标准/
+  },
+  {
+    id: "ability-probe",
+    q: "他不具备这个能力怎么办？",
+    need: /能力/,
+    forbid: /写死的标准|拍十秒|定班/
+  },
+  {
+    id: "join-conditions",
+    q: "我们校园想要加入全园美语系统，要有什么条件？",
+    need: /投影|园长|训练/,
+    forbid: /怎么收费|你是说/
+  },
+  {
+    id: "too-expensive",
+    q: "太贵了，我们现在经营都困难，都没什么生源了，一下子要我付39000，我感觉很困难，有什么好办法没有？",
+    need: /收益保障|每学期/,
+    forbid: /家长看得见的选择理由/
   }
 ];
 
@@ -92,8 +170,61 @@ async function main() {
       console.log(`OK   ${c.id} [${r.arkMode}] :: ${answer.slice(0, 56)}`);
     }
   }
-  console.log(`[smoke-scene-faq] ${pass}/${cases.length}`);
-  process.exit(pass === cases.length ? 0 : 1);
+
+  const follow = createMeetingSession("smoke_ability_follow");
+  follow.mode = "HA_ASK";
+  follow.haLockedUntil = Date.now() + 120000;
+  await runMeetingAnalysis("会场: 他不具备这个能力怎么办？", DEFAULT_AGENDA, {
+    agentState: follow,
+    meetingState: follow,
+    trigger: "wake",
+    forceRule: true
+  });
+  const r2 = await runMeetingAnalysis("会场: 不会做阅读测评", DEFAULT_AGENDA, {
+    agentState: follow,
+    meetingState: follow,
+    trigger: "wake",
+    forceRule: true
+  });
+  const second = String(r2.interventionText || r2.fullAnswer || r2.spokenPrefix || "");
+  const followOk = /报告|机试|十秒|系统出/.test(second) && !/写死的标准|不定场次|你是在问/.test(second);
+  if (followOk) {
+    pass += 1;
+    console.log(`OK   ability-follow [${r2.arkMode}] :: ${second.slice(0, 56)}`);
+  } else {
+    console.log(`FAIL ability-follow :: ${second.slice(0, 80)}`);
+  }
+
+  const listen = detectAgentCommand("听我说。");
+  if (listen.command === "INTERRUPT") {
+    pass += 1;
+    console.log("OK   bare-listen-cmd");
+  } else {
+    console.log(`FAIL bare-listen-cmd :: ${listen.command}`);
+  }
+
+  const reaskState = createMeetingSession("smoke_reask");
+  reaskState.mode = "HA_ASK";
+  reaskState.haLockedUntil = Date.now() + 120000;
+  reaskState.lastOpenAsk = "一年39000太贵了，我们现在经营困难，付不起这么多钱。";
+  reaskState.lastOpenAskAt = Date.now();
+  const reask = await runMeetingAnalysis("会场: 大智回复我刚才的问题。", DEFAULT_AGENDA, {
+    agentState: reaskState,
+    meetingState: reaskState,
+    trigger: "wake",
+    forceRule: true
+  });
+  const reaskText = String(reask.interventionText || reask.fullAnswer || "");
+  if (/收益保障|每学期/.test(reaskText) && !/你想先听哪一步/.test(reaskText)) {
+    pass += 1;
+    console.log(`OK   reask-expensive :: ${reaskText.slice(0, 56)}`);
+  } else {
+    console.log(`FAIL reask-expensive :: ${reaskText.slice(0, 80)}`);
+  }
+
+  const total = cases.length + 3;
+  console.log(`[smoke-scene-faq] ${pass}/${total}`);
+  process.exit(pass === total ? 0 : 1);
 }
 
 main().catch((e) => {

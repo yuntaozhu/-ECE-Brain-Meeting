@@ -25,7 +25,7 @@ const {
   formatAskRecap,
   agendaRedirectLine
 } = require("../internal/scripts.cjs");
-const { decideSpeak } = require("../agent/relevance.cjs");
+const { decideSpeak, repeatLine } = require("../agent/relevance.cjs");
 
 function isExplicitAgendaAsk(q) {
   return /(会议主题|开什么会|今天.*主题|这次会议的主题|今天开什么会)/.test(q);
@@ -78,10 +78,9 @@ function kbBiteAnswer(askText) {
     hits = [];
   }
   const d = decideSpeak({ ask: q, hits, intent, script });
-  if (d.action === "answer" && d.speak && !looksLikeAgendaMenu(d.speak)) {
-    return leadClause(d.speak, 90);
-  }
-  return "";
+  if (!d.speak || looksLikeAgendaMenu(d.speak)) return "";
+  if (d.action === "answer") return leadClause(d.speak, 90);
+  return d.speak;
 }
 
 /**
@@ -136,8 +135,8 @@ function chatFallbackFor(askText, state, agenda, opts = {}) {
   if (opts.allowAgendaRedirect === true && opts.forceAgenda) {
     return agendaRedirectLine(agenda || DEFAULT_AGENDA);
   }
-  // P0：无对齐命中时澄清，禁止「三笔账/经营万能句」冒充任意问句兜底
-  return CLARIFY_LINE;
+  // 无对齐命中时走设计算法的澄清或复述，不再用议程菜单句
+  return kb || repeatLine();
 }
 
 module.exports = { chatFallbackFor, kbBiteAnswer };

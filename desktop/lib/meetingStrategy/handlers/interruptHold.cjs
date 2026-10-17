@@ -9,7 +9,7 @@ async function handle(ctx) {
   let { lastFloor } = ctx;
 
   if (cmd.command === "INTERRUPT" || (cmd.interrupt && cmd.holdToEnd)) {
-    state.holdToEnd = false;
+    state.holdToEnd = true;
     state.interrupted = false;
     state.interruptAt = Date.now();
     state.interruptBuffer = null;
@@ -17,7 +17,7 @@ async function handle(ctx) {
     state.listenNotes = [];
     state.haLockedUntil = 0;
     S.setMode(state, S.INTERACTION_MODE.IDLE_LISTEN);
-    S.setLifecycle(state, state.meetingOpen ? S.MEETING_LIFE.SILENT : S.MEETING_LIFE.OFF);
+    S.setLifecycle(state, state.meetingOpen ? S.MEETING_LIFE.HOLD : S.MEETING_LIFE.OFF);
     S.debugLog.info("Strategy", "听我说：停口播并旁听", {
       floor: lastFloor.slice(0, 40)
     });
@@ -94,6 +94,20 @@ async function handle(ctx) {
       modeChange: S.INTERACTION_MODE.HH,
       kbStatus
     });
+  }
+
+  const release =
+    cmd.command === "SUMMARY" ||
+    cmd.command === "CONFIRM_SUMMARY" ||
+    cmd.command === "WAKE" ||
+    cmd.command === "WAKE_ASK" ||
+    cmd.command === "WAKE_TALK";
+  if (state.holdToEnd && release) {
+    state.holdToEnd = false;
+    state.interrupted = false;
+    state.holdFloorLines = [];
+    S.debugLog.info("Strategy", "占麦中放行口令", { command: cmd.command, floor: lastFloor.slice(0, 40) });
+    return null;
   }
 
   if (state.holdToEnd && !cmd.sayDone) {

@@ -84,10 +84,13 @@ function detectAgentCommand(lastFloor) {
     /停止大智|大智休息|大智闭嘴|大智先听着|谢谢李老师|停止李老师|谢谢大智/.test(t) ||
     /谢谢大智|停止大智|大智休息|大智闭嘴|大智先听着/.test(full);
 
+  const bareInterrupt = (s) => /^(大智[，,]?)?(听我说|你听我说)[。.!！？?]*$/.test(clauseBare(s));
   const interrupt =
     /大智[，,\s]*(听我说|先听我说|你先听|先别说)/.test(t) ||
     /你先听我说完|请听我说完|先听我说|听我说完|大智听我说/.test(t) ||
-    /大智[，,\s]*(听我说|先听我说|你先听|先别说)|大智听我说|请听我说完/.test(full);
+    /大智[，,\s]*(听我说|先听我说|你先听|先别说)|大智听我说|请听我说完/.test(full) ||
+    scan.some(bareInterrupt) ||
+    bareInterrupt(full);
 
   const continueSpeak =
     !stop &&
@@ -110,6 +113,9 @@ function detectAgentCommand(lastFloor) {
   const continueHH = /你们继续|继续讨论|大智旁听|回到讨论/.test(t);
   const holdToEnd = interrupt;
   const sayDone = /我说完了|讲完了|说完了/.test(t);
+  const reask =
+    /回复我刚才|回到刚才|回到我刚才|刚才的问题|回复刚才/.test(t) ||
+    /回复我刚才|回到刚才|刚才的问题/.test(full);
   const presence = named && /(在吗|听得到|有没有在听|你在吗)/.test(t);
   const askMode =
     /大智\s*(咨询|问答|请教)|请教大智|问你一下|给我个标准|标准答案|怎么收费|保底怎么算/.test(t) ||
@@ -127,6 +133,7 @@ function detectAgentCommand(lastFloor) {
   else if (stop) command = "STOP";
   else if (interrupt) command = "INTERRUPT";
   else if (continueSpeak) command = "CONTINUE";
+  else if (reask) command = "REASK";
   else if (pauseLog) command = "PAUSE_LOG";
   else if (resumeLog) command = "RESUME_LOG";
   else if (summary) command = "SUMMARY";

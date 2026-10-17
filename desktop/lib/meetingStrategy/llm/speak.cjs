@@ -116,7 +116,8 @@ async function speakViaChat(system, userTask, opts, a2aTrace) {
       }
     }
     clearThinking();
-    if (opts.signal?.aborted || (res.error === "aborted" && opts.signal?.aborted)) {
+    // 仅父级 signal（新巡检/停听会）才算中止；请求定时器 abort 一律走兜底
+    if (opts.signal?.aborted) {
       return {
         answer: "",
         speakTail: "",
@@ -142,11 +143,16 @@ async function speakViaChat(system, userTask, opts, a2aTrace) {
       arkError = res.error || "Ark HTTP 403";
       throw new Error(arkError);
     }
-    if (res.ok && res.content) answer = stripIntroBoilerplate(clipSpeak(res.content, opts.maxLen || 100));
-    else throw new Error(res.error || "empty");
+    if (res.ok && res.content) {
+      answer = stripIntroBoilerplate(clipSpeak(res.content, opts.maxLen || 100));
+    } else if (res.error === "aborted") {
+      throw new Error("timeout");
+    } else {
+      throw new Error(res.error || "empty");
+    }
   } catch (err) {
     clearThinking();
-    if (opts.signal?.aborted || err?.message === "aborted" || err?.name === "AbortError") {
+    if (opts.signal?.aborted) {
       return {
         answer: "",
         speakTail: "",
@@ -162,7 +168,7 @@ async function speakViaChat(system, userTask, opts, a2aTrace) {
     arkError = String(err?.message || err);
     const is403 = /403/.test(arkError);
     debugLog.warn("Strategy", is403 ? "ark_http_403_fallback" : "对话回退", { error: arkError });
-    // 403 / 失败：只用调用方已对齐的 fallback；空串交给 MeetingAgent 澄清
+    // 超时 / 403 / 失败：只用调用方已对齐的 fallback；空串交给 MeetingAgent
     answer = String(opts.fallback || "").trim();
   }
   return {

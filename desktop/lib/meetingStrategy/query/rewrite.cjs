@@ -122,7 +122,7 @@ function rewriteQueryRuleBased(opts = {}) {
   const skipFollowGlue =
     opts.skipFollowGlue === true ||
     isCasualChitchat(lastFloor) ||
-    /谢谢大智|停止大智|听我说|请继续/.test(lastFloor);
+    /谢谢大智|停止大智|听我说|请继续|回复刚才|回到刚才|刚才的问题/.test(lastFloor);
   let cleaned = stripEchoPrefix(lastFloor, lastHost);
   cleaned = normalizeDazhiAliases(cleaned);
   // 长粘连：优先用 peel 后的唤醒正文
