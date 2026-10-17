@@ -3,6 +3,7 @@ desktop/release/
 desktop/logs/
 desktop/knowledge/.rag-index.json
 desktop/knowledge/.compiled-kb.json
+desktop/knowledge/decisions/
 build/
 dist/
 coverage/

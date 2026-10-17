@@ -82,7 +82,8 @@ function tryLocalAnswer(ctx) {
     intent,
     script,
     prevDesign: state?.lastDesign || null,
-    lastHost
+    lastHost,
+    meetingId: state?.meetingId || ""
   });
   const definitionMismatch =
     bayes.action === "answer" && S.isDefinitionSpeak(bayes.speak) && !S.rx("faq", "defMark").test(askText);
@@ -122,7 +123,8 @@ function tryLocalAnswer(ctx) {
           hits: (retrieved?.hits || []).filter((h) => !S.isDefinitionSpeak(h.speak || h.snippet)),
           intent,
           script,
-          prevDesign: state?.lastDesign || null
+          prevDesign: state?.lastDesign || null,
+          meetingId: state?.meetingId || ""
         }).speak
       : bayes.speak;
     const line = String(spoken || bayes.speak || "").trim();

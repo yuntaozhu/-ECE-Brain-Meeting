@@ -24,7 +24,8 @@ function speakDecision(intentObj, askText, retrieval, state, lastHost) {
     intent: intentObj,
     script: intentSoftAnswer(intentObj, askText),
     prevDesign: state?.lastDesign || null,
-    lastHost: lastHost || ""
+    lastHost: lastHost || "",
+    meetingId: state?.meetingId || ""
   });
 }
 
@@ -496,6 +497,33 @@ async function runMeetingAgent(ctx) {
 
   if (state && grounded.design) state.lastDesign = grounded.design;
 
+  let shadowDraft = null;
+  if (chat && chat.answer) {
+    try {
+      const { load } = require("../../knowledge/schemaStore.cjs");
+      const { extractWeightedPolarityBigrams, computeAlignmentAndExtra } = require("../../text/universalOperators.cjs");
+      const checks = load().hyper.shadowFallbackChecks || {};
+      const range = Array.isArray(checks.charLengthRange) ? checks.charLengthRange : [45, 95];
+      const draft = String(chat.answer || "");
+      const chars = draft.replace(/\s+/g, "").length;
+      const terms = Array.isArray(checks.prohibitedAbsoluteTerms) ? checks.prohibitedAbsoluteTerms : [];
+      const absoluteHit = terms.some((word) => word && draft.includes(word));
+      const cardTitle = String(retrievalTitle || retrieval?.hits?.[0]?.title || "");
+      const groundedScore = computeAlignmentAndExtra(
+        extractWeightedPolarityBigrams(draft),
+        extractWeightedPolarityBigrams(cardTitle)
+      );
+      shadowDraft = {
+        shadowLength: { chars, inRange: chars >= Number(range[0]) && chars <= Number(range[1]) },
+        shadowAbsolute: { hit: absoluteHit },
+        shadowGroundingScore: groundedScore.align
+      };
+      S.debugLog.info("Strategy", "兜底影子", shadowDraft);
+    } catch (_) {
+      shadowDraft = null;
+    }
+  }
+
   return {
     shouldIntervene: Boolean(streamed || tail),
     interventionText: tail,
@@ -520,6 +548,7 @@ async function runMeetingAgent(ctx) {
     faqScore: score,
     retrievalTitle,
     fallbackGate,
+    shadowDraft,
     wake: { lastFloor, chatReply: true, rewritten: askText, agent: "MeetingAgent", intent: intentObj.intent }
   };
 }

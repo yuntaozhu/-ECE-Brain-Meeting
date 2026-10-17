@@ -152,6 +152,8 @@ async function replay(cases) {
   let pass = 0;
   const fails = [];
   const actions = {};
+  let shadowCompared = 0;
+  let shadowDiverged = 0;
   console.log("[benchmark] diagnosis");
 
   for (const c of cases) {
@@ -238,10 +240,15 @@ async function replay(cases) {
       lastHost
     });
     actions[d.action] = (actions[d.action] || 0) + 1;
+    if (d.shadow && d.shadow.shadowAction) {
+      shadowCompared += 1;
+      if (d.shadow.isDiverged) shadowDiverged += 1;
+    }
     console.log(diagLine(c.id, d, evaluateSyntacticCompleteness(ask)));
   }
 
   console.log("[benchmark] actions " + Object.entries(actions).map(([k, v]) => `${k}=${v}`).join(" "));
+  console.log(`[benchmark] shadow diverged ${shadowDiverged}/${shadowCompared}`);
   return { pass, total: cases.length, fails };
 }
 

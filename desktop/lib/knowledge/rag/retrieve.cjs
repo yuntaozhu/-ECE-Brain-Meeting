@@ -153,8 +153,17 @@ async function retrieveSemantic(query, topK = 4, opts = {}) {
     return { ...fb, mode: "keyword-fallback" };
   }
 
+  const anchors = Array.isArray(index.negativeAnchors) ? index.negativeAnchors : [];
+  let maxNegative = null;
+  for (const anchor of anchors) {
+    if (!anchor?.vec) continue;
+    const value = cosine(qVec, anchor.vec);
+    maxNegative = maxNegative == null ? value : Math.max(maxNegative, value);
+  }
   let scored = index.chunks.map((c) => {
-    let score = cosine(qVec, c.vec);
+    const rawCosine = cosine(qVec, c.vec);
+    const shadowNetCosine = maxNegative == null ? null : rawCosine - maxNegative;
+    let score = rawCosine;
     if (c.source === "wiki") score += 0.05;
     if (
       opts.preferBiz &&
@@ -165,7 +174,7 @@ async function retrieveSemantic(query, topK = 4, opts = {}) {
       score += 0.03;
     }
     score += titleOverlapBoost(q, c.title);
-    return { ...c, score };
+    return { ...c, score, shadowNetCosine };
   });
   scored.sort((a, b) => b.score - a.score);
   scored = scored.slice(0, Math.max(1, topK + 2));
@@ -225,7 +234,8 @@ async function retrieveSemantic(query, topK = 4, opts = {}) {
       score: Math.round((h.score || 0) * 1000) / 1000,
       snippet: String(h.snippet || "").slice(0, 400),
       speak: h.speak || "",
-      source: h.source
+      source: h.source,
+      shadowNetCosine: h.shadowNetCosine == null ? null : h.shadowNetCosine
     })),
     preview,
     fromFaq,

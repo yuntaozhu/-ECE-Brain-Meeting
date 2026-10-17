@@ -339,7 +339,7 @@ function clarifyCommitOk(speak, bodies) {
  *
  * @returns {{ action: "answer"|"clarify"|"repeat", speak: string, reason: string, posterior?: number, title?: string, hypotheses?: object[], eig?: number, design?: object, downgraded?: boolean }}
  */
-function decideCore({ ask, hits, intent, script, prevDesign, lastHost } = {}) {
+function decideCore({ ask, hits, intent, script, prevDesign, lastHost, measure, priorScale } = {}) {
   const focused = focusAsk(ask);
   if (isTruncatedAsk(focused)) {
     return {
@@ -374,7 +374,9 @@ function decideCore({ ask, hits, intent, script, prevDesign, lastHost } = {}) {
   const list = (hits || []).filter((h) => h && (h.title || h.snippet || h.speak));
 
   const markovKey = prevDesign && (prevDesign.hypothesisId || prevDesign.type);
-  const markov = (cfg.markov && (cfg.markov[markovKey] || cfg.markov.default)) || { absent: 1, script: 1, doc: 1 };
+  const markov = priorScale
+    ? priorScale
+    : (cfg.markov && (cfg.markov[markovKey] || cfg.markov.default)) || { absent: 1, script: 1, doc: 1 };
   const absentScale = Number(markov.absent) || 1;
   const scriptScale = Number(markov.script) || 1;
   const docScale = Number(markov.doc) || 1;
@@ -395,8 +397,13 @@ function decideCore({ ask, hits, intent, script, prevDesign, lastHost } = {}) {
     const h = list[i];
     const title = String(h.title || "");
     const view = bestTitleView(focused, title, model);
-    const a = view.align;
-    const e = view.extra;
+    let a = view.align;
+    let e = view.extra;
+    if (typeof measure === "function") {
+      const weighed = measure(focused, view.segment || title) || {};
+      if (Number.isFinite(weighed.align)) a = weighed.align;
+      if (Number.isFinite(weighed.extra)) e = weighed.extra;
+    }
     const ba = cfg.betaAlignYes;
     const bn = cfg.betaAlignNo;
     const ea = cfg.betaExtraYes;
@@ -742,10 +749,46 @@ function scriptLikelihoodScale(intent, cfg) {
   return Math.max(floor, Math.min(1, spec / ref));
 }
 
+function winnerBucketOf(result) {
+  if (!result || (result.action !== "answer" && result.reason !== "no_evidence")) return "";
+  if (result.reason === "script" && result.action === "answer") return "script";
+  if (result.reason === "posterior" && result.action === "answer") return "doc";
+  if (result.reason === "no_evidence") return "absent";
+  return "";
+}
+
+function winnerIdOf(result, intent) {
+  if (!result) return "";
+  if (result.reason === "script") return String(intent?.intent || "script");
+  return String(result.title || "");
+}
+
+function weightedMeasure(ask, segment) {
+  const { extractWeightedPolarityBigrams, computeAlignmentAndExtra } = require("../../text/universalOperators.cjs");
+  const scored = computeAlignmentAndExtra(
+    extractWeightedPolarityBigrams(ask),
+    extractWeightedPolarityBigrams(segment)
+  );
+  return { align: scored.align, extra: scored.extra };
+}
+
+function shadowPriorScale(prevDesign) {
+  const bucket = prevDesign && prevDesign.winnerBucket;
+  const table = require("../../knowledge/schemaStore.cjs").load().hyper.shadowMarkov;
+  const row = bucket && table && table[bucket];
+  if (!row) return { absent: 1, script: 1, doc: 1 };
+  return {
+    absent: Number(row.absent) || 1,
+    script: Number(row.script) || 1,
+    doc: Number(row.doc) || 1
+  };
+}
+
 function attachShadow(args, result) {
   try {
     const { diagnoseShadow } = require("../../knowledge/compiler.cjs");
     const { debugLog } = require("../../platform");
+    const { appendDecision } = require("../../runtime/decisionLog.cjs");
     const shadow = diagnoseShadow({
       ask: args && args.ask,
       title: result && result.title,
@@ -753,16 +796,61 @@ function attachShadow(args, result) {
       align: result && result.align,
       extra: result && result.extra
     });
-    if (result && typeof result === "object") result.shadow = shadow;
-    debugLog.info("Strategy", "编译影子", shadow);
+    const bucket = winnerBucketOf(result);
+    const formalId = winnerIdOf(result, args && args.intent);
+    result.winnerBucket = bucket;
+    if (result.design) result.design.winnerBucket = bucket;
+    let shadowAction = "";
+    let shadowWinner = "";
+    let isDiverged = false;
+    try {
+      const alt = decideCore({
+        ask: args && args.ask,
+        hits: args && args.hits,
+        intent: args && args.intent,
+        script: args && args.script,
+        prevDesign: args && args.prevDesign,
+        lastHost: args && args.lastHost,
+        measure: weightedMeasure,
+        priorScale: shadowPriorScale(args && args.prevDesign)
+      });
+      shadowAction = alt.action || "";
+      shadowWinner = winnerIdOf(alt, args && args.intent);
+      isDiverged = shadowAction !== result.action || shadowWinner !== formalId;
+    } catch (_) {
+      shadowAction = "";
+      shadowWinner = "";
+      isDiverged = false;
+    }
+    const intent = args && args.intent;
+    const report = {
+      ...shadow,
+      winnerBucket: bucket,
+      formalAction: result.action,
+      formalWinnerId: formalId,
+      shadowAction,
+      shadowWinner,
+      isDiverged,
+      doubaoConfidence: intent && intent.source === "llm" ? Number(intent.confidence) || 0 : null
+    };
+    result.shadow = report;
+    debugLog.info("Strategy", "编译影子", report);
+    appendDecision(args && args.meetingId, {
+      winnerBucket: bucket,
+      intent: intent && intent.intent ? String(intent.intent) : "",
+      doubaoConfidence: report.doubaoConfidence,
+      action: result.action,
+      winnerId: formalId,
+      reason: result.reason || ""
+    });
   } catch (_) {
     /* 影子失败不影响开口 */
   }
 }
 
 function decideSpeak(args) {
-  const result = decideCore(args);
-  attachShadow(args, result);
+  const result = decideCore(args || {});
+  attachShadow(args || {}, result);
   return result;
 }
 

@@ -89,5 +89,10 @@
   "sharedTopicMin": 2,
   "sharedTopicMax": 6,
   "genericTopicMax": 3,
-  "groundedIntents": ["loss_fear", "roi_confirm", "profit_how", "how_calc", "parent_reason", "alternate_path", "operate", "teacher", "rollout", "hq_support", "pricing_follow"]
+  "groundedIntents": ["loss_fear", "roi_confirm", "profit_how", "how_calc", "parent_reason", "alternate_path", "operate", "teacher", "rollout", "hq_support", "pricing_follow"],
+  "shadowFallbackChecks": {
+    "charLengthRange": [45, 95],
+    "prohibitedAbsoluteTerms": ["一定能", "保证招满", "包赚", "必然盈利", "绝对不会亏"]
+  },
+  "negativeAnchors": ["今天天气怎么样", "中午吃什么", "嗯嗯好的", "哈哈", "你在吗"]
 }

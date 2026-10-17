@@ -123,12 +123,26 @@ async function ensureIndex(opts = {}) {
       state.memIndex = null;
       return null;
     }
+    let negativeAnchors = [];
+    try {
+      const texts = require("../schemaStore.cjs").load().hyper.negativeAnchors || [];
+      const usable = texts.map((t) => String(t || "").trim()).filter(Boolean);
+      if (usable.length && apiKey() && !state.embedUnavailable) {
+        const vecs = await embedTexts(usable, { signal: opts.signal, concurrency: 2 });
+        if (vecs && vecs.length === usable.length) {
+          negativeAnchors = usable.map((text, i) => ({ text, vec: vecs[i] }));
+        }
+      }
+    } catch (_) {
+      negativeAnchors = [];
+    }
     const index = {
       model,
       endpoint: EMBED_URL,
       mtimeKey,
       builtAt: Date.now(),
-      chunks: vectors
+      chunks: vectors,
+      negativeAnchors
     };
     state.memIndex = index;
     saveIndexToDisk(index);
