@@ -11,8 +11,7 @@ const {
   isAnswerable,
   repeatLine,
   focusAsk,
-  localAsk,
-  hostRest
+  offlineFollow
 } = require("./relevance.cjs");
 const { decideSpeak } = require("../decideSpeak.cjs");
 const { validateSlots } = require("../../text/universalOperators.cjs");
@@ -92,7 +91,7 @@ function knowledgeSpeakLine(intentObj, askText, retrieval, state, lastHost) {
   if (d.speak) return S.clipUtterance(d.speak, 160);
   if (d.design?.hypothesisId === "probe") {
     const focus = String(d.design.segments?.[0] || "");
-    const line = hostRest(lastHost) || localAsk(focus);
+    const line = offlineFollow(askText, lastHost, focus);
     return S.clipUtterance(line, 160);
   }
   return "";
@@ -105,7 +104,7 @@ function pickGrounded(intentObj, askText, retrieval, live, state, lastHost) {
     if (!d.speak && d.design?.hypothesisId === "probe") {
       if (live && d.design.depth === "final") return { text: "", decision: "compose", design: d.design, decisionObj: d };
       const focus = String(d.design.segments?.[0] || "");
-      const text = hostRest(lastHost) || localAsk(focus);
+      const text = offlineFollow(askText, lastHost, focus);
       return { ...base, text, decision: d.action };
     }
     return { ...base, decision: d.action };
@@ -374,7 +373,7 @@ async function runMeetingAgent(ctx) {
   let fallbackGate = "";
   const probeTurn = grounded.design?.hypothesisId === "probe";
   if (doubaoSpeak && !validateSlots(askText, finalAnswer)) {
-    const local = hostRest(lastHost) || localAsk(probeFocus);
+    const local = offlineFollow(askText, lastHost, probeFocus);
     const kbOk = knowledgeLine && validateSlots(askText, knowledgeLine) ? knowledgeLine : "";
     finalAnswer = kbOk || local || repeatLine();
     doubaoSpeak = false;

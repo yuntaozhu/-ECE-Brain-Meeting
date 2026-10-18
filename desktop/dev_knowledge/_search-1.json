@@ -1,0 +1,39 @@
+﻿{
+    "success":  true,
+    "data":  {
+                 "web":  [
+                             {
+                                 "url":  "https://arxiv.org/html/1904.00679v2",
+                                 "title":  "Default Bayesian Model Selection of Constrained Multivariate Normal ...",
+                                 "description":  "This paper presents a default Bayes factor for this model selection problem. The default Bayes factor is based on generalized fractional Bayes methodology ...",
+                                 "position":  1
+                             },
+                             {
+                                 "url":  "https://arxiv.org/html/2510.00169",
+                                 "title":  "Bayesian Model Comparison and Significance: Widespread Errors ...",
+                                 "description":  "We review the standard Bayesian interpretation of the Bayes factor as an odds ratio and recommend its use in conjunction with the Akaike ...",
+                                 "position":  2
+                             },
+                             {
+                                 "url":  "https://arxiv.org/abs/2608.29154",
+                                 "title":  "[2608.29154] Stochastic Bayes factors: why, when, and how - arXiv",
+                                 "description":  "Abstract:The Bayes factor (BF) is a central tool in Bayesian hypothesis testing and model selection, yet its practical use is often challenged.",
+                                 "position":  3
+                             },
+                             {
+                                 "url":  "https://arxiv.org/html/2312.05411v1",
+                                 "title":  "Deep Bayes Factors - arXiv",
+                                 "description":  "We propose a deep learning estimator of the Bayes factor based on simulated data from two competing models using the likelihood ratio trick.",
+                                 "position":  4
+                             },
+                             {
+                                 "url":  "https://en.wikipedia.org/wiki/Bayes_factor",
+                                 "title":  "Bayes factor - Wikipedia",
+                                 "description":  "The Bayes factor is a ratio of two competing statistical models represented by their evidence, and is used to quantify the support for one model over the other.",
+                                 "position":  5
+                             }
+                         ]
+             },
+    "creditsUsed":  2,
+    "id":  "01a14d14-750c-764b-86bf-098033fc166f"
+}

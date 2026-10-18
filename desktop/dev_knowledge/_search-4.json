@@ -1,0 +1,39 @@
+﻿{
+    "success":  true,
+    "data":  {
+                 "web":  [
+                             {
+                                 "url":  "https://arxiv.org/html/2406.00697v1",
+                                 "title":  "Topic Modeling for Short Texts with Large Language Models - arXiv",
+                                 "description":  "# Topic Modeling for Short Texts with Large Language Models\n## Appendix D Limitations\nWe do not consider it matters whether GPT-3.5 and GPT-4 have seen these datasets in the pre-training; since topic modeling is an unsupervised task, they can not utilize their knowledge about these datasets in our experiment. Our approaches perform promisingly in a practical common situation where the number of topics is about 10 but are less reliable with a larger number of topics, such as 50 or 100, due to the difficulty of controlling the LLM’s output format.\n\n| Subset Size | Cv | TU | DC | Fa |\n|-|-|-|-|-|\n| 250250 | 0.531 | 0.936 | 0.241 | 1.000 |\n| 500500 | 0.572 | 0.896 | 0.241 | 1.000 |\n| 10001000 | 0.571 | 0.960 | 0.213 | 1.000 |\n\n| Subset Size | Cv | TU | DC | Fa |\n|-|-|-|-|-|\n| 250250 | 0.524 | 0.976 | 0.198 | 0.992 |\n| 500500 | 0.529 | 0.992 | 0.193 | 0.976 |\n| 10001000 | 0.562 | 0.984 | 0.197 | 0.984 |\n\n| Model | Examples of topics |\n|-|-|\n| LDA | xbox microsoft game patriot bronco |",
+                                 "position":  1
+                             },
+                             {
+                                 "url":  "https://arxiv.org/html/2507.08498v1",
+                                 "title":  "Semantic-Augmented Latent Topic Modeling with LLM-in-the-Loop",
+                                 "description":  "it faces two significant limitations: (1) semantically uninformed initialization, which slows convergence and yields incoherent early topics … ...",
+                                 "position":  2
+                             },
+                             {
+                                 "url":  "https://rpubs.com/jmhardaw/eci588-final-project",
+                                 "title":  "Short Text Topic Modeling: Article Titles and Taglines - RPubs",
+                                 "description":  "The LDA model requires the text be presented in the form of a tidy DTM, where each term occupies a single cell according to a unique and ...",
+                                 "position":  3
+                             },
+                             {
+                                 "url":  "https://arxiv.org/html/2403.16248v1",
+                                 "title":  "Large Language Models Offer an Alternative to the Traditional ... - arXiv",
+                                 "description":  "classic topic modelling approaches (e.g., LDA) have certain drawbacks, such as the lack of semantic understanding and the presence of ...",
+                                 "position":  4
+                             },
+                             {
+                                 "url":  "https://stackoverflow.com/questions/24910220/can-topic-models-be-used-on-a-small-text",
+                                 "title":  "Can topic models be used on a small text? - Stack Overflow",
+                                 "description":  "Yes, it\u0027s possible. Treat every sentence as a document in a standard topic modelling technique such as Latent Dirichlet Allocation (LDA).",
+                                 "position":  5
+                             }
+                         ]
+             },
+    "creditsUsed":  2,
+    "id":  "01a14d14-83f9-731a-9133-b4e2fe5b89ea"
+}

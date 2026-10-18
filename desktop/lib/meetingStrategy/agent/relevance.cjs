@@ -5,7 +5,7 @@
  * - Wiki 关键词（queryWiki）强命中约 ≥5，语义检索里会被抬到 0.9 附近
  * - 纯向量余弦：中文无关句也常在 0.6 上下，作答线取 0.62，只用于没有 Wiki/FAQ 强命中时
  */
-const { bestTitleView, buildDf, alignScore } = require("../../knowledge/align.cjs");
+const { bestTitleView, buildDf, alignScore, titleSegments } = require("../../knowledge/align.cjs");
 const { isDefinitionSpeak } = require("../advisors/speakGuards.cjs");
 const { load, rx, words, hp, fill } = require("../../knowledge/schemaStore.cjs");
 
@@ -307,13 +307,58 @@ function hostCards() {
   return hostCardPack;
 }
 
+function unspokenClauses(speak, host) {
+  const seen = plainChars(host);
+  return String(speak || "")
+    .split(/[。！？；]/)
+    .map((s) => s.trim())
+    .filter((s) => {
+      const plain = plainChars(s);
+      return plain.length >= H().hostClauseMin && !seen.includes(plain);
+    });
+}
+
+/** 分句或标题问法对本句的最高对齐。比较前去掉疑问骨架，避免骨架词把别的卡抬过闭题线。 */
+function peelMeta(text) {
+  let s = String(text || "");
+  const keys = [...words("operators", "dropWords"), ...words("operators", "topicDrop")]
+    .filter((w) => w && String(w).length >= 2)
+    .sort((a, b) => b.length - a.length);
+  for (const w of keys) {
+    if (s.includes(w)) s = s.split(w).join("");
+  }
+  return s;
+}
+
+function bestAskAlign(ask, texts, model) {
+  const q = peelMeta(ask);
+  let score = -1;
+  let text = "";
+  for (const row of texts || []) {
+    const s = alignScore(q, peelMeta(row), model);
+    if (s > score) {
+      score = s;
+      text = row;
+    }
+  }
+  return { score: score < 0 ? 0 : score, text };
+}
+
+function cardOffer(ask, card, host, model) {
+  const clause = bestAskAlign(ask, unspokenClauses(card.speak, host), model);
+  const titled = bestAskAlign(ask, titleSegments(card.title), model);
+  return { card, clause, titled, score: Math.max(clause.score, titled.score) };
+}
+
 /**
- * 上一句已经播过具体资料、本句又是完整新问，且没有别的卡压过这张卡时，
- * 从对齐最高的那张卡里取一段尚未出现在上一句里的分句。
- * 新卡仍走原有作答线，这里不改阈值。
+ * 上一句已经播过资料、本句又是完整新问时，只在分句真正对上本句时往下念。
+ * 别的卡的分句或标题达到闭题对齐且更高，就改念那张卡。
+ * 全场都低于闭题对齐时，才继承上一张卡里还没念过的分句。
+ * 不作答线，不改阈值。
  */
 function unspokenProgress(ask, host, ranked) {
   const pack = hostCards();
+  const floor = H().closedAlignMin;
   let anchor = null;
   let hostAlign = -1;
   for (const card of pack.cards) {
@@ -324,28 +369,50 @@ function unspokenProgress(ask, host, ranked) {
     }
   }
   if (!anchor || hostAlign <= 0) return null;
-  const anchorAsk = alignScore(ask, anchor.speak, pack.model);
-  const anchorPlain = plainChars(anchor.speak);
+  const anchorOffer = cardOffer(ask, anchor, host, pack.model);
+  let best = anchorOffer.score;
+  let winner = null;
+  const pool = pack.cards.slice();
   for (const row of ranked || []) {
     const speak = String(row.speak || "");
-    if (!speak || plainChars(speak) === anchorPlain) continue;
-    if (alignScore(ask, speak, pack.model) > anchorAsk) return null;
+    const title = String(row.title || "");
+    if (!speak || plainChars(speak) === plainChars(anchor.speak)) continue;
+    pool.push({ title, speak });
   }
-  let chosen = "";
-  let chosenAlign = -1;
-  const parts = anchor.speak.split(/[。！？；]/).map((s) => s.trim()).filter(Boolean);
-  for (const clause of parts) {
-    const plain = plainChars(clause);
-    if (plain.length < H().hostClauseMin) continue;
-    if (plainChars(host).includes(plain)) continue;
-    const score = alignScore(ask, clause, pack.model);
-    if (score > chosenAlign) {
-      chosenAlign = score;
-      chosen = clause;
+  for (const card of pool) {
+    if (plainChars(card.speak) === plainChars(anchor.speak)) continue;
+    const offer = cardOffer(ask, card, host, pack.model);
+    if (offer.score > best) best = offer.score;
+    if (offer.score >= floor && offer.score > anchorOffer.clause.score && (!winner || offer.score > winner.score)) {
+      winner = offer;
     }
   }
-  if (!chosen) return null;
-  return { clause: chosen, title: anchor.title };
+  if (winner) {
+    const clause = winner.clause.score >= floor ? winner.clause.text : String(winner.card.speak || "").trim();
+    if (clause) return { clause, title: winner.card.title };
+  }
+  if (anchorOffer.clause.text && (anchorOffer.clause.score >= floor || best < floor)) {
+    return { clause: anchorOffer.clause.text, title: anchor.title };
+  }
+  return null;
+}
+
+/** 豆包未出口时的本地一句。别的卡已经对上本句时，不复读上一句，也不拼焦点套话。 */
+function offlineFollow(ask, lastHost, focus) {
+  const host = usableHost(lastHost);
+  if (host && asksNewQuestion(ask)) {
+    const progressed = unspokenProgress(ask, host, []);
+    if (progressed && progressed.clause) return progressed.clause;
+    const pack = hostCards();
+    const floor = H().closedAlignMin;
+    let top = 0;
+    for (const card of pack.cards) {
+      const offer = cardOffer(ask, card, host, pack.model);
+      if (offer.score > top) top = offer.score;
+    }
+    if (top >= floor) return "";
+  }
+  return hostRest(lastHost) || localAsk(focus);
 }
 
 function boundaryFor(focus) {
@@ -960,5 +1027,6 @@ module.exports = {
   boundaryFor,
   localAsk,
   hostRest,
+  offlineFollow,
   decideSpeak
 };

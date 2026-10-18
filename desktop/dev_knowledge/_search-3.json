@@ -1,0 +1,39 @@
+﻿{
+    "success":  true,
+    "data":  {
+                 "web":  [
+                             {
+                                 "url":  "https://arxiv.org/html/2409.15515v1",
+                                 "title":  "Learning When to Retrieve, What to Rewrite, and How to Respond in ...",
+                                 "description":  "To answer the follow-up question, it is not necessary to retrieve new passages and the LLM should refer back to the previously retrieved ...",
+                                 "position":  1
+                             },
+                             {
+                                 "url":  "https://arxiv.org/html/2502.18860v1",
+                                 "title":  "Exploring Rewriting Approaches for Different Conversational Tasks - arXiv",
+                                 "description":  "In particular, we find that for a conversational question-answering assistant, the query rewriting approach performs best, whereas for a data ...",
+                                 "position":  2
+                             },
+                             {
+                                 "url":  "https://arxiv.org/html/2406.05013v2",
+                                 "title":  "CHIQ: Contextual History Enhancement for Improving Query ...",
+                                 "description":  "We propose a two-step method for query rewriting that relies on open-source language models: enhancing the conversation history and then ...",
+                                 "position":  3
+                             },
+                             {
+                                 "url":  "https://arxiv.org/html/2403.18243v1",
+                                 "title":  "Boosting Conversational Question Answering with Fine-Grained ...",
+                                 "description":  "We expand with several new features compared with existing CQA datasets, including reformulated question, extracted question keyword, retrieved ...",
+                                 "position":  4
+                             },
+                             {
+                                 "url":  "https://www.reddit.com/r/LLMDevs/comments/1epk9c2/rag_answer_follow_up_questions/",
+                                 "title":  "RAG: Answer follow up questions : r/LLMDevs - Reddit",
+                                 "description":  "You can use an llm call to rewrite the query to fit the context. You could try prompting better the query rewriting",
+                                 "position":  5
+                             }
+                         ]
+             },
+    "creditsUsed":  2,
+    "id":  "01a14d14-7efb-743e-b5de-4aeaf4d818d6"
+}

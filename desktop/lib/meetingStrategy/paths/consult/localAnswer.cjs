@@ -4,7 +4,7 @@
  * 出口只消费 decideSpeak 的类型与句子（含经营档），不因 useBiz 跳过澄清/复述/脚本。
  */
 const S = require("./kit.cjs");
-const { isTruncatedAsk, focusAsk, localAsk, hostRest } = require("../../agent/relevance.cjs");
+const { isTruncatedAsk, focusAsk, offlineFollow } = require("../../agent/relevance.cjs");
 const { decideSpeak } = require("../../decideSpeak.cjs");
 
 function hasDoubaoKey() {
@@ -133,7 +133,7 @@ function tryLocalAnswer(ctx) {
       const live = hasDoubaoKey() && !ctx.opts?.forceRule && bayes.design?.depth === "final";
       if (live) return null;
       const focus = String(bayes.design?.segments?.[0] || "");
-      const offline = hostRest(lastHost) || localAsk(focus);
+      const offline = offlineFollow(askText, lastHost, focus);
       if (state && bayes.design) state.lastDesign = bayes.design;
       return S.playAnswer(offline, useBiz ? "BIZ_ANSWER" : "WAKE_ANSWER", state, a2aTrace, kbStatus, qFp, bayes.reason, {
         cacheQuestion: askText
