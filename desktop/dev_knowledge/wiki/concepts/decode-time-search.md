@@ -6,6 +6,15 @@ RAIN、ARGS、Linear Alignment 在生成时改 token 选择或回退。综述把
 ## 取舍
 **不采用。** 会场半双工 + 豆包超时回退；禁止 n=3 竞标、禁止逐词奖励搜索进口播主路径。
 
+## 流程
+
+```mermaid
+flowchart LR
+  A[检索原句] --> B[单次生成]
+  B -->|失败| C[offlineFollow]
+  D[逐词奖励搜索或回退重写] -.->|不进入| B
+```
+
 ## 落点
 - 豆包：单次 `stream:true`，温度 0.35
 - 失败：`offlineFollow` / kb-fallback，不重开搜索环

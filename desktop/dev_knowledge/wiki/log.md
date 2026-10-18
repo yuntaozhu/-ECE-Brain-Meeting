@@ -1,5 +1,18 @@
 # 开发 Wiki 日志
 
+## [2026-10-18] lint | 算法页补公式，流程页补 Mermaid
+
+- 公式：`char-bigram-alignment`、`bayesian-card-selection`、`short-text-event-model`、`markov-smoothing`、`short-text-lda`、`atomic-support-eval`、`clarifying-vs-menu`（EIG）。引擎式子来自 `align.cjs` 与 `relevance.cjs`。
+- 流程：流水线、追问三档、澄清、检索后核对、compose、拒答、解码、问句理解、采样、口吻。
+- schema 概念页模板增加「公式」「流程」。Zhai 平滑式按 PDF 表意重写，不粘贴拆栏的 md。
+
+## [2026-10-18] ingest | 似然/对齐/澄清/拒答六篇 + MarkItDown 全文抽取
+
+- 新增 raw：`mccallum-1998-naive-bayes-event-models.pdf`、`zhai-2001-lm-smoothing-ir.pdf`、`kondrak-2005-ngram-similarity.pdf`、`1907.06554-clarifying-questions-qulac.pdf`、`2006.09462-selective-qa-domain-shift.pdf`、`h05-1126-speech-ir-clarification.pdf`。
+- 概念：`short-text-event-model`、`markov-smoothing`、`char-bigram-alignment`、`clarifying-vs-menu`、`selective-abstention`。
+- 未决：无卡达标时不用菜单句；换卡收回后验比较仍见 `follow-up-interaction`。
+- `raw/md/`：本机 `D:\Anaconda\envs\markitdown` 的 markitdown 无 OCR，24/24 PDF 已抽。`kass-1995` 的 md 只有封面，正文仍以 PDF 为准。
+
 ## [2026-10-18] ingest | 六篇原文献：Bayes factor、LDA、BTM、URIAL、FActScore、ALCE
 
 - 新增 raw：`kass-1995-bayes-factors.pdf`（JSTOR 扫描，刻度表未转写）、`blei-2003-lda.pdf`、`yan-2013-biterm-short-texts.pdf`、`2312.01552-urial-in-context-alignment.pdf`、`2305.14251-factscore.pdf`、`2305.14627-alce-citations.pdf`。

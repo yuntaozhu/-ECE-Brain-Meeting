@@ -8,6 +8,16 @@ URIAL 不用 SFT 或 RLHF。固定系统提示加上少至三条风格例句，�
 
 风格例句用本次检索到的原句。不把 URIAL 的通用助手例句抄进会场，也不为口吻去微调。
 
+## 流程
+
+```mermaid
+flowchart LR
+  R[本次检索原句] --> P[固定 composeNumberRule]
+  P --> L[单次生成]
+  L -->|成功| S[两到三句口播]
+  L -->|超时或槽位失败| F[offlineFollow]
+```
+
 ## 落点
 - `desktop/knowledge/schema/speak-lines.json` → `composeNumberRule`
 - `desktop/lib/meetingStrategy/agent/run.cjs` → `composeSystem`

@@ -6,6 +6,14 @@ QALIGN（Faria、Smith）用 MCMC 在 token 上采样，用来替代会过拟合
 ## 取舍
 **不采用** QALIGN、SMC 和逐词粒子解码。理由是假设单位、单次生成和超时，不是因为这篇论文反对 MCMC。卡片级贝叶斯选择 **已有**；马尔可夫正式表保持全 1；IDF 只在影子。
 
+## 流程
+
+```mermaid
+flowchart LR
+  C[整张 FAQ 卡的后验] --> S[开口]
+  T[token 上的 MCMC 或 SMC] -.->|不进入| S
+```
+
 ## 落点
 - `engine-hyperparams.json` → `markov` 全 1、`posteriorMin` 0.42
 - 影子后验在 `relevance.cjs` attachShadow，不参与开口

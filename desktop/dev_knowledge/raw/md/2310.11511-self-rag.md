@@ -1,0 +1,1564 @@
+Preprint.
+| SELF-RAG: |     | LEARNING |     |                 | RETRIEVE, |     | GENERATE, |     |     |
+| --------- | --- | -------- | --- | --------------- | --------- | --- | --------- | --- | --- |
+|           |     |          |     | TO              |           |     |           |     | AND |
+| CRITIQUE  |     |          |     | SELF-REFLECTION |           |     |           |     |     |
+THROUGH
+AkariAsai†,ZeqiuWu†,YizhongWang†§,AvirupSil‡,HannanehHajishirzi†§
+| †UniversityofWashington |     |     | §AllenInstituteforAI |     |     | ‡IBMResearchAI |     |     |     |
+| ----------------------- | --- | --- | -------------------- | --- | --- | -------------- | --- | --- | --- |
+{akari,zeqiuwu,yizhongw,hannaneh}@cs.washington.edu,avi@us.ibm.com
+ABSTRACT
+3202 tcO 71  ]LC.sc[  1v11511.0132:viXra
+Despitetheirremarkablecapabilities,largelanguagemodels(LLMs)oftenproduce
+responsescontainingfactualinaccuraciesduetotheirsolerelianceontheparamet-
+|     | ricknowledgetheyencapsulate. |     |     | Retrieval-AugmentedGeneration(RAG),anad |     |     |     |     |     |
+| --- | ---------------------------- | --- | --- | --------------------------------------- | --- | --- | --- | --- | --- |
+hocapproachthataugmentsLMswithretrievalofrelevantknowledge,decreases
+|     | suchissues. | However,indiscriminatelyretrievingandincorporatingafixednumber |     |     |     |     |     |     |     |
+| --- | ----------- | -------------------------------------------------------------- | --- | --- | --- | --- | --- | --- | --- |
+ofretrievedpassages,regardlessofwhetherretrievalisnecessary,orpassagesare
+relevant,diminishesLMversatilityorcanleadtounhelpfulresponsegeneration.
+WeintroduceanewframeworkcalledSelf-ReflectiveRetrieval-AugmentedGen-
+eration(SELF-RAG)thatenhancesanLM’squalityandfactualitythroughretrieval
+|     | and self-reflection.                                           |          | Our framework |     | trains    | a single arbitrary |     | LM that   | adaptively |
+| --- | -------------------------------------------------------------- | -------- | ------------- | --- | --------- | ------------------ | --- | --------- | ---------- |
+|     | retrieves                                                      | passages | on-demand,    | and | generates | and reflects       | on  | retrieved | passages   |
+|     | anditsowngenerationsusingspecialtokens,calledreflectiontokens. |          |               |     |           |                    |     |           | Generating |
+reflectiontokensmakestheLMcontrollableduringtheinferencephase,enablingit
+|     | totailoritsbehaviortodiversetaskrequirements.     |        |                          |     |     | ExperimentsshowthatSELF- |                       |     |      |
+| --- | ------------------------------------------------- | ------ | ------------------------ | --- | --- | ------------------------ | --------------------- | --- | ---- |
+|     | RAG (7B                                           | and13B | parameters)significantly |     |     | outperforms              | state-of-the-art      |     | LLMs |
+|     | andretrieval-augmentedmodelsonadiversesetoftasks. |        |                          |     |     |                          | Specifically,SELF-RAG |     |      |
+outperformsChatGPTandretrieval-augmentedLlama2-chatonOpen-domainQA,
+reasoningandfactverificationtasks,anditshowssignificantgainsinimproving
+factualityandcitationaccuracyforlong-formgenerationsrelativetothesemodels.1
+1 INTRODUCTION
+State-of-the-artLLMscontinuetostrugglewithfactualerrors(Mallenetal.,2023;Minetal.,2023)
+despitetheirincreasedmodelanddatascale(Ouyangetal.,2022). Retrieval-AugmentedGeneration
+(RAG) methods (Figure 1 left; Lewis et al. 2020; Guu et al. 2020) augment the input of LLMs
+withrelevantretrievedpassages,reducingfactualerrorsinknowledge-intensivetasks(Rametal.,
+2023;Asaietal.,2023a). However,thesemethodsmayhindertheversatilityofLLMsorintroduce
+unnecessaryoroff-topicpassagesthatleadtolow-qualitygenerations (Shietal.,2023)sincethey
+retrievepassagesindiscriminatelyregardlessofwhetherthefactualgroundingishelpful. Moreover,
+theoutputisnotguaranteedtobeconsistentwithretrievedrelevantpassages(Gaoetal.,2023)since
+the models are not explicitly trained to leverage and follow facts from provided passages. This
+work introduces Self-Reflective Retrieval-augmented Generation (SELF-RAG) to improve an
+LLM’sgenerationquality,includingitsfactualaccuracywithouthurtingitsversatility,viaon-demand
+retrievalandself-reflection. WetrainanarbitraryLMinanend-to-endmannertolearntoreflecton
+itsowngenerationprocessgivenataskinputbygeneratingbothtaskoutputandintermittentspecial
+tokens(i.e.,reflectiontokens). Reflectiontokensarecategorizedintoretrievalandcritiquetokensto
+indicatetheneedforretrievalanditsgenerationqualityrespectively(Figure1right). Inparticular,
+given an input prompt and preceding generations, SELF-RAG first determines if augmenting the
+continuedgenerationwithretrievedpassageswouldbehelpful. Ifso,itoutputsaretrievaltokenthat
+callsaretrievermodelondemand(Step1).Subsequently,SELF-RAGconcurrentlyprocessesmultiple
+retrievedpassages,evaluatingtheirrelevanceandthengeneratingcorrespondingtaskoutputs(Step
+2). Itthengeneratescritiquetokenstocriticizeitsownoutputandchoosebestone(Step3)interms
+offactualityandoverallquality. ThisprocessdiffersfromconventionalRAG(Figure1left),which
+1Ourcodeandtrainedmodelsareavailableathttps://selfrag.github.io/.
+1
+
+Preprint.
+Retrieval-Augmented Generation (RAG) Ours: Self-reflective Retrieval-Augmented Generation (Self-RAG)
+Prompt How did US states get their names? Prompt How did US states get their names? Step 1: Retrieve on demand
+Step 1: Retrieve K documents US states got their names from a variety of sources. Retrieve
+Of the fifty states, eleven are named
+after an individual person. Step 2: Generate segment in parallel
+Popular names by states. In Texas,
+Emma is a popular baby name. Prompt + Prompt + Prompt +
+Retriever California was named after a fictional
+island in a Spanish book.
+Step 2: Prompt LM with K docs and generate Relevant 11 of 50 state names Irrelevant Texas is named Relevant California's name has its
+come from persons. Supported after a Native American tribe. origins in a 16th-century novel
+Prompt How did US states get their names? + Las Sergas de Esplandián. Partially
+Step 3: Critique outputs and select best segment
+US states got their names from a variety of > >
+sources. Eleven states are named after an
+individual person (e.g, California was named
+LM after Christopher Columbus). Some states US states got their names from a variety of sources. 11 of 50
+including Texas and Utah, are named after Retrieve Repeat.… states names are come from persons. 26 states are named
+ContradNicatotirvye American tribe.No information in passages after Native Americans, including Utah.
+Prompt: Write an essay of your best summer vacation Prompt: Write an essay of your best summer vacation
+My best… No Retrieval My best summer vacation is when my family and I embarked on a road trip along …
+Figure1: OverviewofSELF-RAG. SELF-RAGlearnstoretrieve,critique,andgeneratetextpassages
+toenhanceoverallgenerationquality,factuality,andverifiability.
+consistentlyretrievesafixednumberofdocumentsforgenerationregardlessoftheretrievalnecessity
+(e.g., thebottomfigureexampledoesnotrequirefactualknowledge)andneversecondvisitsthe
+generationquality. Moreover,SELF-RAGprovidescitationsforeachsegmentwithitsself-assessment
+ofwhethertheoutputissupportedbythepassage,leadingtoeasierfactverification.
+SELF-RAG trainsanarbitraryLMtogeneratetextwithreflectiontokensbyunifyingthemasthe
+nexttokenpredictionfromtheexpandedmodelvocabulary. WetrainourgeneratorLMonadiverse
+collectionoftextinterleavedwithreflectiontokensandretrievedpassages. Reflectiontokens,inspired
+by reward models used in reinforcement learning (Ziegler et al., 2019; Ouyang et al., 2022), are
+insertedofflineintotheoriginalcorpusbyatrainedcriticmodel. Thiseliminatestheneedtohosta
+criticmodelduringtraining,reducingoverhead. Thecriticmodel,inpart,issupervisedonadataset
+ofinput,output,andcorrespondingreflectiontokenscollectedbypromptingaproprietyLM(i.e.,
+GPT-4;OpenAI2023). Whilewedrawinspirationfromstudiesthatusecontroltokenstostartand
+guidetextgeneration(Luetal.,2022;Keskaretal.,2019),ourtrainedLMusescritiquetokensto
+assessitsownpredictionsaftereachgeneratedsegmentasanintegralpartofthegenerationoutput.
+SELF-RAG furtherenablesacustomizabledecodingalgorithmtosatisfyhardorsoftconstraints,
+whicharedefinedbyreflectiontokenpredictions. Inparticular,ourinference-timealgorithmenables
+usto(1)flexiblyadjustretrievalfrequencyfordifferentdownstreamapplicationsand(2)customize
+models’behaviorstouserpreferencesbyleveragingreflectiontokensthroughsegment-levelbeam
+searchusingtheweightedlinearsumofthereflectiontokenprobabilitiesassegmentscore.
+Empiricalresultsonsixtasks,includingreasoningandlong-formgeneration,demonstratethatSELF-
+RAGsignificantlyoutperformspre-trainedandinstruction-tunedLLMsthathavemoreparametersand
+widelyadoptedRAGapproacheswithhighercitationaccuracy. Inparticular,SELF-RAGoutperforms
+retrieval-augmentedChatGPTonfourtasks,Llama2-chat(Touvronetal.,2023)andAlpaca(Dubois
+etal.,2023)onalltasks. Ouranalysisdemonstratestheeffectivenessoftrainingandinferencewith
+reflectiontokensforoverallperformanceimprovementsaswellastest-timemodelcustomizations
+(e.g.,balancingthetrade-offbetweencitationprevisionsandcompleteness).
+2 RELATED WORK
+Retrieval-AugmentedGeneration. Retrieval-AugmentedGeneration(RAG)augmentstheinput
+spaceofLMswithretrievedtextpassages(Guuetal.,2020;Lewisetal.,2020),leadingtolarge
+improvementsinknowledge-intensivetasksafterfine-tuningorusedwithoff-the-shelfLMs(Ram
+etal.,2023). Amorerecentwork(Luoetal.,2023)instruction-tunesanLMwithafixednumber
+2
+
+Preprint.
+ofretrievedpassagesprependedtoinput,orpre-trainaretrieverandLMjointly,followedbyfew-
+shot fine-tuning on task datasets (Izacard et al., 2022b). While prior work often retrieves only
+once at the beginning, Jiang et al. (2023) propose to adaptively retrieve passages for generation
+ontopofaproprietaryLLMor Schicketal.(2023)trainanLMtogenerateAPIcallsfornamed
+entities. Yet, the improved task performance of such approaches often comes at the expense of
+runtimeefficiency(Mallenetal.,2023),robustnesstoirrelevantcontext(Shietal.,2023),andlackof
+attributions(Liuetal.,2023a;Gaoetal.,2023). WeintroduceamethodtotrainanarbitraryLMto
+learntouseretrievalon-demandfordiverseinstruction-followingqueriesandintroducecontrolled
+generationguidedbyreflectionstokenstofurtherimprovegenerationqualityandattributions.
+ConcurrentRAGwork. Afewconcurrentworks2 onRAGproposenewtrainingorprompting
+strategiestoimprovewidely-adoptedRAGapproaches. Linetal.(2023)fine-tuneboththeretriever
+and LM on instruction-tuning datasets in two steps. While we also train our model on diverse
+instruction-following datasets, SELF-RAG enables retrieval on demand and selection of the best
+possiblemodeloutputviafine-grainedself-reflection,makingitwidelyapplicableandmorerobust
+andcontrollable. Yoranetal.(2023)useanaturallanguageinferencemodelandXuetal.(2023)use
+asummarizationmodeltofilteroutorcompressretrievedpassagesbeforeusingthemtopromptthe
+LMtogeneratetheoutput. SELF-RAGprocessespassagesinparallelandfiltersoutirrelevantones
+throughself-reflection,withoutrelyingonexternalmodelsatinference. Moreover,ourself-reflection
+mechanismalsoevaluatesotheraspectsofthemodeloutputqualityincludingfactuality. LATS(Zhou
+etal.,2023)promptoff-the-shelfLMstosearchforrelevantinformationforquestionansweringtasks
+andtogeneratewithtreesearch,guidedbyLM-generatedvaluescores. Whiletheirvaluefunction
+simplyindicatesanoverallscoreofeachgeneration,SELF-RAGtrainstoanarbitraryLMtolearnto
+generatefine-grainedself-reflectionandcustomizableinference.
+Trainingandgeneratingwithcritics. TrainingLLMswithreinforcementlearning(e.g.,Proximal
+Policy Optimization or PPO; Schulman et al. 2017) from human feedback (RLHF) has proven
+effectiveinaligningLLMswithhumanpreferences(Ouyangetal.,2022). Wuetal.(2023)introduce
+fine-grainedRLHFwithmultiplerewardmodels. Thoughourworkalsostudiesfine-grainedcritique
+on retrieval and generation, we train our target LM on task examples augmented with reflection
+tokensfromacriticmodeloffline, withafarlowertrainingcostcomparedtoRLHF.Inaddition,
+reflectiontokensinSELF-RAGenablecontrollablegenerationatinference,whileRLHFfocuseson
+humanpreferencealignmentduringtraining. OtherworksusegeneralcontroltokenstoguideLM
+generation(Luetal.,2022;Korbaketal.,2023),whileSELF-RAGusesreflectiontokenstodecidethe
+needforretrievalandtoself-evaluategenerationquality. Xieetal.(2023)proposeaself-evaluation-
+guideddecodingframework,buttheyfocusonlyonreasoningtaskswithoneevaluationdimension
+(reasoningpathconsistency)andwithoutretrieval. RecentworkonLLMrefinement(Dhuliawala
+etal.,2023;Madaanetal.,2023;Pauletal.,2023)promptsamodeltogeneratetaskoutput,natural
+languagefeedbackandrefinedtaskoutputiteratively,butatthecostofinferenceefficiency.
+3 SELF-RAG: LEARNING TO RETRIEVE, GENERATE AND CRITIQUE
+We introduce Self-Reflective Retrieval-Augmented Generation (SELF-RAG), shown in Figure 1.
+SELF-RAGisaframeworkthatenhancesthequalityandfactualityofanLLMthroughretrievaland
+self-reflection,withoutsacrificingLLM’soriginalcreativityandversatility. Ourend-to-endtraining
+letsanLMMgeneratetextinformedbyretrievedpassages,ifneeded,andcriticizetheoutputby
+learningtogeneratespecialtokens. Thesereflectiontokens(Table1)signaltheneedforretrieval
+orconfirmtheoutput’srelevance,support,orcompleteness. Incontrast,commonRAGapproaches
+retrievepassagesindiscriminately,withoutensuringcompletesupportfromcitedsources.
+3.1 PROBLEMFORMALIZATIONANDOVERVIEW
+Formally,giveninputx,wetrainMtosequentiallygeneratetextualoutputsyconsistingofmultiple
+segmentsy =[y ,...,y ],wherey indicatesasequenceoftokensforthet-thsegment.3 Generated
+1 T t
+tokensiny includetextfromtheoriginalvocabularyaswellasthereflectiontokens(Table1).
+t
+2AllworkisarXivedwithinaweekofthispreprint.
+3Inthispaper,wetreatonesentenceasasegmentinourexperiments,butourframeworkisapplicabletoany
+segmentunit(i.e.,sub-sentence).
+3
+
+Preprint.
+| Type     |     |     | Input | Output            |     |     | Definitions                |     |     |
+| -------- | --- | --- | ----- | ----------------- | --- | --- | -------------------------- | --- | --- |
+| Retrieve |     |     | x/x,y | {yes,no,continue} |     |     | DecideswhentoretrievewithR |     |     |
+ISREL x,d {relevant,irrelevant} dprovidesusefulinformationtosolvex.
+ISSUP x,d,y {fullysupported,partially Alloftheverification-worthystatementiny
+|       |     |     |     | supported,nosupport} |     |     | issupportedbyd.        |     |     |
+| ----- | --- | --- | --- | -------------------- | --- | --- | ---------------------- | --- | --- |
+| ISUSE |     |     | x,y | {5,4,3,2,1}          |     |     | yisausefulresponsetox. |     |     |
+Table1:FourtypesofreflectiontokensusedinSELF-RAG.Eachtypeusesseveraltokenstorepresent
+itsoutputvalues. Thebottomthreerowsarethreetypesof Critique tokens,andtheboldtextindicates
+themostdesirablecritiquetokens. x,y,dindicateinput,output,andarelevantpassage,respectively.
+Algorithm1SELF-RAGInference
+Require: GeneratorLMM,RetrieverR,Large-scalepassagecollections{d ,...,d }
+1 N
+Input: inputpromptxandprecedinggenerationy ,Output: nextoutputsegmenty
+| 1:  |                                              |           |                    |     |     |     | <t  |     | t         |
+| --- | -------------------------------------------- | --------- | ------------------ | --- | --- | --- | --- | --- | --------- |
+| 2:  | Mpredicts                                    |           | Retrieve given(x,y | <t  | )   |     |     |     |           |
+| 3:  | if Retrieve                                  | ==Yesthen |                    |     |     |     |     |     |           |
+| 4:  | RetrieverelevanttextpassagesDusingRgiven(x,y |           |                    |     |     |     |     | )   | ▷Retrieve |
+t−1
+| 5:  | Mpredicts |     |       | givenx,dandy |          | givenx,d,y   |     | foreachd∈D | ▷Generate |
+| --- | --------- | --- | ----- | ------------ | -------- | ------------ | --- | ---------- | --------- |
+|     |           |     | ISREL |              | t        |              | <t  |            |           |
+|     | Mpredicts |     |       | and          | givenx,y | ,dforeachd∈D |     |            | ▷Critique |
+| 6:  |           |     | ISSUP | ISUSE        |          | t            |     |            |           |
+7: Ranky t basedon ISREL , ISSUP , ISUSE ▷DetailedinSection3.3
+| 8:  | elseif | Retrieve  | ==Nothen |          |     |     |     |     |           |
+| --- | ------ | --------- | -------- | -------- | --- | --- | --- | --- | --------- |
+| 9:  | M      | predictsy |          | givenx   |     |     |     |     | ▷Generate |
+|     |        | gen       | t        |          |     |     |     |     |           |
+| 10: | M      | predicts  |          | givenx,y |     |     |     |     | ▷Critique |
+|     |        | gen       | ISUSE    |          | t   |     |     |     |           |
+Inferenceoverview. Figure1andAlgorithm1presentanoverviewofSELF-RAGatinference. For
+everyxandprecedinggenerationy , themodeldecodesaretrievaltokentoevaluatetheutility
+<t
+ofretrieval. Ifretrievalisnotrequired,themodelpredictsthenextoutputsegment,asitdoesina
+standardLM.Ifretrievalisneeded,themodelgenerates: acritiquetokentoevaluatetheretrieved
+passage’srelevance,thenextresponsesegment,andacritiquetokentoevaluateiftheinformationin
+theresponsesegmentissupportedbythepassage. Finally,anewcritiquetokenevaluatestheoverall
+utilityoftheresponse.4 Togenerateeachsegment,SELF-RAGprocessesmultiplepassagesinparallel
+andusesitsowngeneratedreflectiontokenstoenforcesoftconstraints(Section3.3)orhardcontrol
+(Algorithm1)overthegeneratedtaskoutput. Forinstance,inFigure1(right),theretrievedpassages
+d 1 isselectedatthefirsttimestepsinced 2 doesnotprovidedirectevidence( ISREL isIrrelevant)
+| andd | 3 outputisonlypartiallysupportedwhiled |     |     |     |     | 1 arefullysupported. |     |     |     |
+| ---- | -------------------------------------- | --- | --- | --- | --- | -------------------- | --- | --- | --- |
+Training overview. SELF-RAG enables an arbitrary LM to generate text with reflection tokens
+byunifyingthemasnexttokenpredictionsfromtheexpandedmodelvocabulary(i.e.,theoriginal
+Specifically,wetrainthegeneratormodelMonacuratedcorpus
+vocabularyplusreflectiontokens).
+withinterleavingpassagesretrievedbyaretrieverRandreflectiontokenspredictedbyacriticmodel
+C (summarizedinAppendixAlgorithm2). WetrainC togeneratereflectiontokensforevaluating
+retrievedpassagesandthequalityofagiventaskoutput(Section3.2.1). Usingthecriticmodel,we
+updatethetrainingcorpusbyinsertingreflectiontokensintotaskoutputsoffline. Subsequently,we
+trainthefinalgeneratormodel(M)usingtheconventionalLMobjective(Section3.2.2)toenable
+Mtogeneratereflectiontokensbyitselfwithoutrelyingonthecriticatinferencetime.
+3.2 SELF-RAGTRAINING
+Here,wedescribethesuperviseddatacollectionandtrainingoftwomodels,thecriticC(Section3.2.1)
+andthegeneratorM(Section3.2.2).
+3.2.1 TRAININGTHECRITICMODEL
+Data collection for critic model. Manual annotation of reflection tokens for each segment is
+expensive(Wuetal.,2023). Astate-of-the-artLLMlikeGPT-4(OpenAI,2023)canbeeffectively
+4WefollowLiuetal.(2023a)inusinga“perceived”utilityvaluethatisindependentofretrievedpassages.
+4
+
+Preprint.
+Input: Write an essay of your best summer vacation Input: How did US states get their names?
+Output: My best summer vacation was a magical escape Output: 1 of 50 states names come from persons. For instance, Louisiana was named in honor
+to the coastal town of Santorini. The azure waters, of King Louis XIV of France and Georgia was named after King George II.
+charming white-washed building are unforgettable.
+Critic LM Retriever
+Augmented Output: N o R e t r ie v a l My best summer Augmented Output: R e tr i e v e <p>Of the fifty states, eleven are named after an individual person</p>.
+vacation was a magical escape to the coastal town of R e l e v a n t 11 of 50 states’ names come from person. Supported Retrieve <p>LOUISIANA: Named in
+Santorini. N o R e t r i e v a l The azure waters, charming white- honor of Louis XIV of France.</p>. Relevant For instance, Louisiana was named after King Louis XIV, and
+washed building are unforgettable experience. Util: 5 Georgia was named after King George II. Partially Util: 5
+Figure2: SELF-RAGtrainingexamples. Theleftexampledoesnotrequireretrievalwhiletheright
+onerequiresretrieval;thus,passagesareinserted. MoreexamplesareinAppendixTable4.
+usedtogeneratesuchfeedback(Liuetal.,2023b). However,dependingonsuchproprietaryLMs
+canraiseAPIcostsanddiminishreproducibility(Chenetal.,2023). Wecreatesuperviseddataby
+promptingGPT-4togeneratereflectiontokensandthendistilltheirknowledgeintoanin-houseC.
+Foreachgroupofreflectiontokens,werandomlysampleinstancesfromtheoriginaltrainingdata:
+{Xsample,Ysample}∼{X,Y}. Asdifferentreflectiontokengroupshavetheirowndefinitionsand
+input,asshowninTable1,weusedifferentinstructionpromptsforthem. Here,weuse Retrieve as
+an example. We prompt GPT-4 with a type-specific instruction (“Given an instruction, make a
+judgment on whether finding some external documents from the web helps to generate a better
+response.”) followedbyfew-shotdemonstrationsI theoriginaltaskinputxandoutputytopredict
+anappropriatereflectiontokenastext: p(r|I,x,y). ManualassessmentrevealsthatGPT-4reflection
+token predictions show high agreement with human evaluations. We collect 4k-20k supervised
+trainingdataforeachtypeandcombinethemtoformtrainingdataforC. AppendixSectionDshows
+thefulllistofinstructions,andA.1containsmoredetailsandouranalysis.
+Criticlearning. AfterwecollecttrainingdataD ,weinitializeC withapre-trainedLMand
+critic
+trainitonD usingastandardconditionallanguagemodelingobjective,maximizinglikelihood:
+critic
+maxE logp (r|x,y), rforreflectiontokens. (1)
+C
+((x,y),r)∼Dcritic C
+Though the initial model can be any pre-trained LM, we use the same one as the generator LM
+(i.e.,Llama2-7B;Touvronetal.2023)forC initialization. Thecriticachievesahigherthan90%
+agreementwithGPT-4-basedpredictionsonmostreflectiontokencategories(AppendixTable5).
+3.2.2 TRAININGTHEGENERATORMODEL
+Datacollectionforgenerator. Givenaninput-outputpair(x,y),weaugmenttheoriginaloutput
+y using the retrieval and critic models to create supervised data that precisely mimics the SELF-
+RAG inference-timeprocess(Section3.1). Foreachsegmenty
+t
+∈ y,werunC toassesswhether
+additionalpassagescouldhelptoenhancegeneration. Ifretrievalisrequired,theretrievalspecial
+token Retrieve =Yesisadded,andRretrievesthetopK passages,D. Foreachpassage,C further
+evaluateswhetherthepassageisrelevantandpredicts ISREL . Ifapassageisrelevant,C further
+evaluateswhetherthepassagesupportsthemodelgenerationandpredicts ISSUP . Critiquetokens
+ISREL and ISSUP areappendedaftertheretrievedpassageorgenerations. Attheendoftheoutput,y
+(ory T ),C predictstheoverallutilitytoken ISUSE ,andanaugmentedoutputwithreflectiontokens
+andtheoriginalinputpairisaddedtoD . SeetheexampletrainingdatainFigure2.
+gen
+Generatorlearning. WetrainthegeneratormodelMbytrainingonthecuratedcorpusaugmented
+withreflectiontokensD usingthestandardnexttokenobjective:
+gen
+maxE logp (y,r|x). (2)
+M
+(x,y,r)∼Dgen M
+UnlikeCtraining(Eq.1),Mlearnstopredictthetargetoutputaswellasthereflectiontokens.During
+training,wemaskouttheretrievedtextchunks(surroundedby<p>and</p>inFigure2)forloss
+calculationandexpandtheoriginalvocabularyV withasetofreflectiontokens{Critique, Retrieve}.
+Connections to prior work on learning with critique. Recent work incorporates additional
+critique(feedback)duringtraining,e.g.,RLHF(Ouyangetal.2022)viaPPO.WhilePPOrelieson
+5
+
+Preprint.
+separaterewardmodelsduringtraining,wecomputecritiqueofflineanddirectlyinsertthemintothe
+trainingcorpus,wherethegeneratorLMistrainedwithastandardLMobjective. Thissignificantly
+reducestrainingcostscomparedtoPPO.Ourworkalsorelatestopriorworkthatincorporatesspecial
+tokenstocontrolgeneration (Keskaretal.,2019;Luetal.,2022;Korbaketal.,2023).OurSELF-RAG
+learnstogeneratespecialtokenstoevaluateitsownpredictionaftereachgeneratedsegment,enabling
+theuseofasoftre-rankingmechanismorhardconstraintsatinference(discussednext).
+3.3 SELF-RAGINFERENCE
+Generatingreflectiontokenstoself-evaluateitsownoutputmakesSELF-RAGcontrollableduringthe
+inferencephase,enablingittotailoritsbehaviortodiversetaskrequirements. Fortasksdemanding
+factualaccuracy(Minetal.,2023),weaimforthemodeltoretrievepassagesmorefrequentlyto
+ensurethattheoutputalignscloselywiththeavailableevidence. Conversely,inmoreopen-ended
+tasks,likecomposingapersonalexperienceessay,theemphasisshiftstowardsretrievinglessand
+prioritizingtheoverallcreativityorutilityscore. Inthissection,wedescribeapproachestoenforce
+controltomeetthesedistinctobjectivesduringtheinferenceprocess.
+Adaptiveretrievalwiththreshold. SELF-RAGdynamicallydecideswhentoretrievetextpassagesby
+predicting Retrieve. Alternatively,ourframeworkallowsathresholdtobeset. Specifically,iftheprob-
+abilityofgeneratingthe Retrieve=Yestokennormalizedoveralloutputtokensin Retrieve surpassesa
+designatedthreshold,wetriggerretrieval(detailsinAppendixSectionA.3).
+Tree-decodingwithcritiquetokens. Ateachsegmentstept,whenretrievalisrequired,basedeither
+onhardorsoftconditions,RretrievesK passages,andthegeneratorMprocesseseachpassagein
+parallelandoutputsK differentcontinuationcandidates. Weconductasegment-levelbeamsearch
+(withthebeamsize=B)toobtainthetop-Bsegmentcontinuationsateachtimestampt,andreturn
+thebestsequenceattheendofgeneration. Thescoreofeachsegmenty withrespecttopassagedis
+t
+updatedwithacriticscoreS thatisthelinearweightedsumofthenormalizedprobabilityofeach
+Critique tokentype. ForeachcritiquetokengroupG(e.g., ISREL ),wedenoteitsscoreattimestamp
+tassG,andwecomputeasegmentscoreasfollows:
+t
+f(y
+t
+,d, Critique)=p(y
+t
+|x,d,y
+<t
+))+S(Critique),where (3)
+(cid:88)
+S(Critique)= wGsG t forG ={ISREL , ISSUP , ISUSE }, (4)
+G∈G
+wheresG = pt(rˆ) standsforthegenerationprobabilityofthemostdesirablereflectiontoken
+t (cid:80)N
+i=
+G
+1
+pt(ri)
+rˆ(e.g., ISREL =Relevant)forthecritiquetokentypeGwithNGdistincttokens(thatrepresent
+differentpossiblevaluesforG). TheweightswGinEq.4arehyperparametersthatcanbeadjusted
+at inference time to enable customized behaviors at test time. For instance, to ensure that result
+y is mostly supported by evidence, we can set a weight term for the ISSUP score higher, while
+relativelyloweringweightsforotheraspects. Alternatively,wecouldfurtherenforcehardconstraints
+duringdecodingusing Critique. InsteadofusingasoftrewardfunctioninEq.4,wecouldexplicitly
+filter out a segment continuation when the model generates an undesirable Critique token (e.g.,
+ISSUP =No support). Balancingthetrade-offbetweenmultiplepreferenceshasbeenstudied
+inRLHF(Touvronetal.,2023;Wuetal.,2023),whichoftenrequirestrainingtochangemodels’
+behaviors. SELF-RAGtailorsanLMwithnoadditionaltraining.
+4 EXPERIMENTS
+4.1 TASKSANDDATASETS
+Weconductevaluationsofour SELF-RAG anddiversebaselinesonarangeofdownstreamtasks,
+holisticallyevaluatingoutputswithmetricsdesignedtoassessoverallcorrectness,factuality,and
+fluency. Throughouttheseexperiments,weconductzero-shotevaluations,whereweprovideinstruc-
+tionsdescribingtaskswithoutfew-shotdemonstrations(Weietal.,2022;Sanhetal.,2022).Detailsof
+ourexperiments’settings,includingtest-timeinstructions,areavailableintheAppendixSectionB.1.
+Closed-settasksincludetwodatasets,i.e.,afactverificationdatasetaboutpublichealth(PubHealth;
+Zhangetal.2023)andamultiple-choicereasoningdataset createdfromscientificexams(ARC-
+6
+
+Preprint.
+Challenge; Clarketal.2018). Weuseaccuracyasanevaluationmetricandreportonthetestset. We
+aggregatetheanswerprobabilitiesoftargetclassesforbothofthesedatasets(AppendixSectionB.2).
+Short-form generations tasks include two open-domain question answering (QA) datasets,
+PopQA (Mallen et al., 2023) and TriviaQA-unfiltered (Joshi et al., 2017), where systems need
+to answer arbitrary questions about factual knowledge. For PopQA, we use the long-tail subset,
+consistingof1,399rareentityquerieswhosemonthlyWikipediapageviewsarelessthan100. Asthe
+TriviaQA-unfiltered(open)testsetisnotpubliclyavailable,wefollowpriorwork’svalidationand
+testsplit(Minetal.,2019;Guuetal.,2020),using11,313testqueriesforevaluation. Weevaluate
+performancebasedonwhethergoldanswersareincludedinthemodelgenerationsinsteadofstrictly
+requiringexactmatching,followingMallenetal.(2023);Schicketal.(2023).
+Long-formgenerationtasksincludeabiographygenerationtask(Minetal.,2023)andalong-form
+QAtask ALCE-ASQA Gaoet al.(2023);Stelmakh etal.(2022). WeuseFactScore(Minet al.,
+2023)toevaluatebiographies,andweuseofficialmetricsofcorrectness(str-em),fluencybasedon
+MAUVE(Pillutlaetal.,2021),andcitationprecisionandrecall(Gaoetal.,2023)forASQA.5
+4.2 BASELINES
+Baselines without retrievals. We evaluate strong publicly available pre-trained LLMs,
+Llama2 (Touvronetal.,2023),instruction-tunedmodels,Alpaca (Duboisetal.,2023)
+7B,13B 7B,13B
+(our replication based on Llama2); and models trained and reinforced using private data, Chat-
+GPT (Ouyang et al., 2022) and Llama2-chat . For instruction-tuned LMs, we use the official
+13B
+systempromptorinstructionformatusedduringtrainingifpubliclyavailable. Wealsocompareour
+methodtoconcurrentwork,CoVE (Dhuliawalaetal.,2023),whichintroducesiterativeprompt
+65B
+engineeringtoimprovethefactualityofLLMgenerations.
+Baselineswithretrievals.Weevaluatemodelsaugmentedwithretrievalattesttimeorduringtraining.
+ThefirstcategoryincludesstandardRAGbaselines,whereanLM(Llama2,Alpaca)generatesoutput
+giventhequeryprependedwiththetopretrieveddocumentsusingthesameretrieverasinoursystem.
+It also includes Llama2-FT, where Llama2 is fine-tuned on all training data we use without the
+reflectiontokensorretrievedpassages. Wealsoreporttheresultofretrieval-augmentedbaselines
+with LMs trained with private data: Ret-ChatGPT and Ret-Llama2-chat, which deploy the same
+augmentation technique above, as well as perplexity.ai, an InstructGPT-based production search
+system. The second category includes concurrent methods that are trained with retrieved text
+passages,i.e., SAIL(Luoetal.,2023)toinstruction-tuneanLMontheAlpacainstruction-tuning
+datawithtopretrieveddocumentsinsertedbeforeinstructions,andToolformer(Schicketal.,2023)
+topre-trainanLMwithAPIcalls(e.g.,WikipediaAPIs).6
+4.3 EXPERIMENTALSETTINGS
+Trainingdataandsettings. Ourtrainingdataconsistsofdiverseinstruction-followinginput-output
+pairs. Inparticular,wesampleinstancesfromOpen-Instructprocesseddata(Wangetal.,2023)and
+knowledge-intensivedatasets(Petronietal.,2021;Stelmakhetal.,2022;Mihaylovetal.,2018). In
+total,weuse150kinstruction-outputpairs. WeuseLlama27Band13B(Touvronetal.,2023)as
+ourgeneratorbaseLM,andweuseLlama27BasourbasecriticLM.FortheretrievermodelR,we
+useoff-the-shelfContriever-MSMARCO(Izacardetal.,2022a)bydefaultandretrieveuptoten
+documentsforeachinput. MoretrainingdetailsareintheAppendixSectionB.1.
+Inferencesettings. Asadefaultconfiguration,weassigntheweightterms ISREL , ISSUP , ISUSE
+valuesof1.0,1.0and0.5,respectively. Toencouragefrequentretrieval,wesettheretrievalthreshold
+to0.2formosttasksandto0forALCE(Gaoetal.,2023)duetocitationrequirements. Wespeed
+upinferenceusingvllm(Kwonetal.,2023). Ateachsegmentlevel,weadoptabeamwidthof2.
+Foratoken-levelgeneration,weusegreedydecoding. Bydefault,weusethetopfivedocuments
+from Contriever-MS MARCO (Izacard et al., 2022a); for biographies and open-domain QA, we
+useadditionaltopfivedocumentsretrievedbyawebsearchengine, followingLuoetal.(2023);
+forASQA,weusetheauthor-providedtop5documentsbyGTR-XXL(Nietal.,2022)acrossall
+baselinesforafaircomparison.
+5https://github.com/princeton-nlp/ALCE
+6Wereportnumbersusingtheresultsreportedinthepaperastheimplementationsarenotavailable.
+7
+
+Preprint.
+Table2: Overallexperimentresultsonsixtasks. Boldnumbersindicatethebestperformanceamong
+non-proprietary models, and gray-colored bold text indicates the best proprietary model when
+∗
+theyoutperformsallnon-proprietarymodels. indicatesconcurrentorrecentresultsreportedby
+concurrentwork.–indicatesnumbersthatarenotreportedbytheoriginalpapersorarenotapplicable.
+Modelsaresortedbasedonscale. FS,em,rg,mau,prec,recdenoteFactScore(factuality);str-em,
+rouge(correctness);MAUVE(fluency);citationprecisionandrecall,respectively.
+|     | Short-form  | Closed-set |       | Long-formgenerations(withcitations) |      |      |       |       |       |
+| --- | ----------- | ---------- | ----- | ----------------------------------- | ---- | ---- | ----- | ----- | ----- |
+|     | PopQA TQA   | Pub        | ARC   | Bio                                 |      |      | ASQA  |       |       |
+| LM  | (acc) (acc) | (acc)      | (acc) | (FS)                                | (em) | (rg) | (mau) | (pre) | (rec) |
+LMswithproprietarydata
+| Llama2-c | 20.0 59.3 | 49.4 | 38.4 | 55.9 | 22.4 | 29.6 | 28.6 | –   | –   |
+| -------- | --------- | ---- | ---- | ---- | ---- | ---- | ---- | --- | --- |
+13B
+Ret-Llama2-c 51.8 59.8 52.1 37.9 79.9 32.8 34.8 43.8 19.8 36.1
+13B
+| ChatGPT       | 29.3 74.3 | 70.1 | 75.3 | 71.8   | 35.3 | 36.2 | 68.8 | –    | –    |
+| ------------- | --------- | ---- | ---- | ------ | ---- | ---- | ---- | ---- | ---- |
+| Ret-ChatGPT   | 50.8 65.7 | 54.7 | 75.3 | –      | 40.7 | 39.9 | 79.7 | 65.1 | 76.6 |
+| Perplexity.ai | –         | –    | –    | – 71.2 | –    | –    | –    | –    | –    |
+Baselineswithoutretrieval
+| Llama2 | 14.7 30.5 | 34.2 | 21.8 | 44.5 | 7.9 | 15.3 | 19.0 | –   | –   |
+| ------ | --------- | ---- | ---- | ---- | --- | ---- | ---- | --- | --- |
+7B
+| Alpaca | 23.6 54.5 | 49.8 | 45.0 | 45.8 | 18.8 | 29.4 | 61.7 | –   | –   |
+| ------ | --------- | ---- | ---- | ---- | ---- | ---- | ---- | --- | --- |
+7B
+| Llama2 | 14.7 38.5 | 29.4 | 29.4 | 53.4 | 7.2 | 12.4 | 16.0 | –   | –   |
+| ------ | --------- | ---- | ---- | ---- | --- | ---- | ---- | --- | --- |
+13B
+| Alpaca | 24.4 61.3 | 55.5 | 54.9 | 50.2 | 22.9 | 32.0 | 70.6 | –   | –   |
+| ------ | --------- | ---- | ---- | ---- | ---- | ---- | ---- | --- | --- |
+13B
+| CoVE * | –   | –   | –   | – 71.2 | –   | –   | –   | –   | –   |
+| ------ | --- | --- | --- | ------ | --- | --- | --- | --- | --- |
+65B
+Baselineswithretrieval
+| Toolformer* | – 48.8 |     | –   | – – | –   | –   | –   | –   | –   |
+| ----------- | ------ | --- | --- | --- | --- | --- | --- | --- | --- |
+6B
+| Llama2 | 38.2 42.5 | 30.0 | 48.0 | 78.0 | 15.2 | 22.1 | 32.0 | 2.9 | 4.0 |
+| ------ | --------- | ---- | ---- | ---- | ---- | ---- | ---- | --- | --- |
+7B
+| Alpaca | 46.7 64.1 | 40.2 | 48.0 | 76.6 | 30.9 | 33.3 | 57.9 | 5.5 | 7.2 |
+| ------ | --------- | ---- | ---- | ---- | ---- | ---- | ---- | --- | --- |
+7B
+| Llama2-FT | 48.7 57.3 | 64.3 | 65.8 | 78.2 | 31.0 | 35.8 | 51.2 | 5.0 | 7.5 |
+| --------- | --------- | ---- | ---- | ---- | ---- | ---- | ---- | --- | --- |
+7B
+| SAIL* | –   | – 69.2 | 48.4 | –   | –   | –   | –   | –   | –   |
+| ----- | --- | ------ | ---- | --- | --- | --- | --- | --- | --- |
+7B
+| Llama2 | 45.7 47.0 | 30.2 | 26.0 | 77.5 | 16.3 | 20.5 | 24.7 | 2.3 | 3.6 |
+| ------ | --------- | ---- | ---- | ---- | ---- | ---- | ---- | --- | --- |
+13B
+| Alpaca | 46.1 66.9 | 51.1 | 57.6 | 77.7 | 34.8 | 36.7 | 56.6 | 2.0 | 3.8 |
+| ------ | --------- | ---- | ---- | ---- | ---- | ---- | ---- | --- | --- |
+13B
+OurSELF-RAG7B 54.9 66.4 72.4 67.3 81.2 30.0 35.7 74.3 66.9 67.8
+OurSELF-RAG13B 55.8 69.3 74.5 73.1 80.2 31.7 37.0 71.6 70.3 71.3
+| 5 RESULTS AND | ANALYSIS |     |     |     |     |     |     |     |     |
+| ------------- | -------- | --- | --- | --- | --- | --- | --- | --- | --- |
+5.1 MAINRESULTS
+Comparisonagainstbaselineswithoutretrieval. Table2(top)presentsthebaselineswithout
+retrieval. Our SELF-RAG (bottom two rows) demonstrates a substantial performance advantage
+oversupervisedfine-tunedLLMsinalltasksandevenoutperformsChatGPTinPubHealth,PopQA,
+biographygenerations,andASQA(RougeandMAUVE).Ourapproachalsosignificantlyoutperforms
+aconcurrentmethodthatemployssophisticatedpromptengineering;specifically,onthebiogeneration
+task, our 7B and 13B models outperform the concurrent CoVE (Dhuliawala et al., 2023), which
+| iterativelypromptsLlama2 | 65B torefineoutput. |     |     |     |     |     |     |     |     |
+| ------------------------ | ------------------- | --- | --- | --- | --- | --- | --- | --- | --- |
+Comparisonagainstbaselineswithretrieval. AsshowninTables2(bottom),ourSELF-RAGalso
+outperformsexistingRAGinmanytasks,obtainingthebestperformanceamongnon-proprietary
+LM-basedmodelsonalltasks. Whileourmethodoutperformsotherbaselines,onPopQAorBio,
+powerfulinstruction-tunedLMswithretrieval(e.g.,LLama2-chat,Alpaca)showlargegainsfrom
+theirnon-retrievalbaselines. However,wefoundthatthesebaselinesprovidelimitedsolutionsfor
+tasks where we cannot simply copy or extract sub-strings of retrieved passages. On PubHealth
+andARC-Challenge, baselineswithretrievaldonotimproveperformancenotablyfromtheirno-
+retrievalcounterparts. Wealsoobservethatmostbaselineswithretrievalstruggletoimprovecitation
+accuracy. On ASQA, our model shows significantly higher citation precision and recall than all
+modelsexceptChatGPT.Gaoetal.(2023)foundthatChatGPTconsistentlyexhibitssuperiorefficacy
+inthisparticulartask,surpassingsmallerLMs. OurSELF-RAGbridgesthisperformancegap,even
+outperformingChatGPTincitationprecision,whichmeasureswhetherthemodel-generatedclaimis
+fullysupportedbycitedevidence. Wealsofoundthatonthemetricsforfactualprecision,SELF-RAG
+7Boccasionallyoutperformsour13BduetothetendencyofsmallerSELF-RAGtooftengenerate
+8
+
+Preprint.
+PubHealth
+|     | PQA Med     | AS 70.5   |     | 1.00     | 1.0       |
+| --- | ----------- | --------- | --- | -------- | --------- |
+|     |             | noisicerP |     | ycaruccA | ycneuqerF |
+|     | (acc) (acc) | (em)      |     | 0.99     |           |
+0.5
+| SELF-RAG(50k) | 45.5 73.5 | 32.1 70.0 |     | 0.99 |     |
+| ------------- | --------- | --------- | --- | ---- | --- |
+Training
+|              |           |      |     | 0.98          | 0.0 |
+| ------------ | --------- | ---- | --- | ------------- | --- |
+| NoRetrieverR | 43.6 67.8 | 31.0 | 1   | 2 0.0 0.2 0.4 | 0.6 |
+PopQA
+| NoCriticC | 42.6 72.0 | 18.1 |     | 1.0 | 1.00 |
+| --------- | --------- | ---- | --- | --- | ---- |
+95
+| Test            |                 |                      |     | ycaruccA            | ycneuqerF |
+| --------------- | --------------- | -------------------- | --- | ------------------- | --------- |
+|                 |                 | evuaM                |     | 0.8                 | 0.75      |
+| Noretrieval     | 24.7 73.0       | –                    |     |                     |           |
+|                 |                 | 90                   |     |                     | 0.50      |
+| Hardconstraints | 28.3 72.6       | –                    |     | 0.6                 |           |
+| Retrievetop1    | 41.8 73.1       | 28.6                 |     |                     | 0.25      |
+| Remove          | ISSUP 44.1 73.2 | 30.6                 | 1   | 2 0.0 0.2 0.4       | 0.6       |
+|                 |                 | Weight for IsSupport |     | Retrieval Threshold |           |
+|                 | (a)Ablation     | (b)Customization     |     | (c)Retrieval        |           |
+Figure3: AnalysisonSELF-RAG: (a)AblationstudiesforkeycomponentsofSELF-RAGtraining
+andinferencebasedonour7Bmodel. (b)EffectsofsoftweightsonASQAcitationprecisionand
+Mauve(fluency). (c)RetrievalfrequencyandnormalizedaccuracyonPubHealthandPopQA.
+preciselygroundedyetshorteroutputs. Llama2-FT ,whichisthebaselineLMtrainedonthesame
+7B
+instruction-outputpairsasSELF-RAGwithoutretrievalorself-reflectionandisretrieval-augmented
+attesttimeonly,lagsbehindSELF-RAG. ThisresultindicatesSELF-RAGgainsarenotsolelyfrom
+trainingdataanddemonstratetheeffectivenessofSELF-RAGframework.
+5.2 ANALYSIS
+Ablationstudies. Weconductasetofablationsofourframeworktoidentifywhichfactorsplay
+keyroles. Weevaluatetwomodelvariantstraineddifferentlythanourmodel: NoRetrievertrainsan
+LMusingthestandardinstruction-followingmethodgiveninstruction-outputpairs,withoutretrieved
+passages;NoCritictrainsanLMtrainedwithinput-outputpairsthatarealwaysaugmentedwiththe
+toponeretrieveddocumentwithoutreflectiontokens. ThisissimilartoSAIL(Luoetal.,2023),and
+weuseourinstruction-outputdatainsteadofusingtheAlpacadataset(Duboisetal.,2023),asin
+SAIL.Wealsoconductablationonourinference-timealgorithm,includingNoretrievaldisables
+retrievalduringinference; Hardconstraintsindicatesthemodelperformancethatretrieveswhen
+Retrieve=Yesinsteadofusingtheadaptivethreshold;Retrievetop1alwaysretrievesandusesthe
+toponedocumentonly,similartostandardRAGapproaches;Remove ISSUP indicatesthemodel
+performancethatremoves scoreonlyduringcritique-guidedbeamsearchinEq.4. Inthis
+ISSUP
+ablationexperiment,weuseatraininginstancesizeof50kforamoreefficientexplorationoftraining
+variations. Laterinthissection,weconductananalysisoftheeffectoftrainingdatasize. Weconduct
+theablationstudiesonthreedatasets,PopQA,PubHealth,andASQA.OnASQA,weevaluatemodels
+onsampled150instancesandexcludeablationsinvolvingadaptiveornoretrievalprocesses.
+WeshowinTable3atheablationresults. Thetoppartofthetableshowsresultsfortrainingablations,
+andthebottompartisforinferenceablations. Weseethatallcomponentsplayimportantroles. We
+alsoobservealargeperformancegapbetweenSELF-RAGandNoRetrieverorCriticbaselinesacross
+tasks,indicatingthattraininganLMwiththosemodelslargelycontributestotheperformancegainof
+SELF-RAG. Usingthetoppassagesregardlessoftheirrelevance(Retrievetop1)asinconventional
+RAGapproachescausesalargedropinPopQAandASQA,andremoving duringthebeam
+ISSUP
+search results hurts performance on ASQA. This demonstrates the effectiveness of SELF-RAG’s
+capabilitiesofcarefullyselectinggenerationsbasedfine-grainedmultiplecriterion,insteadofnaively
+usingallofthetoppassagesfromtheretrievalmodelorsolelydependingonrelevancescores.
+Effects of inference-time customization. One key benefit of our proposed framework is that it
+enablesustocontrolhowmucheachcritiquetypeaffectsthefinalgenerationsampling. Weanalyze
+the effects of different parameter weights on the top of our 7B model during inference time on
+ASQA,wheremultipleevaluationaspectsareconsidered. Figure3bshowstheeffectsofchanging
+theweightingtermfor ,whichcriticizeshowsupportedtheoutputisbythetextpassage. As
+ISSUP
+thefigureshows,increasingtheweightleadstopositiveeffectsonthemodels’citationprecision
+sincethisputsmoreemphasisonwhethermodelgenerationissupportedbytheevidence. Onthe
+9
+
+Preprint.
+55
+50
+45
+40
+35
+0 50 100 150
+Num of training (k)
+ecnamofreP
+Pop Bio.
+73
+60
+S&P 92.5 70.0
+72
+ISREL 95.0 90.0
+71 40 ISSUP 90.0 85.0
+0 100 0 100
+Num of training (k) Num of training (k) (d)HumanevaluationonPopQA
+(a)PopQA (b)PubHealth (c)ASQA(prec) andBiogeneration.
+Figure4: TrainingscaleandHumananalysis: (a)(b)(c)Trainingscaleanalysisshowstheeffect
+ofthetrainingdatascaleonPopQA,PubHealthandASQA(citationprecision),respectively. (d)
+HumananalysisonSELF-RAGoutputsaswellasreflectiontokens.
+contrary,alargerweightresultsinlowerMAUVEscores: whengenerationgetslongerandmore
+fluent,thereareoftenmoreclaimsthatarenotfullysupportedbycitations,consistentwithfindings
+byLiuetal.(2023a). Ourframeworkletspractitionerschooseandcustomizemodels’behaviorsat
+testtimebyadjustingsuchparameterswithoutrequiringadditionaltraining.
+Efficiencyandaccuracytrade-off.Usingourframework,practitionerscanadjusthowoftenretrieval
+occursusingthetokenprobabilityofrewardtokens. Weevaluatehowthisadaptivethresholdaffects
+overallaccuracyandfrequencyofretrieval,andweevaluatetheperformancewithvaryingnumbers
+of threshold δ (larger δ results in less retrieval) on PubHealth and PopQA. Figure 3c shows that
+themodel’sretrievalfrequenciesdramaticallychangeonbothdatasets. asδ varies. Ononehand,
+performancedeteriorationbyretrievinglessissmalleronPubHealthbutlargerinPopQA.
+Effects of training data size. We conduct an analysis of how the data scale affects the model’s
+performance. Inparticular,werandomlysample5k,10k,20k,and50kinstancesfromouroriginal
+150ktraininginstances,andfine-tunefourSELF-RAG7B variantsonthosesubsets. Then,wecompare
+themodelperformanceonPopQA,PubHealth,andASQA(citationprecision)withourfinalSELF-
+RAGtrainedonthefull150kinstances. WealsoevaluateFigures4a,4band4cshowsthemodels’
+performancetrainedondifferentamountofdata. Acrossalldatasets,increasingdatasizeoftenshows
+upwardtrajectoriesandtheimprovementsaresignificantlylargerinPopQAandASQA,whilewedo
+notobservedsuchsignificantimprovementsonLlama2-FT whenincreasingthetrainingdatafrom
+7B
+50kto150k. TheseresultsalsoindicatethatfurtherexpandingthetrainingdataofSELF-RAGmay
+leadtofurtherimprovements,althoughinthisworkwelimitourtrainingdatasizeto150k.
+Humanevaluations. WeconductsmallhumanevaluationsonSELF-RAGoutputs,aswellasthe
+reliabilityofpredictedreflectiontokens. Inparticular,wesampled50samplesfromPopQAandBio
+results. FollowingMenicketal.(2022),humanannotatorsevaluateS&P,whichindicateswhether
+themodeloutputisplausible(i.e.,theoutputisareasonableandon-topicresponsetothequestion
+asifitwereoccurringinaconversation)andsupported(i.e.,theprovidedevidenceissufficientto
+verify the validity of the answer). For S&P, we do not consider the instances where SELF-RAG
+predictsirrelevantorno support. Wethenaskourannotatorswhetherthemodel-predicted
+reflectiontokensabout ISREL and ISSUP matchtheirinspections(e.g.,whetherthefullysupported
+outputissupportedbythecitedevidence). Humanannotatorsfind SELF-RAG answersareoften
+plausibleandsupportedbyrelevantpassageswithhigherS&Pscoresonshort-formPopQA,whichis
+consistentwithMenicketal.(2022). Humanannotatorsalsofind ISREL and ISSUP reflectiontoken
+predictionsaremostlyalignedwiththeirassessments. AppendixTable6showsseveralannotated
+examplesandexplanationsonassessments.
+6 CONCLUSION
+ThisworkintroducesSELF-RAG,anewframeworktoenhancethequalityandfactualityofLLMs
+throughretrievalondemandandself-reflection. SELF-RAGtrainsanLMtolearntoretrieve,generate,
+and critique text passages and its own generation by predicting the next tokens from its original
+vocabularyaswellasnewlyaddedspecialtokens,calledreflectiontokens. SELF-RAGfurtherenables
+thetailoringofLMbehaviorsattesttimebyleveragingreflectiontokens. Ourholisticevaluationson
+sixtasksusingmultiplemetricsdemonstratethatSELF-RAGsignificantlyoutperformsLLMswith
+moreparametersorwithconventionalretrieval-augmentedgenerationapproaches.
+10
+
+Preprint.
+ETHICAL CONCERNS
+ThisworkaimstoimprovethefactualityofLLMoutputs,thelackofwhichcontinuestocausenu-
+merousreal-worldproblems(e.g.,spreadofmisinformationandprovisionofincorrectanddangerous
+advice). Whileourmethodshowssignificantimprovementsintermsofperformance,factuality,and
+citationaccuracy,itcanstillgenerateoutputsthatarenotfullysupportedbythecitations. Wehope
+thatexplicitself-reflectionandfine-grainedattributionmayhelpusersverifyfactualerrorsinthe
+modeloutputs.
+ACKNOWLEDGMENTS
+WethankSewonMin,ScottWen-tauYih,SeanWelleck,andKawinEthayarajhforfruitfuldiscussions
+intheearlystagesofthiswork. WethankSewonMin,Joongwon(Daniel)Kim,andSandyKaplan
+forvaluablefeedbackonthepaper, andTianyuGaoandWeijiaShifortheirhelponevaluations.
+AkariAsaiissupportedbytheIBMFellowship. WethankStabilityAIforprovidingcomputing
+totrainandevaluatetheLMsinthiswork,andMicrosoftAccelerateFoundationModelsResearch
+ProgramfortheaccesstoOpenAIAPIs. ThisworkwasfundedinpartbytheDARPAMCSprogram
+throughNIWCPacific(N66001-19-2-4031),NSFIIS-2044660,andgiftsfromAI2.
+REFERENCES
+AkariAsai,KazumaHashimoto,HannanehHajishirzi,RichardSocher,andCaimingXiong. Learn-
+ing to retrieve reasoning paths over wikipedia graph for question answering. In International
+ConferenceonLearningRepresentations,2020. URLhttps://openreview.net/forum?
+id=SJgVHkrYDH.
+AkariAsai,SewonMin,ZexuanZhong,andDanqiChen. Retrieval-basedlanguagemodelsandappli-
+cations.InProceedingsofthe61stAnnualMeetingoftheAssociationforComputationalLinguistics
+(Tutorial),2023a. URLhttps://aclanthology.org/2023.acl-tutorials.6.
+AkariAsai,TimoSchick,PatrickLewis,XilunChen,GautierIzacard,SebastianRiedel,Hannaneh
+Hajishirzi,andWen-tauYih. Task-awareretrievalwithinstructions. InFindingsoftheAssoci-
+ation for Computational Linguistics, 2023b. URL https://aclanthology.org/2023.
+findings-acl.225.
+BerndBohnet,VinhQTran,PatVerga,RoeeAharoni,DanielAndor,LivioBaldiniSoares,Jacob
+Eisenstein, KuzmanGanchev, JonathanHerzig, KaiHui, etal. Attributedquestionanswering:
+Evaluationandmodelingforattributedlargelanguagemodels. arXivpreprintarXiv:2212.08037,
+2022. URLhttps://arxiv.org/abs/2212.08037.
+LingjiaoChen,MateiZaharia,andJamesZou. Howischatgpt’sbehaviorchangingovertime? arXiv
+preprintarXiv:2307.09009,2023. URLhttps://arxiv.org/abs/2307.09009.
+PeterClark,IsaacCowhey,OrenEtzioni,TusharKhot,AshishSabharwal,CarissaSchoenick,and
+OyvindTafjord. Thinkyouhavesolvedquestionanswering? tryarc,theai2reasoningchallenge.
+arXivpreprintarXiv:1803.05457,2018. URLhttps://arxiv.org/abs/1803.05457.
+TriDao,DanFu,StefanoErmon,AtriRudra,andChristopherRe´. Flashattention: Fastandmemory-
+efficientexactattentionwithio-awareness. InAdvancesinNeuralInformationProcessingSystems,
+2022. URLhttps://openreview.net/forum?id=H4DqfPSibmx.
+ShehzaadDhuliawala,MojtabaKomeili,JingXu,RobertaRaileanu,XianLi,AsliCelikyilmaz,and
+JasonWeston. Chain-of-verificationreduceshallucinationinlargelanguagemodels. arXivpreprint
+arXiv:2309.11495,2023. URLhttps://arxiv.org/abs/2309.11495.
+EmilyDinan,StephenRoller,KurtShuster,AngelaFan,MichaelAuli,andJasonWeston. Wizardof
+wikipedia: Knowledge-poweredconversationalagents. InInternationalConferenceonLearning
+Representations,2019. URLhttps://openreview.net/forum?id=r1l73iRqKm.
+YannDubois,XuechenLi,RohanTaori,TianyiZhang,IshaanGulrajani,JimmyBa,CarlosGuestrin,
+PercyLiang,andTatsunoriB.Hashimoto. Alpacafarm: Asimulationframeworkformethodsthat
+11
+
+Preprint.
+learnfromhumanfeedback. arXivpreprintarXiv:2305.14387,2023. URLhttps://arxiv.
+org/abs/2305.14387.
+TianyuGao,HowardYen,JiatongYu,andDanqiChen. Enablinglargelanguagemodelstogenerate
+textwithcitations. arXivpreprintarXiv:2305.14627,2023. URLhttps://arxiv.org/abs/
+2305.14627.
+KelvinGuu,KentonLee,ZoraTung,PanupongPasupat,andMingweiChang. Retrievalaugmented
+language model pre-training. In International Conference on Machine Learning, 2020. URL
+https://dl.acm.org/doi/pdf/10.5555/3524938.3525306.
+Gautier Izacard, Mathilde Caron, Lucas Hosseini, Sebastian Riedel, Piotr Bojanowski, Armand
+Joulin,andEdouardGrave. Unsuperviseddenseinformationretrievalwithcontrastivelearning.
+Transactions on Machine Learning Research, 2022a. URL https://openreview.net/
+forum?id=jKN1pXi7b0.
+GautierIzacard,PatrickLewis,MariaLomeli,LucasHosseini,FabioPetroni,TimoSchick,Jane
+Dwivedi-Yu, Armand Joulin, Sebastian Riedel, and Edouard Grave. Few-shot learning with
+retrievalaugmentedlanguagemodels. arXivpreprintarXiv:2208.03299,2022b. URLhttps:
+//arxiv.org/abs/2208.03299.
+ZhengbaoJiang,FrankFXu,LuyuGao,ZhiqingSun,QianLiu,JaneDwivedi-Yu,YimingYang,
+Jamie Callan, and Graham Neubig. Active retrieval augmented generation. arXiv preprint
+arXiv:2305.06983,2023. URLhttps://arxiv.org/abs/2305.06983.
+MandarJoshi,EunsolChoi,DanielWeld,andLukeZettlemoyer. TriviaQA:Alargescaledistantly
+supervised challenge dataset for reading comprehension. In Proceedings of the 55th Annual
+MeetingoftheAssociationforComputationalLinguistics(Volume1: LongPapers),2017. URL
+https://aclanthology.org/P17-1147.
+Nitish Shirish Keskar, Bryan McCann, Lav R Varshney, Caiming Xiong, and Richard Socher.
+Ctrl: A conditional transformer language model for controllable generation. arXiv preprint
+arXiv:1909.05858,2019. URLhttps://arxiv.org/abs/1909.05858.
+TomaszKorbak,KejianShi,AngelicaChen,RasikaVinayakBhalerao,ChristopherBuckley,Jason
+Phang,SamuelRBowman,andEthanPerez. Pretraininglanguagemodelswithhumanpreferences.
+InInternationalConferenceonMachineLearning,2023. URLhttps://openreview.net/
+forum?id=AT8Iw8KOeC.
+Tom Kwiatkowski, Jennimaria Palomaki, Olivia Redfield, Michael Collins, Ankur Parikh, Chris
+Alberti,DanielleEpstein,IlliaPolosukhin,JacobDevlin,KentonLee,KristinaToutanova,Llion
+Jones, Matthew Kelcey, Ming-Wei Chang, Andrew M. Dai, Jakob Uszkoreit, Quoc Le, and
+SlavPetrov. Naturalquestions: Abenchmarkforquestionansweringresearch. Transactionsof
+theAssociationforComputationalLinguistics,2019. URLhttps://aclanthology.org/
+Q19-1026.
+WoosukKwon,ZhuohanLi,SiyuanZhuang,YingSheng,LianminZheng,CodyHaoYu,JosephE.
+Gonzalez,HaoZhang,andIonStoica. Efficientmemorymanagementforlargelanguagemodel
+servingwithpagedattention. InProceedingsoftheACMSIGOPS29thSymposiumonOperating
+SystemsPrinciples,2023. URLhttps://arxiv.org/abs/2309.06180.
+PatrickLewis,EthanPerez,AleksandraPiktus,FabioPetroni,VladimirKarpukhin,NamanGoyal,
+HeinrichKu¨ttler,MikeLewis,Wen-tauYih,TimRockta¨schel,SebastianRiedel,andDouweKiela.
+Retrieval-augmentedgenerationforknowledge-intensivenlptasks. InAdvancesinNeuralInfor-
+mationProcessingSystems,2020. URLhttps://proceedings.neurips.cc/paper/
+2020/file/6b493230205f780e1bc26945df7481e5-Paper.pdf.
+XiVictoriaLin,XilunChen,MingdaChen,WeijiaShi,MariaLomeli,RichJames,PedroRodriguez,
+JacobKahn,GergelySzilvasy,MikeLewis,LukeZettlemoyer,andScottYih. Ra-dit: Retrieval-
+augmenteddualinstructiontuning,2023. URLhttps://arxiv.org/abs/2310.01352.
+NelsonFLiu,TianyiZhang,andPercyLiang. Evaluatingverifiabilityingenerativesearchengines.
+arXivpreprintarXiv:2304.09848,2023a. URLhttps://arxiv.org/abs/2304.09848.
+12
+
+Preprint.
+YangLiu,DanIter,YichongXu,ShuohangWang,RuochenXu,andChenguangZhu. Gpteval: Nlg
+evaluationusinggpt-4withbetterhumanalignment. arXivpreprintarXiv:2303.16634,2023b.
+URLhttps://arxiv.org/abs/2303.16634.
+Ximing Lu, Sean Welleck, Jack Hessel, Liwei Jiang, Lianhui Qin, Peter West, Prithviraj Am-
+manabrolu,andYejinChoi. QUARK:Controllabletextgenerationwithreinforcedunlearning.
+InAdvancesinNeuralInformationProcessingSystems,2022. URLhttps://openreview.
+net/forum?id=5HaIds3ux5O.
+HongyinLuo,Yung-SungChuang,YuanGong,TianhuaZhang,YoonKim,XixinWu,DannyFox,
+Helen Meng, and James Glass. Sail: Search-augmented instruction learning. arXiv preprint
+arXiv:2305.15225,2023. URLhttps://arxiv.org/abs/2305.15225.
+Aman Madaan, Niket Tandon, Prakhar Gupta, Skyler Hallinan, Luyu Gao, Sarah Wiegreffe, Uri
+Alon,NouhaDziri,ShrimaiPrabhumoye,YimingYang,ShashankGupta,BodhisattwaPrasad
+Majumder, Katherine Hermann, Sean Welleck, Amir Yazdanbakhsh, and Peter Clark. Self-
+refine: Iterative refinement with self-feedback. arXiv preprint arXiv:2303.17651, 2023. URL
+https://arxiv.org/abs/2303.17651.
+AlexMallen,AkariAsai,VictorZhong,RajarshiDas,DanielKhashabi,andHannanehHajishirzi.
+Whennottotrustlanguagemodels: Investigatingeffectivenessofparametricandnon-parametric
+memories. In Proceedings of the 61st Annual Meeting of the Association for Computational
+Linguistics (Volume 1: Long Papers), 2023. URL https://aclanthology.org/2023.
+acl-long.546.
+JacobMenick,MajaTrebacz,VladimirMikulik,JohnAslanides,FrancisSong,MartinChadwick,
+Mia Glaese, Susannah Young, Lucy Campbell-Gillingham, Geoffrey Irving, et al. Teaching
+languagemodelstosupportanswerswithverifiedquotes. arXivpreprintarXiv:2203.11147,2022.
+URLhttps://arxiv.org/abs/2203.11147.
+Todor Mihaylov, Peter Clark, Tushar Khot, and Ashish Sabharwal. Can a suit of armor conduct
+electricity?anewdatasetforopenbookquestionanswering.InProceedingsofthe2018Conference
+onEmpiricalMethodsinNaturalLanguageProcessing,2018.URLhttps://aclanthology.
+org/D18-1260.
+SewonMin,DanqiChen,HannanehHajishirzi,andLukeZettlemoyer. AdiscretehardEMapproach
+forweaklysupervisedquestionanswering. InProceedingsofthe2019ConferenceonEmpirical
+MethodsinNaturalLanguageProcessingandthe9thInternationalJointConferenceonNatu-
+ralLanguageProcessing(EMNLP-IJCNLP),2019. URLhttps://aclanthology.org/
+D19-1284.
+SewonMin,KalpeshKrishna,XinxiLyu,MikeLewis,Wen-tauYih,PangWeiKoh,MohitIyyer,
+LukeZettlemoyer,andHannanehHajishirzi. Factscore: Fine-grainedatomicevaluationoffactual
+precisioninlongformtextgeneration. arXivpreprintarXiv:2305.14251,2023. URLhttps:
+//arxiv.org/abs/2305.14251.
+ReiichiroNakano,JacobHilton,SuchirBalaji,JeffWu,LongOuyang,ChristinaKim,Christopher
+Hesse, Shantanu Jain, Vineet Kosaraju, William Saunders, et al. Webgpt: Browser-assisted
+question-answeringwithhumanfeedback. arXivpreprintarXiv:2112.09332,2021. URLhttps:
+//arxiv.org/abs/2112.09332.
+Jianmo Ni, Chen Qu, Jing Lu, Zhuyun Dai, Gustavo Hernandez Abrego, Ji Ma, Vincent Zhao,
+YiLuan,KeithHall,Ming-WeiChang,andYinfeiYang. Largedualencodersaregeneralizable
+retrievers. InProceedingsofthe2022ConferenceonEmpiricalMethodsinNaturalLanguage
+Processing,2022. URLhttps://aclanthology.org/2022.emnlp-main.669.
+OpenAI. Gpt-4technicalreport. arXivpreprintarXiv:2303.08774,2023. URLhttps://arxiv.
+org/abs/2303.08774.
+LongOuyang,JeffreyWu,XuJiang,DiogoAlmeida,CarrollWainwright,PamelaMishkin,Chong
+Zhang,SandhiniAgarwal,KatarinaSlama,AlexGray,JohnSchulman,JacobHilton,FraserKelton,
+LukeMiller,MaddieSimens,AmandaAskell,PeterWelinder,PaulChristiano,JanLeike,and
+13
+
+Preprint.
+RyanLowe. Traininglanguagemodelstofollowinstructionswithhumanfeedback. InAdvancesin
+NeuralInformationProcessingSystems,2022. URLhttps://openreview.net/forum?
+id=TG8KACxEON.
+DebjitPaul,MeteIsmayilzada,MaximePeyrard,BeatrizBorges,AntoineBosselut,RobertWest,
+andBoiFaltings. Refiner: Reasoningfeedbackonintermediaterepresentations. arXivpreprint
+arXiv:2304.01904,2023. URLhttps://arxiv.org/abs/2304.01904.
+FabioPetroni,AleksandraPiktus,AngelaFan,PatrickLewis,MajidYazdani,NicolaDeCao,James
+Thorne,YacineJernite,VladimirKarpukhin,JeanMaillard,VassilisPlachouras,TimRockta¨schel,
+andSebastianRiedel. KILT:abenchmarkforknowledgeintensivelanguagetasks. InProceedings
+of the 2021 Conference of the North American Chapter of the Association for Computational
+Linguistics: HumanLanguageTechnologies, 2021. URLhttps://aclanthology.org/
+2021.naacl-main.200.
+KrishnaPillutla,SwabhaSwayamdipta,RowanZellers,JohnThickstun,SeanWelleck,YejinChoi,
+and Zaid Harchaoui. MAUVE: Measuring the gap between neural text and human text using
+divergencefrontiers. InAdvancesinNeuralInformationProcessingSystems,2021. URLhttps:
+//openreview.net/forum?id=Tqx7nJp7PR.
+SamyamRajbhandari,JeffRasley,OlatunjiRuwase,andYuxiongHe. Zero: Memoryoptimizations
+towardtrainingtrillionparametermodels. InProceedingsoftheInternationalConferenceforHigh
+PerformanceComputing,Networking,StorageandAnalysis,2020. URLhttps://dl.acm.
+org/doi/10.5555/3433701.3433727.
+OriRam,YoavLevine,ItayDalmedigos,DorMuhlgay,AmnonShashua,KevinLeyton-Brown,and
+YoavShoham. In-contextretrieval-augmentedlanguagemodels. TransactionsoftheAssociation
+forComputationalLinguistics,2023. URLhttps://arxiv.org/abs/2302.00083.
+VictorSanh,AlbertWebson,ColinRaffel,StephenBach,LintangSutawika,ZaidAlyafeai,Antoine
+Chaffin,ArnaudStiegler,ArunRaja,MananDey,MSaifulBari,CanwenXu,UrmishThakker,
+ShanyaSharmaSharma,ElizaSzczechla,TaewoonKim,GunjanChhablani,NihalNayak,De-
+bajyotiDatta,JonathanChang,MikeTian-JianJiang,HanWang,MatteoManica,ShengShen,
+ZhengXinYong,HarshitPandey,RachelBawden,ThomasWang,TrishalaNeeraj,JosRozen,
+AbheeshtSharma,AndreaSantilli,ThibaultFevry,JasonAlanFries,RyanTeehan,TevenLeScao,
+StellaBiderman,LeoGao,ThomasWolf,andAlexanderMRush. Multitaskpromptedtraining
+enableszero-shottaskgeneralization. InInternationalConferenceonLearningRepresentations,
+2022. URLhttps://openreview.net/forum?id=9Vrb9D0WI4.
+TimoSchick,JaneDwivedi-Yu,RobertoDess`ı,RobertaRaileanu,MariaLomeli,LukeZettlemoyer,
+NicolaCancedda,andThomasScialom. Toolformer: Languagemodelscanteachthemselvesto
+usetools. arXivpreprintarXiv:2302.04761,2023. URLhttps://arxiv.org/abs/2302.
+04761.
+JohnSchulman,FilipWolski,PrafullaDhariwal,AlecRadford,andOlegKlimov. Proximalpolicy
+optimizationalgorithms. arXivpreprintarXiv:1707.06347,2017. URLhttps://arxiv.org/
+abs/1707.06347.
+Freda Shi, Xinyun Chen, Kanishka Misra, Nathan Scales, David Dohan, Ed H. Chi, Nathanael
+Scha¨rli,andDennyZhou. Largelanguagemodelscanbeeasilydistractedbyirrelevantcontext.
+InProceedingsofthe40thInternationalConferenceonMachineLearning,2023. URLhttps:
+//proceedings.mlr.press/v202/shi23a.html.
+IvanStelmakh,YiLuan,BhuwanDhingra,andMing-WeiChang.ASQA:Factoidquestionsmeetlong-
+formanswers. InProceedingsofthe2022ConferenceonEmpiricalMethodsinNaturalLanguage
+Processing,2022. URLhttps://aclanthology.org/2022.emnlp-main.566.
+JamesThorne,AndreasVlachos,ChristosChristodoulopoulos,andArpitMittal. FEVER:alarge-
+scaledatasetforfactextractionandVERification. InProceedingsofthe2018Conferenceofthe
+NorthAmericanChapteroftheAssociationforComputationalLinguistics:HumanLanguageTech-
+nologies,Volume1(LongPapers),2018. URLhttps://aclanthology.org/N18-1074.
+14
+
+Preprint.
+HugoTouvron,LouisMartin,KevinStone,PeterAlbert,AmjadAlmahairi,YasmineBabaei,Nikolay
+Bashlykov,SoumyaBatra,PrajjwalBhargava,ShrutiBhosale,etal. Llama2: Openfoundation
+andfine-tunedchatmodels. arXivpreprintarXiv:2307.09288,2023. URLhttps://arxiv.
+org/abs/2307.09288.
+YizhongWang,HamishIvison,PradeepDasigi,JackHessel,TusharKhot,KhyathiRaghaviChandu,
+David Wadden, Kelsey MacMillan, Noah A Smith, Iz Beltagy, et al. How far can camels go?
+exploringthestateofinstructiontuningonopenresources. arXivpreprintarXiv:2306.04751,2023.
+URLhttps://arxiv.org/abs/2306.04751.
+Jason Wei, Maarten Bosma, Vincent Zhao, Kelvin Guu, Adams Wei Yu, Brian Lester, Nan Du,
+AndrewM.Dai,andQuocVLe.Finetunedlanguagemodelsarezero-shotlearners.InInternational
+ConferenceonLearningRepresentations,2022. URLhttps://openreview.net/forum?
+id=gEZrGCozdqR.
+Zeqiu Wu, Yushi Hu, Weijia Shi, Nouha Dziri, Alane Suhr, Prithviraj Ammanabrolu, Noah A
+Smith, Mari Ostendorf, and Hannaneh Hajishirzi. Fine-grained human feedback gives better
+rewards for language model training. arXiv preprint arXiv:2306.01693, 2023. URL https:
+//arxiv.org/abs/2306.01693.
+YuxiXie,KenjiKawaguchi,YiranZhao,XuZhao,Min-YenKan,JunxianHe,andQizheXie.Decom-
+positionenhancesreasoningviaself-evaluationguideddecoding.arXivpreprintarXiv:2305.00633,
+2023. URLhttps://arxiv.org/abs/2305.00633.
+Fangyuan Xu, Weijia Shi, and Eunsol Choi. Recomp: Improving retrieval-augmented lms with
+compression and selective augmentation, 2023. URL https://arxiv.org/abs/2310.
+04408.
+OriYoran,TomerWolfson,OriRam,andJonathanBerant. Makingretrieval-augmentedlanguage
+modelsrobusttoirrelevantcontext,2023. URLhttps://arxiv.org/abs/2310.01558.
+XiangYue,BoshiWang,KaiZhang,ZiruChen,YuSu,andHuanSun. Automaticevaluationof
+attribution by large language models. arXiv preprint arXiv:2305.06311, 2023. URL https:
+//arxiv.org/abs/2305.06311.
+TianhuaZhang,HongyinLuo,Yung-SungChuang,WeiFang,LucGaitskell,ThomasHartvigsen,
+XixinWu,DannyFox,HelenMeng,andJamesGlass. Interpretableunifiedlanguagechecking.
+arXivpreprintarXiv:2304.03728,2023. URLhttps://arxiv.org/abs/2304.03728.
+AndyZhou,KaiYan,MichalShlapentokh-Rothman,HaohanWang,andYu-XiongWang. Language
+agenttreesearchunifiesreasoningactingandplanninginlanguagemodels,2023. URLhttps:
+//arxiv.org/abs/2310.04406.
+DanielMZiegler,NisanStiennon,JeffreyWu,TomBBrown,AlecRadford,DarioAmodei,Paul
+Christiano,andGeoffreyIrving. Fine-tuninglanguagemodelsfromhumanpreferences. arXiv
+preprintarXiv:1909.08593,2019. URLhttps://arxiv.org/abs/1909.08593.
+15
+
+Preprint.
+APPENDIX
+A SELF-RAGDetails 17
+A.1 ReflectionTokens. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 17
+A.2 SELF-RAGTraining. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 17
+A.3 SELF-RAGInference . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 19
+B ExperimentalDetails 19
+B.1 MoreDetailsofTraining . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 19
+B.2 MoreDetailsofEvaluations . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 20
+C Results 20
+C.1 Analysis . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 20
+C.2 HumanEvaluationExamples . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 21
+C.3 QualitativeExamples . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 21
+D FullListofInstructionsandDemonstrationsforGPT-4 21
+16
+
+Preprint.
+A SELF-RAG DETAILS
+A.1 REFLECTIONTOKENS.
+Definitionsofreflectiontokens. Below,weprovideadetaileddefinitionofreflectiontypeand
+outputtokens. Thefirstthreeaspectswillbeprovidedateachsegmentlevel,whilethefinalaspectis
+onlygivenateachoutputlevel.
+• Retrieval-on-demand (Retrieve): Given an input and previous-step generation (if applicable),
+an LM determines whether the continuation requires factual grounding. No indicates retrieval
+is unnecessary as the sequence does not require factual grounding or may not be enhanced by
+knowledge retrieval, Yes indicates retrieval is necessary. We additionally have continue
+to use evidence,whichindicatesthatamodelcancontinuetousetheevidenceretrieved
+previously. For instance, a passage may contain rich factual information, and thus SELF-RAG
+generatesmultiplesegmentsbasedonthepassage.
+• Relevant( ISREL ): Retrievedknowledgemaynotbealwaysrelevanttotheinput. Thisaspect
+indicateswhethertheevidenceprovidesusefulinformation(Relevant)ornot(Irrelevant).
+• Supported ( ISSUP ): Attribution is the concept of whether the output is fully supported by
+certainevidence(Menicketal.,2022;Bohnetetal.,2022). Thisaspectjudgeshowmuchinfor-
+mationintheoutputisentailedbytheevidence. Weevaluateattributionsinthreescale,Fully
+supported, Partially supported, and No support / Contradictory, follow-
+ingYueetal.(2023);Nakanoetal.(2021).
+• Useful( ISUSE ): Followingthedefinitionsfrom Liuetal.(2023a),wedefinetheperceivedutility
+as whether the response is a helpful and informative answer to the query, independently from
+whetheritisinfactfactualornot. ThiscanbealsoviewedasplausibilityinMenicketal.(2022).
+Forusefulness,weuseafive-scaleevaluation(1isthelowestand5isthehighest).
+DetailsofGPT-4-baseddatacollections. Weusetheinstructionanddemonstrationpairstoprompt
+GPT-4, listed in Section D. Following an official recommendation, we separate instructions and
+outputswith“##”. Weusethetemperature1andsetthemaximumoutputtokencountstobe200. We
+discardinstanceswhereGPT-4doesnotfollowthedesignatedoutputformatsoroutputsequences
+thatdonotmatchourexpectedcategorynames. Asaresult,wecollected1,2594for Retrieve,11,181
+for ISSUP ,19,317forrelevance,3,831forutility.
+ManualanalysisoftheGPT-4predictions. Theauthorsofthispapermanuallyassessrandomly
+sampled20instancesforeachaspectandcheckifGPT-4predictionsmatchtheirassessmentsgiven
+the same instruction, demonstrations, and test instances. We found our assessments show high
+agreementwithGPT-4predictions,especiallyforrelevance(95%),retrievalnecessity(95%),and
+thedegreeofsupport(90%). Agreementwasslightlylowerinusefulness(80%),mostlyduetothe
+disagreementbetween1and2or4and5.
+A.2 SELF-RAGTRAINING
+Overviewoftraining. Algorithm2providesahigh-leveloverviewofourtraining.
+Fulllistofseeddatasets. Tosamplediverseinput-outputpairs,wesampleinstancesoftheOpen-
+Instruct(Wangetal.,2023)dataset. Inparticular,weusetheirShareGPT,GPT-4Alpaca,Alpaca,
+OpenAssistant,andFLANsubsetssubsets. Wealsosampleinstancesfromacoupleofknowledge-
+intensivedatasets,NaturalQuestions(Kwiatkowskietal.,2019),WizardofWikipedia(Dinanetal.,
+2019)andFEVER(Thorneetal.,2018)fromtheKILTbenchmark(Petronietal.,2021),ASQA(Stel-
+makhetal.,2022)andmultipleQAdatasetsincludingARC-EasyandOpenBookQA(Mihaylovetal.,
+2018). Table3showsthefulllistoftraininginstances,andintotal,weuse145,619instances.
+PerformanceoftheCriticC. WeevaluatetheaccuracyofrewardpredictionsbysplittingGPT-4
+generatedfeedbackintotraining,development,andtestsets. Theaccuracyoftherewardmodelis
+asfollows. Table5showsthemodelperformanceofpredictingGPT-4judgments. Asyoucansee,
+overallourfine-tunedrewardmodelshowshighpredictionmatchingwithGPT-4predictedfeedback.
+17
+
+Preprint.
+Algorithm2SELF-RAGTraining
+| 1:  | Inputinput-outputdataD |                    | ={X,Y},generatorM,C |     |     | θ   |     |     |     |
+| --- | ---------------------- | ------------------ | ------------------- | --- | --- | --- | --- | --- | --- |
+| 2:  | InitializeC            | withapre-trainedLM |                     |     |     |     |     |     |     |
+3: Sampledata{Xsample,Ysample}∼{X,Y} ▷TrainingCriticLM(Section3.2.1)
+|     | for(x,y)∈(Xsample,Ysample)do |     |     |     |     |     |     | ▷DatacollectionsforC |     |
+| --- | ---------------------------- | --- | --- | --- | --- | --- | --- | -------------------- | --- |
+4:
+5: PromptGPT-4tocollectareflectiontokenrfor(x,y)
+6: Add{(x,y,r)}toD
+critic
+| 7:  | UpdateC withnexttokenpredictionloss |     |     |     |     |     |     | ▷Criticlearning;Eq.1 |     |
+| --- | ----------------------------------- | --- | --- | --- | --- | --- | --- | -------------------- | --- |
+8: InitializeMwithapre-trainedLM ▷TrainingGeneratorLM(Section3.2.2)
+| 9:  | for(x,y)∈(X,Y)do |     |     |     |     | ▷DatacollectionforMwithD |     |     |     |
+| --- | ---------------- | --- | --- | --- | --- | ------------------------ | --- | --- | --- |
+critic
+| 10: | RunC | topredictrgiven(x,y) |     |     |     |     |     |     |     |
+| --- | ---- | -------------------- | --- | --- | --- | --- | --- | --- | --- |
+Add(x,y,r)toD
+| 11: |     |     | gen |     |     |     |     |     |     |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+12: UpdateMonD withnexttokenpredictionloss ▷GeneratorLMlearning;Eq.2
+gen
+|     | Datasetname       |         |                                        | category | Datasource    |           | thenumberofinstances |        |     |
+| --- | ----------------- | ------- | -------------------------------------- | -------- | ------------- | --------- | -------------------- | ------ | --- |
+|     | GPT-4Alpaca       |         | Instruction-following                  |          | Open-Instruct |           |                      | 26,168 |     |
+|     | StanfordAlpaca    |         | Instruction-following                  |          | Open-Instruct |           |                      | 25,153 |     |
+|     | FLAN-V2           |         | Instruction-following                  |          | Open-Instruct |           |                      | 17,817 |     |
+|     | ShareGPT          |         | Instruction-following                  |          | Open-Instruct |           |                      | 13,406 |     |
+|     | OpenAssistant1    |         | Instruction-following                  |          | Open-Instruct |           |                      | 9,464  |     |
+|     | WizardofWikipedia |         | Knowledge-intensive                    |          |               | KILT      |                      | 17,367 |     |
+|     | NaturalQuestions  |         | Knowledge-intensive                    |          |               | KILT      |                      | 15,535 |     |
+|     | FEVER             |         | Knowledge-intensive                    |          |               | KILT      |                      | 9,966  |     |
+|     | OpenBoookQA       |         | Knowledge-intensive                    |          |               | HFDataset |                      | 4,699  |     |
+|     | Arc-Easy          |         | Knowledge-intensive                    |          |               | HFDataset |                      | 2,147  |     |
+|     | ASQA              |         | Knowledge-intensive                    |          |               | ASQA      |                      | 3,897  |     |
+|     |                   | Table3: | ThegeneratorLMMtrainingdatastatistics. |          |               |           |                      |        |     |
+baseLM
+|     |     |           |     | Retrieve | ISSUP | ISREL | ISUSE |     |     |
+| --- | --- | --------- | --- | -------- | ----- | ----- | ----- | --- | --- |
+|     |     | Llama2-7B |     | 93.8     | 93.5  | 80.2  | 73.5  |     |     |
+|     |     | FLAN-3B   |     | 85.6     | 73.1  | 82.0  | 72.1  |     |     |
+Figure5: RewardpredictionaccuracyusingGPT-4predictionsasground-truthpredictions.
+WhileourfinalmodelusesLlama2-7BasabaseLM,wealsotrainandcompareFLAN-3B(Wei
+etal.,2022)modelonthesamedata,toinvestigatetheeffectivenessofdifferentdatasizesaffectfinal
+rewardpredictions. Inmostaspects,ourrewardmodelshowshigherthan80%accuracy,indicating
+thepowerfulabilityoffine-tunedspecializedLMstoevaluatetext.Whilebothmodelsshowrelatively
+lowerperformanceon ,thisisbecausebothmodelsoftenconfusebetweenthetwohighest
+ISUSE
+cases(5and4),wherehumanannotatorscanalsodisagree.
+DetailsofMdatacreation. Here, weprovidedetaileddatacreationprocedures. Algorithm3
+summarizestheprocess. Herewesety toyforsimplification. Oncewetrainthecriticmodel,we
+t
+firstrunitoninputdatafromtheaforementioneddatasets,topredictwhetherretrievalisneededor
+not. Fortheinstanceswherethecriticpredicts Retrieve=No,weonlypredictthe ISUSE giveninput
+andoutput. Fortheinstanceswherethecriticpredicts Retrieve=Yes,wefirstretrievepassagesusing
+theinputandtheentireoutputasqueries,tofindpassagesthatarerelevanttotheentireoutput. We
+thensplitoutputsentencesusingSpacy.7 Foreachsentence,werunC topredictwhethertheretrieval
+isnecessaryornot,giventheinput,precedingsegments,andtheinitialretrievedpassage.IfCpredicts
+Retrieve=No,thendonotinsertanyparagraphatthetthsegment. IfC predicts Retrieve=Yes,then
+weusetheoriginalinputandthetthsegmentasaretrievalquerytofindrelevantpassagesforthe
+t-thsegment. Foreachretrievedpassage,wepredict and . Ifthereisanypassageand
+|                  |     |              |     |       | ISREL  |            | ISSUP |       |            |
+| ---------------- | --- | ------------ | --- | ----- | ------ | ---------- | ----- | ----- | ---------- |
+| continuationwith |     | =Relevantand |     |       | =Fully | Supported/ |       |       | =Partially |
+|                  |     | ISREL        |     | ISSUP |        |            |       | ISSUP |            |
+7https://spacy.io/
+18
+
+Preprint.
+Supported,thenwesampleitasthecontinuation. Ifthereismorethanonepassagesatisfyingthis
+criterion,weusetheonewiththehighestretrievalscore. Ifthereareonly =Irrelevantor
+ISREL
+| =No | Supportpassages,werandomlysampleonepassage. |     |     |     |     |
+| --- | ------------------------------------------- | --- | --- | --- | --- |
+ISSUP
+| Algorithm3M | gen Datacreation |     |     |     |     |
+| ----------- | ---------------- | --- | --- | --- | --- |
+1: InputInput-outputdataD=X,Y
+2: for(x,y)∈{X,Y}do
+| 3: Given(x,y)C |     | predicts |     |     |     |
+| -------------- | --- | -------- | --- | --- | --- |
+Retrieve
+| if  | ispredictedthen |     |     |     |     |
+| --- | --------------- | --- | --- | --- | --- |
+4: Retrieve
+5: RetrieverelevantpassagesDusingRgiven(x,y) ▷Retrievepassages
+| 6:  | ford∈Ddo   |          |     |                             |     |
+| --- | ---------- | -------- | --- | --------------------------- | --- |
+| 7:  | C predicts | foreachd |     | ▷Predictrelevanceofpassages |     |
+ISREL
+| 8:  | C predicts | foreach(y,d) |     | ▷Predictsupportsofoutputs |     |
+| --- | ---------- | ------------ | --- | ------------------------- | --- |
+ISSUP
+9: C predicts ISUSE foreachd ▷Predictoverallutility(t=T only)
+| 10:        | Sampled |                    |     |     |     |
+| ---------- | ------- | ------------------ | --- | --- | --- |
+| 11: elseif |         | isnotpredictedthen |     |     |     |
+Retrieve
+|     | C predicts | givenx,y |     |     |     |
+| --- | ---------- | -------- | --- | --- | --- |
+| 12: |            | ISUSE    |     |     |     |
+Addaugmented(x,y,d,r)toD
+gen
+| Trainingexamples. |     | Table4showseveraltrainingexamplesusedforMtraining. |     |     |     |
+| ----------------- | --- | -------------------------------------------------- | --- | --- | --- |
+A.3 SELF-RAGINFERENCE
+Details of beam-search score calculations. We first compute scores for each critique type by
+takingthenormalizedprobabilitiesofdesirabletokens. For ISREL ,wecomputethescoreasfollows:
+|           |                              |         | p(ISREL = RELEVANT) |                      |     |
+| --------- | ---------------------------- | ------- | ------------------- | -------------------- | --- |
+|           | s(ISREL                      | )=      |                     |                      | .   |
+|           |                              | p(ISREL | = RELEVANT)+p(ISREL | = IRRELEVANT)        |     |
+| For ISSUP | ,wecomputethescoreasfollows: |         |                     |                      |     |
+|           |                              | p(ISSUP | = FULLY)            | p(ISSUP = PARTIALLY) |     |
+|           | s(ISREL                      | )=      | +0.5×               |                      | ,   |
+|           |                              |         | S                   | S                    |     |
+| whereS =  | (cid:80)                     |         | p(ISSUP =t).        |                      |     |
+For ISUSE wherewehaveafive-scalescore,we
+t∈{FULLY,PARTIALLY,NO}
+computetheweightedsumofthescores. Weassignsweightedscoresofw ={−1,−0.5,0,0.5,1}
+| tothetokens | ={1,2,3,4,5},andcomputethefinalscoresasfollows: |     |     |     |     |
+| ----------- | ----------------------------------------------- | --- | --- | --- | --- |
+ISUSE
+5
+|     |     |         | (cid:88) p(ISUS | E =i) |     |
+| --- | --- | ------- | --------------- | ----- | --- |
+|     |     | s(ISUSE | )= w            | ,     |     |
+i S
+i
+(cid:80)
+| whereS = |     | p(ISUSE | =t). |     |     |
+| -------- | --- | ------- | ---- | --- | --- |
+t∈{1,2,3,4,5}
+Detailsofadaptiveretrieval. Forretrievalbasedonsoftconstraints, wetriggerretrievalifthe
+followingconditionissatisfied:
+|     |     |     | p(Retrieve = YES) |     |     |
+| --- | --- | --- | ----------------- | --- | --- |
+>δ.
+|                |     | p(Retrieve | = YES)+p(p(Retrieve | = NO) |     |
+| -------------- | --- | ---------- | ------------------- | ----- | --- |
+| B EXPERIMENTAL |     | DETAILS    |                     |       |     |
+B.1 MOREDETAILSOFTRAINING
+Moredetailsoftrainingandcomputations. Weuse4NvidiaA100with80GBmemorytotrain
+ourmodels. Allmodelsaretrainedfor3epochswithabatchsizeof128,apeaklearningrateof2e-5
+with3%warmupsteps,andlineardecayafterward. Wesetthemaximumtokenlengthtobe2,048
+forthe7Bmodel,and1,524forthe13Bmodelduetothememoryconstraint. WeuseDeepspeed
+stage3(Rajbhandarietal.,2020)toconductmulti-GPUdistributedtraining,withtrainingprecision
+Bfloat16enabled. FlashAttention(Daoetal.,2022)isusedtomakethelong-contexttrainingmore
+efficient. Weruninferenceofourtrainedmodelsusing1-2QuadroRTX6000GPUswith24GB
+memory.
+19
+
+Preprint.
+B.2 MOREDETAILSOFEVALUATIONS
+Retrieval setup details. By default, we use Contriever-MS MARCO to retrieve the top five
+documentsfromWikipedia,anduseofficialWikipediaembeddingsbasedon2018EnglishWikipedia.
+On PopQA, where question and answer pairs are created based on WikiData in 2022, we found
+thatthe2018Wikipediasometimeslacksarticlesaboutsomeentitiesthathavebeenmorerecently
+addedtoWikipedia. Therefore,forPopQA,weusedtheDecember2020preprocessedWikipedia
+corpus provided by Izacard et al. (2022b) and generated document embeddings.8 The issues of
+performancevariancefromdifferentWikipediadumpshavebeenreportedbypriorwork(Asaietal.,
+2020;Izacardetal.,2022b). Yet, weobservelimitedeffectivenessofsuchoff-the-shelfretrieval
+modelstrainedprimarilyonknowledge-intensivetasksforopen-endedgeneration(e.g.,instruction
+following). Recentorconcurrentworkstudiesinstruction-tuningofretrievalsystems(Asaietal.,
+2023b)orjointtrainingofretrievalandLMcomponents(Linetal.,2023),whileweleaveexploring
+theeffectivessofsuchappraochesforfuturework. Forbiogenerationandopen-domainQAtasks,
+weadditionallyretrievefivedocumentsusingGoogleProgrammableSearch9 andsearchdocuments
+fromEnglishWikipedia. AsthisAPIonlyprovidessnippets,weretrieveWikipediaintroductory
+paragraphsforthecorrespondingentities.
+Detailedexperimentalsettingsforindividualdatasets. ForOpenQAdatasets,wesetthemax-
+imumnewtokennumberto100tokens. Forclosed-settasks(PubHealthandARC-C),wesetthe
+maximum new token length to 50 for all baselines. For SELF-RAG inference on PubHealth and
+ARC-C,insteadofdeterminingtheoutputwiththehighestscore4asinothertasks,weaggregatethe
+scoresforeachoptionandselecttheansweroptionwiththehighestscore. Wefoundinzero-shot
+settingsoffactchecking,someLLMscangeneratecapitalizedclasslabels(e.g.,True)whileour
+goldlabelsarelower-cased. Therefore,acrossdifferentLMs,forfactchecking,welowercasethe
+predictions. Inmultiplechoicetasks,wefoundsomemodelsgenerateanswersinslightlydifferent
+ways(e.g.,(A)insteadofA).WeslightlymodifyinstructionsforeachLLMtoavoidsuchformat
+violations, andfurtherconductstringmatchingbetweeneachcandidateandmodelpredictionsif
+formatviolationsstillremain. Afterthatprocessing,inclosedsettasks,modelpredictionsmatch
+oneofthegoldclassesinalmostallcases. ForALCE,wefoundthatLlama2-chattendtogenerate
+significantlyloweroutputsthanothermodels(e.g.,onaverage,theiroutputisnearly100token,while
+ChatGPTgenerates40tokensonaverage),resultingininflatedstr-emscores. Welimitthemaximum
+generation length to 100 tokens for all baselines to avoid this issue, rather than the original 300
+tokensintheALCEpaper. Consequently,allofthebaselineoutputlengthiswithin30-60tokens.
+ForFactScore,wesetthemaximumnewtokenlengthto500forbaselinesand200forSELF-RAGat
+eachsegmentlevel.
+Task-specificinstructions. Table5showsthelistoftheinstructionsusedduringevaluations. For
+Open-domainQA,wedonotprovideexplicitinstructions.
+C RESULTS
+C.1 ANALYSIS
+Relianceonparametric-andnon-parametricmemories. Weconductanalysisonhowfrequently
+modelanswerscomefromretrievedpassages(non-parametricmemories)ortheirownparametric
+memories. On two open-domain QA datasets, TriviaQA and PopQA, we conduct the following
+analysis: 1) sample query models successfully answer correctly, 2) for each query in this group,
+checkwhetherthematchedground-truthanswerisasub-stringoftheretrievedpassageornot. We
+evaluateSELF-RAG7B,Alpaca7B,Alpaca13B,andLlama2-Chat-13B.WefoundthatSELF-RAG
+significantlylessfrequentlygeneratesanswersthatarenotincludedintheprovidedevidence; in
+particular,inAlpaca30B,20%ofthecorrectpredictionsarenotincludedintheprovidedpassages,
+followedbyLlama2-chat13B(18%)andAlpaca(15%),whileitisonly2%inSELF-RAG. When
+retrievedpassagesarenotrelevant,SELF-RAGgenerates ISREL =Irrelevant,indicatingthatthe
+followinganswersmaynotbefactuallygrounded,whilethoseinstruction-tunedmodelscontinueto
+generateplausibleanswers.
+8https://github.com/facebookresearch/atlas
+9https://programmablesearchengine.google.com/about/
+20
+
+Preprint.
+C.2 HUMANEVALUATIONEXAMPLES
+Table 6 shows examples with human evaluations on S&P and correctness of ISREL and ISSUP
+reflectiontokens.
+C.3 QUALITATIVEEXAMPLES
+Table7showsseveralexamplespredictedbyourSELF-RAG(13B).Thefirstexampleisthemodel
+outputtoanASQAquestion. ThefirstreferencestatesthatEmperorConstantinemadeSundaya
+day ofrest from labor, and further thesecond citation supportsthe fact that theofficial adoption
+ofSundayasadayofrestbyConstantineinAD321. Inthesecondexample,themodelpredicts
+ContradictorytothefirstoutputastheoutputsaysthepersonhasservedastheCEOsince2010,
+whilethepassagesayshesteppeddownasCEOin2015. Indicatingthosefactualcontradictions
+asreflectiontokensenablestoenforcementofhardcontrolandalsoverificationofmodeloutputs
+easily. Inthethirdexample,whilethegenerationismostlycorrect,SELF-RAGpredictsPartially
+Supporttothestatementlistingthenameofthesongs,astheywerenotexplicitlymentioned.
+D FULL LIST OF INSTRUCTIONS AND DEMONSTRATIONS FOR GPT-4
+Here,weshowtheinstructionsanddemonstrationsusedtopromptGPT-4tocollectreflectiontokens.
+Table 8 shows the instructions and demonstrations for the initial retrieval token. Table 9 shows
+the instruction and demonstrations used to collect the three-way output tokens for Retrieve given
+instruction,precedingsentences,andpreviouslyretrievedpassages. Duetothelongerdemonstration
+andtestinput,weonlyuseasingledemonstration. Table10showsaninstructionanddemonstrations
+usedtocollectthethree-wayoutputtokensfor ISREL . Table11showsaninstructionanddemon-
+strationsusedtocollectthethree-wayoutputtokensfor ISREL . Table12showsaninstructionand
+demonstrationsusedtocollectthefive-wayoutputtokensfor ISUSE .
+21
+
+Preprint.
+InputIdentifythetwotypesofcomputermemory.(fromgpt4 alpaca)
+Output [Retrieve=Yes]<p>Computer memory Computer memory – In computing, memory refers to the
+computerhardwareintegratedcircuitsthatstoreinformationforimmediateuseinacomputer;itissynonymous
+withtheterm“primarystorage”.Computermemoryoperatesatahighspeed,forexamplerandom-accessmemory
+(RAM),asadistinctionfromstoragethatprovidesslow-to-accessinformationbutoffershighercapacities.If
+needed,contentsofthecomputermemorycanbetransferredtosecondarystorage;averycommonwayofdoing
+thisisthroughamemorymanagementtechniquecalled“virtualmemory”.Anarchaicsynonymformemoryis
+store.Theterm“memory”,meaning“primarystorage”or“mainmemory”,is<p>[ ISREL =Relevant]Primary
+memory,alsoknownasmainmemory,isthememorythatthecomputercandirectlyaccessandmanipulate.
+[ ISSUP =Fully Supported] [Retrieve=Yes]<p>Computer memory–often associated with addressable
+semiconductormemory, i.e. integratedcircuitsconsistingofsilicon-basedtransistors, usedforexampleas
+primarystoragebutalsootherpurposesincomputersandotherdigitalelectronicdevices.Therearetwomain
+kindsofsemiconductormemory,volatileandnon-volatile.Examplesofnon-volatilememoryareflashmemory
+(usedassecondarymemory)andROM,PROM,EPROMandEEPROMmemory(usedforstoringfirmware
+suchasBIOS).Examplesofvolatilememoryareprimarystorage,whichistypicallydynamicrandom-access
+memory(DRAM),andfastCPUcachememory, whichistypicallystaticrandom-accessmemory(SRAM)
+thatisfastbutenergy-consuming,offeringlowermemory<p>[ ISREL =Relevant]Primarymemorycanbe
+accessedquickly,butitisvolatile,meaningthatthedataislostifthepoweristurnedoff.[ ISSUP =Partially
+Supported]...[ ISUSE :5]
+InputGiveanexampleofasituationwhereyouhavetodelegatetasks(fromgpt4 alpaca)
+Output[Retrieve=No]Themanagerrealizesthatthereisanextensivelistoftasksthatneedtobecompletedin
+ordertomaketheeventasuccess.[Retrieve=Yes]<p>Delegation–Delegationistheassignmentofanyresponsi-
+bilityorauthoritytoanotherperson(normallyfromamanagertoasubordinate)tocarryoutspecificactivities.It
+isoneofthecoreconceptsofmanagementleadership.However,thepersonwhodelegatedtheworkremains
+accountablefortheoutcomeofthedelegatedwork.Delegationempowersasubordinatetomakedecisions,i.e.it
+isashiftingofdecision-makingauthorityfromoneorganizationalleveltoalowerone.Delegation,ifproperly
+done,isnotfabrication.Theoppositeofeffectivedelegationismicromanagement,whereamanagerprovidestoo
+muchinput,<p>[ ISREL =Relevant]Thisincludestaskssuchascreatingaguestlist,designingandsendingin-
+vitations,bookingavenue,coordinatingwithvendors,planningtheevents´program,andmonitoringthebudget.[
+ISSUP =Partially Supported][Retrieve=No]Sinceitisnotpossibleforthemanagertohandleeverything
+alone, they must delegate tasks to their team members.[Retrieve=No]The manager would then assign each
+teammemberspecificresponsibilitiesbasedontheirindividualskillsetsandstrengths.[Retrieve=Yes]<p>Joint
+applicationdesign–SubjectMatterExperts:Thesearethebusinessusers,theISprofessionals,andtheoutside
+expertsthatwillbeneededforasuccessfulworkshop.Thisgroupisthebackboneofthemeeting<p>[ ISREL
+=Irrelevant]Forinstance,theteams´graphicdesignermightbetaskedwithdesigningtheinvitations,while
+theeventcoordinatorwouldbeinchargeofplanningtheprogramandworkingwithvendors...[Retrieve=No]By
+delegatingtasks,themanagercanensurethatallnecessarytasksarecompletedinatimelymanner,whilealso
+empoweringtheirteammemberstotakeonresponsibilitiesandcontributetothesuccessoftheevent.[ ISUSE
+=5]
+InputSynthesizeapoembasedonthisprompt:“Thesunissetting”(fromstanford alpaca)
+Output [Retrieve=No]The stars begin to twinkle bright the trees, scattered throughout the night;
+[Retrieve=No]Thestarsbegintotwinklebrightthetrees,scatteredthroughoutthenight[Retrieve=No]They
+flickerlikeasilentdance,Apeacefulmomentinitstrance. [Retrieve=No]Theyflickerlikeasilentdance,A
+peacefulmomentinitstrance.[Retrieve=No]Achorusofcricketssingalullaby,Toeverycreaturethatroams
+thesky[ ISUSE =5]
+Inputwhendidwalkingdeadseason7comeout(fromnq)
+Output[Retrieve=Yes]<p>TheWalkingDead(season7)–TheWalkingDead(season7)Theseventhseasonof
+“TheWalkingDead”,anAmericanpost-apocalyptichorrortelevisionseriesonAMC,premieredonOctober23,
+2016,andconcludedonApril2,2017,consistingof16episodes.DevelopedfortelevisionbyFrankDarabont,
+theseriesisbasedontheeponymousseriesofcomicbooksbyRobertKirkman,TonyMoore,andCharlieAdlard.
+...<p>[ ISREL =Relevant]October23,2016[ ISSUP =Fully Supported][ ISUSE =5]
+InputGivenachathistoryseparatedbynewlines, generatesaninformative, knowledgeableandengaging
+response:Hello,IloveGermanshepherddogsandyou?–Myfavoritedog,theyareofficiallyknownasGerman
+ShepherdDogs?–Yes,IhaveaGermanshepherdinmyhouseandsheispregnant(fromwow)
+Outputheyalsoareeasilytrained,obedient,andintelligent.[Retrieve=Yes]<p>GermanShepherd–asimple
+differenceofopinion,itisthefundamentalissueofthebreeds´essentialconformationandmovement....They
+areknownforbeingeasytotrainandgoodforperformingtasksandfollowinginstructions.Theyareespecially
+wellknownfortheirpolicework,beingusedfortrackingcriminals,patrollingtroubledareasanddetectingand
+holdingsuspects.<p>[ ISREL =Relevant]Becauseofthis,theyareoftenusedfordisabilityassistanceand
+forpolicework.[ ISSUP =Partially Supported][ ISUSE =2]
+Table4: Listofthetrainingexamples.
+22
+
+Preprint.
+Dataset Instruction
+ARC-C Givenfouranswercandidates,A,B,CandD,choosethebestanswerchoice. Pleaseanswer
+withthecapitalizedalphabetonly,withoutaddinganyextraphraseorperiod.
+PubHealth Isthefollowingstatementcorrectornot? Saytrueifit’scorrect;otherwise,sayfalse. Don’t
+capitalizeoraddperiods,justsay“true”or“false”.
+BioGeneration Tellmeabioabout[Person Name]
+ASQA(baseline) Instruction:Writeanaccurate,engaging,andconciseanswerforthegivenquestionusingonly
+theprovidedsearchresults(someofwhichmightbeirrelevant)andcitethemproperly. Use
+an unbiased and journalistic tone. Always cite for any factual claim. When citing several
+searchresults,use[1][2][3]. Citeatleastonedocumentandatmostthreedocumentsineach
+sentence.Ifmultipledocumentssupportthesentence,onlyciteaminimumsufficientsubsetof
+thedocuments.
+ASQA(ours) Answerthefollowingquestion. Thequestionmaybeambiguousandhavemultiplecorrect
+answers,andinthatcase,youhavetoprovidealong-formanswerincludingallcorrectanswers.
+Table5: Fulllistofinstructionsusedduringzero-shotevaluations. Foropen-domainQA,wedon’t
+useanytaskspecificinstructionandsimplyusetheoriginalquestionsasinputquery.
+23
+
+Preprint.
+InputWhatgenreisAQuestionandAnswerGuidetoAstronomy?(PopQA)
+Output[Retrieve=Yes]<p>Reference[1]<p>[ ISREL =Relevant]AQuestionandAnswerGuidetoAs-
+tronomy is a non-fiction book that falls under the genre of Astronomy and Cosmology. [ ISSUP =Fully
+Supported][ ISUSE =5]
+Reference[1]AQuestionandAnswerGuidetoAstronomyisabookaboutastronomyandcosmology,andis
+intendedforageneralaudience. ThebookwaswrittenbyPierre-YvesBely,CarolChristian,andJean-Rene
+Roy,andpublishedinEnglishbyCambridgeUniversityPressin2010.ItwasoriginallywritteninFrench.The
+contentwithinthebookiswrittenusingaquestionandanswerformat.Itcontainssome250questions,which
+TheScienceTeacherstateseachareansweredwithaconciseandwell-formulatedessaythatisinformativeand
+readable.TheScienceTeacherreviewgoesontostatethatmanyoftheanswersgiveninthebookarelittlegems
+ofsciencewriting.TheScienceTeachersummarizesbystatingthateachquestionislikelytobethoughtofbya
+student,andthattheanswersareinformative,wellconstructed,andthorough.Thebookcoversinformationabout
+theplanets,theEarth,theUniverse,practicalastronomy,history,andawkwardquestionssuchasastronomyin
+theBible,UFOs,andaliens.AlsocoveredaresubjectssuchastheBigBang,comprehensionoflargenumbers,
+andtheMoonillusion.
+S&P SupportedandPlausible.
+Correctnessof ISREL and ISSUP : Both ISREL and ISSUP arecorrect,astheReference[1]provides
+detailedinformationofthebookincludingthegenre,andthemodeloutputisfullysupportedbythereference.
+InputWhoistheauthorofTheLie?(PopQA)
+Output [Retrieve=Yes]<p>Reference[1]<p>[ ISREL =Relevant]TheauthorofTheLieisSamHarris.[
+ISSUP =Fully Supported][ ISUSE =5]
+Reference[1]Lyingisa2011long-formessaybookbyAmericanauthorandneuroscienceexpertSamHarris.
+Harrisarguesthatwecanradicallysimplifyourlivesandimprovesocietybymerelytellingthetruthinsituations
+whereothersoftenlie.
+S&P Plausiblebutnotsupported.
+Correctnessof ISREL and ISSUP Both ISREL and ISSUP areincorrect,astheReference[1]isabouta
+differentbookwhosetitleissimilartoTheLie.
+InputTellmeabioaboutRonaldinho(Bio)
+Output[Retrieve=Yes]<p>Reference[1]<p>[ ISREL =Relevant]Ronaldinhoisaretiredprofessional
+footballer from Brazil.[ ISSUP =Fully Supported][Retrieve=Continue]He played as an attacking
+midfielder and was known for his technical skills, creativity, dribbling ability, and accuracy from free
+kicks[Retrieve=Continue]HewontwoFIFAWorldPlayeroftheYearawardsandaBallond’Or.[ ISUSE =5]
+Reference[1]RonaldodeAssisMoreira(born21March1980),commonlyknownasRonaldinhoGau´choor
+simplyRonaldinho,isaBrazilianretiredprofessionalfootballerwhoplayedmostlyasanattackingmidfielder,
+butwasalsodeployedasawinger.Consideredoneofthebestplayersofhisgenerationandregardedbymanyas
+oneofthegreatestofalltime,RonaldinhowontwoFIFAWorldPlayeroftheYearawardsandaBallond’Or.A
+globaliconofthesport,hewasrenownedforhistechnicalskills,creativity,dribblingabilityandaccuracyfrom
+free-kicks,aswellashisuseoftricks,feints,no-lookpassesandoverhead...
+S&PPlausibleandfullysupported.
+Correctnessof ISREL and ISSUP Both ISREL and ISSUP arecorrect.
+InputTellmeabioaboutSergeiBodrov(Bio)
+Output [Retrieve=Yes] <p>Reference [1]<p>[ ISREL =Relevant] Sergei Vladimirovich Bodrov
+(born June 28, 1948) is a Russian film director, screenwriter, and producer.[ ISSUP =Fully
+Supported][Retrieve=Continue]HewasborninMoscow, Russia.[Retrieve=Continue]Heisthepresi-
+dentoftheRussianGuildofFilmProducers.[ ISUSE =5]
+Reference[1]SergeiVladimirovichBodrov(bornJune28,1948)isaRussianfilmdirector,screenwriter,and
+producer.In2003hewasthePresidentoftheJuryatthe25thMoscowInternationalFilmFestival.
+S&PPlausiblebutonlypartiallysupported.ThetheReference[1]doesnotexplicitlymentionthepersonisborn
+inMoscowandthereisnodescriptionabouttheRussianGuildofFilmProducers.
+Correctnessof ISREL and ISSUP ISREL and ISSUP arecorrectasthereferencedocumentishighlyrelevant
+andthefirstsentenceisfullysupported.
+Table6: Examplesofhumanevaluationresults.
+24
+
+Preprint.
+InputWhendidsundaybecametheseventhdayoftheweek(asqa)
+Output[Retrieve=Yes]<p>Reference[1]<p>[ ISREL =Relevant]In321AD,theRomanEmperorCon-
+stantinetheGreatmadeSundayadayofrestfromlabor,stating: “OnthevenerableDayoftheSunletthe
+magistratesandpeopleresidingincitiesrest,andletallworkshopsbeclosed”.[ ISSUP =Fully Supported]
+[Retrieve=Yes] <p>Reference [2]<p>[ ISREL =Relevant] The official adoption of Sunday as a day of
+rest by Constantine the Great in AD 321 made Sunday the seventh day of the week.[2][ ISSUP =Fully
+Supported][ ISUSE =5]
+Reference[1]EmperorConstantinethenenactedthefirstSundayLaws,for“thevenerableDayoftheSun”
+in321A.D.OnMarch7,321,theRomanemperorConstantineissuedadecreemakingSundayadayofrest
+fromlabor,stating: WefindagooddescriptionofthisinsourcessuchasthebookRestDayswhichstates:
+EarlyChristianobservanceofboththespiritualseventh-daysabbathandaLords´Dayassemblyisevidencedin
+Ignatiuss´lettertotheMagnesiansca.110.
+Reference[2]DespitetheofficialadoptionofSundayasadayofrestbyConstantine,theseven-dayweekand
+thenundialcyclecontinuedtobeusedside-by-sideuntilatleasttheCalendarof354andprobablylater....The
+factthatthecanonhadtobeissuedatallisanindicationthatadoptionofConstantine’sdecreeof321wasstill
+notuniversal...
+InputTellmeabioaboutRoryTapner.(bio generation)
+Output<p>Reference[1]<p>[ ISREL =Relevant]RoryTapnerisaBritishbusinessmanwhohasservedas
+theChiefExecutiveOfficerofCoutts,aprivatebankingandwealthmanagementcompany,since2010.[ ISSUP
+=Contradictory],Reference[2]<p>[ ISREL =Relevant]RoryTapnerwasbornon30September1959
+inLondon,England.[ ISSUP =Fully Supported]
+Reference[1]RoryTapnerRoryTapnerisaUKbusinessmanwho,inSeptember2010wasappointedCEOof
+Coutts,theWealthManagementdivisionofRoyalBankofScotlandGroup.InFebruary2015hesteppeddown
+asCEOwhenhewasreplacedintherolebyAlisonRose
+Reference[2]Holdings(fromAugust2016);andtheCounciloftheUniversityofBuckingham(fromJuly2017).
+RoryTapnerRoryTapner(born30September1959)isaUKbusinessman...
+InputTellmeabioaboutG.Venugopa.(bio generation)
+Output(ranked1)[Retrieve=Yes]<p>Reference[1]<p>[ ISREL =Relevant]G.Venugopalisapopu-
+larplaybacksingerintheMalayalamfilmindustry. [Retrieve=Continue]Hehassungover300songsin
+Malayalam,Tamil,andHindimovies.[ ISSUP =Partially Supported][Retrieve=Yes]<p>Reference
+[2]<p>G.VenugopalwasbornonDecember10,1960inIndia.[ ISSUP =Fully Supported]
+Reference[1]’G.VenugopalGVenugopal(born10December1960)isanIndianplaybacksingerknownforhis
+workinMalayalamfilms.Hestartedhissingingcareerinthefilm“OdaruthammaavaAalariyaam”(1984).Since
+thenhehassunginmorethan300films;andhasover500privatealbumstohiscredit.Themanyawardshehas
+wonincludethecovetedBestPlaybackSinger(KeralaState)whichhewonthrice,theFilmCriticsawardand
+theKeralaKaumudiGallopPollaward(twice).HewonTheKeralaStateawardforBestPlaybacksinger(2004)
+thirdtimeforthesong”aadedee..aadaadedee”fromthefilm”Ullam”.Venugopal’
+Reference[2]KeralaStateFilmAwards:KeralaFilmCriticsAwardKeralaStateGovernmentAward(Profes-
+sionalDrama):AsianetFilmAwards:KeralaKaumadiGallupPollAward:AcademicG.VenugopalGVenugopal
+(born10December1960)isanIndianplaybacksingerknownforhisworkinMalayalamfilms.
+Table7: Examplesofoutputs.
+25
+
+Preprint.
+Instructions
+Givenaninstruction,pleasemakeajudgmentonwhetherfindingsomeexternaldocuments
+fromtheweb(e.g.,Wikipedia)helpstogenerateabetterresponse. Pleaseanswer[Yes]or
+[No]andwriteanexplanation.
+Demonstrations
+InstructionGivethreetipsforstayinghealthy.
+Needretrieval? [Yes]
+ExplanationTheremightbesomeonlinesourceslistingthreetipsforstayinghealthyor
+somereliablesourcestoexplaintheeffectsofdifferentbehaviorsonhealth. Soretrieving
+documentsishelpfultoimprovetheresponsetothisquery.
+InstructionDescribeatimewhenyouhadtomakeadifficultdecision.
+Needretrieval? [No]
+ExplanationThisinstructionisaskingaboutsomepersonalexperienceandthusitdoesnot
+requireonetofindsomeexternaldocuments.
+Instruction Write a short story in third person narration about a protagonist who
+hastomakeanimportantcareerdecision.
+Needretrieval? [No]
+ExplanationThisinstructionasksustowriteashortstory,whichdoesnotrequireexternal
+evidencetoverify.
+InstructionWhatisthecapitalofFrance?
+Needretrieval? [Yes]
+ExplanationWhiletheinstructionsimplyasksustoanswerthecapitalofFrance,whichisa
+widelyknownfact,retrievingwebdocumentsforthisquestioncanstillhelp.
+InstructionFindtheareaofacirclegivenitsradius. Radius=4
+Needretrieval? [No]
+ExplanationThisisamathquestionandalthoughwemaybeabletofindsomedocuments
+describingaformula,itisunlikelytofindadocumentexactlymentioningtheanswer.
+Instruction Arrange the words in the given sentence to form a grammatically cor-
+rectsentence. quicklythebrownfoxjumped
+Needretrieval? [No]
+ExplanationThistaskdoesn’trequireanyexternalevidence,asitisasimplegrammatical
+question.
+InstructionExplaintheprocessofcellularrespirationinplants.
+Needretrieval? [Yes]
+ExplanationThisinstructionasksforadetaileddescriptionofascientificconcept,andis
+highlylikelythatwecanfindareliableandusefuldocumenttosupporttheresponse.
+Table8: Instructionsanddemonstrationsfor Retrieve aspectgiventheinputonly.
+26
+
+Preprint.
+Instructions
+Youwillbeprovidedwithaninstruction,evidence,outputsentence,andprecedingsentences
+(optional). Iftheprecedingsentenceisgiven,theoutputshouldbethesentencethatfollows
+thoseprecedingsentences. Yourtaskistodeterminewhethertheinformationintheoutput
+sentencecanbefullyverifiedbytheevidenceorifitrequiresfurtherexternalverification.
+Therearethreecases:
+-Iftheoutputsentencecanbeverifiedsolelywiththeevidence,thenrespondwith[Continue
+toUseEvidence].
+- If the sentence doesn’t require any factual verification (e.g., a subjective sentence or a
+sentenceaboutcommonsense),thenrespondwith[NoRetrieval].
+-Ifadditionalinformationisneededtoverifytheoutputsentence,respondwith[Retrieval].
+Pleaseprovideexplanationsforyourjudgments.
+InstructionExplaintheuseofwordembeddingsinNaturalLanguageProcessing.
+Preceding sentences Word embeddings are one of the most powerful tools available for
+Natural Language Processing (NLP). They are mathematical representations of words or
+phrasesinavectorspace,allowingsimilaritiesbetweenwordsandthecontextinwhichthey
+areusedtobemeasured.
+Evidence: Wordembedding
+Wordembeddingisthecollectivenameforasetoflanguagemodelingandfeaturelearning
+techniquesinnaturallanguageprocessing(NLP)wherewordsorphrasesfromthevocabulary
+aremappedtovectorsofrealnumbers. Conceptuallyitinvolvesamathematicalembedding
+fromaspacewithonedimensionperwordtoacontinuousvectorspacewithamuchlower
+dimension. Output: Wordembeddingsareusefulfortaskssuchassentimentanalysis,text
+classification, predicting the next word in a sequence, and understanding synonyms and
+analogies.
+Rating[Retrieval]
+ExplanationTheoutputdiscussestheapplicationsofwordembeddings,whiletheevidence
+onlydiscussesthedefinitionsofwordembeddingsandhowtheywork. Therefore,weneedto
+retrieveotherevidencetoverifywhethertheoutputiscorrectornot.
+Table9: Instructionsanddemonstrationsfor Retrieve aspectgiventheinput,precedinggenerations,
+andretrievedpassages.
+27
+
+Preprint.
+Instructions
+You’llbeprovidedwithaninstruction,alongwithevidenceandpossiblysomepreceding
+sentences. Whenthereareprecedingsentences,yourfocusshouldbeonthesentencethat
+comesafterthem. Yourjobistodetermineiftheevidenceisrelevanttotheinitialinstruction
+andtheprecedingcontext,andprovidesusefulinformationtocompletethetaskdescribedin
+theinstruction. Iftheevidencemeetsthisrequirement,respondwith[Relevant];otherwise,
+generate[Irrelevant].
+InstructionGivenfouransweroptions,A,B,C,andD,choosethebestanswer.
+InputEarth’srotatingcauses
+A:thecyclingofAMandPM
+B:thecreationofvolcaniceruptions
+C:thecyclingofthetides
+D:thecreationofgravity
+EvidenceRotationcausestheday-nightcyclewhichalsocreatesacorrespondingcycleof
+temperatureandhumiditycreatesacorrespondingcycleoftemperatureandhumidity. Sea
+levelrisesandfallstwiceadayastheearthrotates.
+Rating[Relevant]
+ExplanationTheevidenceexplicitlymentionsthattherotationcausesaday-nightcycle,as
+describedintheansweroptionA.
+InstructionagetorunforUSHouseofRepresentatives
+EvidenceTheConstitutionsetsthreequalificationsforserviceintheU.S.Senate: age(at
+leastthirtyyearsofage);U.S.citizenship(atleastnineyears);andresidencyinthestatea
+senatorrepresentsatthetimeofelection.
+Rating[Irrelevant]
+Explanation The evidence only discusses the ages to run for the US Senate, not for the
+HouseofRepresentatives.
+Table10: Instructionsanddemonstrationsfor ISREL aspectgiventheinputonly.
+28
+
+Preprint.
+Instructions
+Youwillreceiveaninstruction,evidence,andoutput,andoptionalprecedingsentences. Ifthe
+precedingsentenceisgiven,theoutputshouldbethesentencethatfollowsthosepreceding
+sentences. Yourtaskistoevaluateiftheoutputisfullysupportedbytheinformationprovided
+intheevidence.
+Usethefollowingentailmentscaletogenerateascore:
+-[Fullysupported]-Allinformationinoutputissupportedbytheevidence,orextractions
+from the evidence. This is only applicable when the output and part of the evidence are
+almostidentical.
+-[Partiallysupported]-Theoutputissupportedbytheevidencetosomeextent,butthere
+ismajorinformationintheoutputthatisnotdiscussedintheevidence. Forexample,ifan
+instructionasksabouttwoconceptsandtheevidenceonlydiscusseseitherofthem,itshould
+beconsidereda[Partiallysupported].
+-[Nosupport/Contradictory]-Theoutputcompletelyignoresevidence,isunrelatedtothe
+evidence,orcontradictstheevidence. Thiscanalsohappeniftheevidenceisirrelevanttothe
+instruction.
+Make sure to not use any external information/knowledge to judge whether the out-
+put is true or not. Only check whether the output is supported by the evidence, and not
+whethertheoutputfollowstheinstructionsornot.
+InstructionExplaintheuseofwordembeddingsinNaturalLanguageProcessing.
+Preceding sentences Word embeddings are one of the most powerful tools available for
+Natural Language Processing (NLP). They are mathematical representations of words or
+phrasesinavectorspace,allowingsimilaritiesbetweenwordsandthecontextinwhichthey
+areusedtobemeasured.
+OutputWordembeddingsareusefulfortaskssuchassentimentanalysis,textclassification,
+predictingthenextwordinasequence,andunderstandingsynonymsandanalogies.
+EvidenceWordembedding
+Wordembeddingisthecollectivenameforasetoflanguagemodelingandfeaturelearning
+techniquesinnaturallanguageprocessing(NLP)wherewordsorphrasesfromthevocabulary
+aremappedtovectorsofrealnumbers. Conceptuallyitinvolvesamathematicalembedding
+fromaspacewithonedimensionperwordtoacontinuousvectorspacewithamuchlower
+dimension. Methods to generate this mapping include neural networks, dimensionality
+reductiononthewordco-occurrencematrix,probabilisticmodels,explainableknowledge
+basemethod,andexplicitrepresentationintermsofthecontextinwhichwordsappear. Word
+andphraseembeddings,whenusedastheunderlyinginputrepresentation,havebeenshown
+toboosttheperformanceinNLPtaskssuchassyntacticparsing,sentimentanalysis,next
+tokenpredictionsaswellandanalogydetection.
+Score[Fullysupported]
+ExplanationTheoutputsentencediscussestheapplicationofwordembeddings,andthe
+evidencementionsalloftheapplicationssyntacticparsing,sentimentanalysis,nexttoken
+predictionsaswellasanalogydetectionastheapplications. Therefore,thescoreshouldbe
+[Fullysupported].
+Table11: Instructionsanddemonstrationsfor ISSUP tokens.
+29
+
+Preprint.
+Instructions
+Givenaninstructionandanoutput,ratewhethertheresponseappearstobeahelpfuland
+informativeanswertothequery,from1(lowest)-5(highest). Wecallthisscoreperceived
+utility. The detailed criterion is as follows: 5: The response provides a complete, highly
+detailed,andinformativeresponsetothequery,fullysatisfyingtheinformationneeds. 4: The
+responsemostlyfulfillstheneedinthequery,whiletherecanbesomeminorimprovements
+suchasdiscussingmoredetailedinformation,havingbetterstructureoftheresponse,orim-
+provingcoherence. 3: Theresponseisacceptable,butsomemajoradditionsorimprovements
+areneededtosatisfyusers’needs. 2: Theresponsestilladdressesthemainrequest,butitis
+notcompleteornotrelevanttothequery. 1: Theresponseisbarelyon-topicorcompletely
+irrelevant.
+InstructionWhoisthecurrentprimeministeroftheUKasof2023?
+OutputBorisJohnsonwastheprimeministeroftheUKfrom2019-2022.
+Perceivedutility2
+ExplanationWhiletheoutputprovidesafactuallycorrectstatementabouttheUKprime
+ministerfrom2019to2022,thisinstructionaskswhotheprimeministerisasof2023,soit
+doesn’tanswertheinstruction. Therefore,theutilityis2.
+Instruction Given a description of a travel destination, recommend 10 tourist attrac-
+tionswithdetaileddescriptionsofeach. ThetraveldestinationisTokyo,Japan.
+Output Tokyo is a vibrant city full of exciting tourist attractions. Some must-see sights
+includetheTokyoSkytree,TokyoDisneyland,SensojiTemple,MeijiShrine,TsukijiFish
+Market,Harajuku,andShinjukuGyoen.
+Perceivedutility3
+ExplanationThisoutputdoesn’tprovidedescriptionsofeachattractionandthenumberof
+theattractionsisalsolessthan10. Whilethisoutputpartiallyanswerstheinstructions,it
+doesn’tmatchtheinstructionsstrictly.
+Table12: Instructionsanddemonstrationsfor ISUSE tokens.
+30

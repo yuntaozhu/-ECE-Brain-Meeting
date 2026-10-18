@@ -14,6 +14,19 @@
 | 作答 | decideSpeak 后验选卡 + compose |
 | 追问 | unspokenProgress / offlineFollow |
 
+## 流程
+
+```mermaid
+flowchart LR
+  A[转写] --> B[meetingSession 与半双工]
+  B --> C[会中知识库召回]
+  C --> D[decideSpeak]
+  D --> E[写回 lastDesign]
+  E --> F[合成]
+```
+
+责任链在进入咨询之前：回声、停止、会议起止、占麦、唤醒、总结。静默、占麦、播报中的非放行输入不到检索。开发 wiki 不在这条链上。
+
 ## 落点
 - `desktop/.cursorrules` 单向流水线
 - `decideSpeak.cjs` → `relevance.cjs` / `run.cjs`

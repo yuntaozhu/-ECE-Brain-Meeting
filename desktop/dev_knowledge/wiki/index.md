@@ -22,6 +22,12 @@
 - [[lin-2023-urial]] | 系统提示加少至三条风格例句 | type=source | aliases=2312.01552,URIAL
 - [[min-2023-factscore]] | 原子事实被知识源支撑的比例 | type=source | aliases=2305.14251,FActScore
 - [[gao-2023-alce]] | 带引用的回答要核对引用是否撑住句子 | type=source | aliases=2305.14627,ALCE
+- [[mccallum-1998-naive-bayes-event-models]] | 短文本上二元出现与多项计数两套事件模型 | type=source | aliases=McCallum,Nigam,Bernoulli,multinomial
+- [[zhai-2001-lm-smoothing-ir]] | 文档语言模型必须平滑 | type=source | aliases=Zhai,Lafferty,Dirichlet
+- [[kondrak-2005-ngram-similarity]] | 共有 n 元组与 n 元组距离不是同一公式 | type=source | aliases=Kondrak,bigram
+- [[aliannejadi-2019-clarifying-questions]] | 一个好的澄清问题能大幅抬检索 | type=source | aliases=1907.06554,Qulac
+- [[kamath-2020-selective-qa]] | 域外会过度自信，必须会拒答 | type=source | aliases=2006.09462,selective QA
+- [[misu-2005-speech-ir-clarification]] | 语音残缺问句用信息增益确认 | type=source | aliases=H05-1126,Misu,Kawahara
 
 ## 概念
 
@@ -36,3 +42,8 @@
 - [[perceived-empathy-tone]] | 共情只作口吻不进开口线 | type=concept | aliases=empathy
 - [[llm-agent-qa-pipeline]] | 规划→理解→检索→作答→追问 | type=concept | aliases=agent QA
 - [[atomic-support-eval]] | 口播分句必须被胜出卡支撑 | type=concept | aliases=FActScore,ALCE,引用质量
+- [[short-text-event-model]] | 短转写用出现型特征 | type=concept | aliases=Bernoulli,multinomial
+- [[markov-smoothing]] | 正式马尔可夫全 1，影子才估平滑 | type=concept | aliases=Dirichlet,Jelinek-Mercer
+- [[char-bigram-alignment]] | 对齐是共有字二元组 | type=concept | aliases=alignScore,contentBigrams
+- [[clarifying-vs-menu]] | 澄清问候选差异，不用菜单套话 | type=concept | aliases=splitQuestion,localAsk
+- [[selective-abstention]] | 无证据就拒答 | type=concept | aliases=no_evidence,abstain

@@ -17,3 +17,4 @@ Bayes factor 是两个假设的证据比；用来给「选这张卡而不是无�
 
 ## 原文
 - `raw/kass-1995-bayes-factors.pdf` · JASA 90(430):773–795，1995
+- 核对用：`raw/md/kass-1995-bayes-factors.md`（MarkItDown 只抽出封面文字层；正文是扫描图像，**不要**把该 md 当全文）

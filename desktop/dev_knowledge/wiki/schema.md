@@ -34,6 +34,12 @@
 ## 取舍
 采用 / 已有 / 不采用。不采用写明约束（时延、后验线、不微调、在线零 Embedding）。
 
+## 公式
+算法页必填。引擎正在用的式子以 `desktop/lib/` 为准，并写参数来自哪份 JSON。论文式子只誊写能对上 PDF 的行；`raw/md/` 分栏拆乱的表格不得原样粘贴。没有公式的流程页删掉本节。
+
+## 流程
+流程页必填，用 Mermaid。画现行路径；未决改动单独标出，不画成已经在跑。
+
 ## 落点
 对应文件或机制（如 relevance.cjs、compose、engine-hyperparams.json）。不写进 faq-meeting.txt。
 
@@ -75,6 +81,7 @@
 4. **数字只写论文或代码里有的**。不作答线放宽（后验 ≥ 0.42、对齐 ≥ 0.28、闭题 ≥ 0.18、Bayes factor ≥ 3）除非 `.cursorrules` 与评测一起改。
 5. **不跑 `rag:index`** 给本库建 Embedding。本库靠 `index.md` 与整页阅读。
 6. 密钥、API Key **禁止** 写入本目录任何文件。
+7. **`raw/md/`** 是 MarkItDown（本机 `conda activate markitdown`，环境在 `D:\Anaconda\envs\markitdown`）从 PDF 抽出的核对文本。不断言版面、公式、表格完全正确；主张与数字以 PDF 为准。Query 先读 index 与概念页，核对某一句时再打开对应 md，禁止把多篇全文灌进同一次上下文。不使用 `markitdown-ocr`（会改写原文）。
 
 ## 索引行格式（index.md）
 

@@ -6,6 +6,15 @@
 ## 取舍
 **仅口吻。** compose 可先接住关切、短句；事实必须来自检索原句。共情分数 **不是** 开口线。
 
+## 流程
+
+```mermaid
+flowchart LR
+  R[检索原句] --> C[短句口吻]
+  C --> S[口播]
+  E[共情分数] -.->|不进入开口线| S
+```
+
 ## 落点
 - `composeNumberRule` + composeSystem
 - 禁止把「让客户舒服」写成 .cjs 里的业务承诺
