@@ -5,7 +5,7 @@ Aliannejadi 等：主动问一个能澄清意图的问题，检索可大幅提�
 
 ## 取舍
 **已有**：Bayes factor 不够时，`splitQuestion` 用两张卡的片段。  
-**未决**：没有卡达标时，不要用「你想先听哪一步」这种菜单句顶替澄清；应沉默，或只问能分开两个候选的片段。改代码前以现行 `localAsk` / hostReject 行为为准。
+没有卡达标、也没有可分两段时：`speak` 为空，`reason=no_evidence`，不拼「你想先听哪一步」。`localAsk` 模板仍留在 schema 供 hostReject 识别旧套话。
 
 ## 公式
 出处：`relevance.cjs` 的 `eigOf`。\(H\) 是二进制熵（比特）。假设质量来自后验。对候选对 \((a,b)\)，若质量落在 \(a\) 上则 \(P(Y{=}1)=0.85\)，落在 \(b\) 上则 \(0.15\)，其余为 \(0.5\)（`eigHit` / `eigMiss` / `eigOther`）。
@@ -26,14 +26,13 @@ flowchart TD
   B -->|是| K[作答]
   B -->|否| E{EIG 够且有两段候选?}
   E -->|是| Q[splitQuestion 问两段差异]
-  E -->|否| M[现行：焦点菜单句]
-  M -.->|未决| R[改为沉默或只问两段差异]
+  E -->|否| R[沉默 no_evidence]
 ```
 
 ## 落点
-- `relevance.cjs` → splitQuestion、eig
-- `speak-lines.json` → localAsk（现行；未决是否收紧）
-- 残句与焦点：`universalOperators.cjs`、`linguistic-operators.json`
+- `relevance.cjs` → splitQuestion、eig、无证据空 speak
+- `linguistic-operators.json` → localAsk 仅作 hostReject
+- 残句与焦点：`universalOperators.cjs`
 
 ## 相关
 - [[selective-abstention]]

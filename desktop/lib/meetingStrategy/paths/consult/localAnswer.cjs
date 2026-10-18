@@ -111,7 +111,11 @@ function tryLocalAnswer(ctx) {
         kbStatus,
         qFp,
         ark,
-        { cacheQuestion: askText }
+        {
+          cacheQuestion: askText,
+          speakReason: bayes.reason || "",
+          speakTitle: bayes.title || ""
+        }
       );
     }
   }
@@ -128,15 +132,41 @@ function tryLocalAnswer(ctx) {
         }).speak
       : bayes.speak;
     const line = String(spoken || bayes.speak || "").trim();
-    const probeRelease = !line && (bayes.reason === "probe" || bayes.reason === "draft");
+    const probeRelease =
+      !line && (bayes.reason === "probe" || bayes.reason === "draft" || bayes.reason === "no_evidence");
     if (probeRelease) {
-      const live = hasDoubaoKey() && !ctx.opts?.forceRule && bayes.design?.depth === "final";
+      const live =
+        bayes.reason !== "no_evidence" &&
+        hasDoubaoKey() &&
+        !ctx.opts?.forceRule &&
+        bayes.design?.depth === "final";
       if (live) return null;
       const focus = String(bayes.design?.segments?.[0] || "");
       const offline = offlineFollow(askText, lastHost, focus);
       if (state && bayes.design) state.lastDesign = bayes.design;
+      if (!String(offline || "").trim()) {
+        return {
+          shouldIntervene: false,
+          interventionText: "",
+          fullAnswer: "",
+          reason: "OK",
+          speakReason: bayes.reason || "",
+          speakTitle: bayes.title || "",
+          latestToDos: [],
+          nextStageRecommendation: null,
+          a2aTrace,
+          arkConfigured: hasDoubaoKey(),
+          arkMode: "skip",
+          agentMode: state.mode,
+          interactionMode: state.mode,
+          kbStatus,
+          questionFp: qFp || ""
+        };
+      }
       return S.playAnswer(offline, useBiz ? "BIZ_ANSWER" : "WAKE_ANSWER", state, a2aTrace, kbStatus, qFp, bayes.reason, {
-        cacheQuestion: askText
+        cacheQuestion: askText,
+        speakReason: bayes.reason || "",
+        speakTitle: bayes.title || ""
       });
     }
     if (line) {
@@ -146,7 +176,9 @@ function tryLocalAnswer(ctx) {
         state.lastOpenAskAt = Date.now();
       }
       return S.playAnswer(line, useBiz ? "BIZ_ANSWER" : "WAKE_ANSWER", state, a2aTrace, kbStatus, qFp, bayes.action, {
-        cacheQuestion: askText
+        cacheQuestion: askText,
+        speakReason: bayes.reason || "",
+        speakTitle: bayes.title || ""
       });
     }
   }

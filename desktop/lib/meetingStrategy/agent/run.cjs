@@ -172,6 +172,8 @@ function finishSpoken(ctx, payload) {
     earlyCovered: Boolean(spoken),
     earlySpoken: Boolean(spoken),
     reason: useBiz && !S.isClosedFaqQuestion(focusAsk(askText)) ? "BIZ_ANSWER" : "WAKE_ANSWER",
+    speakReason: payload.decisionObj?.reason || "",
+    speakTitle: payload.decisionObj?.title || payload.design?.hypothesisId || "",
     latestToDos: payload.todos || [],
     nextStageRecommendation: "MainDiscussion",
     a2aTrace,
@@ -280,6 +282,7 @@ async function runMeetingAgent(ctx) {
         topScore: score,
         riskRewrite,
         design: grounded.design,
+        decisionObj: grounded.decisionObj,
         todos: todosFromRetrieval(retrieval, askText)
       }
     );
@@ -531,6 +534,8 @@ async function runMeetingAgent(ctx) {
     earlyCovered: Boolean(streamed),
     earlySpoken: Boolean(streamed),
     reason: ctx.useBiz && !S.isClosedFaqQuestion(focusAsk(askText)) ? "BIZ_ANSWER" : "WAKE_ANSWER",
+    speakReason: grounded.decisionObj?.reason || "",
+    speakTitle: grounded.decisionObj?.title || grounded.design?.hypothesisId || retrievalTitle || "",
     latestToDos: todosFromRetrieval(retrieval, askText),
     nextStageRecommendation: "MainDiscussion",
     a2aTrace,

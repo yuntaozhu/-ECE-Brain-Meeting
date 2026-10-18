@@ -123,8 +123,8 @@ const cases = [
   {
     id: "ability-probe",
     q: "他不具备这个能力怎么办？",
-    need: /能力/,
-    forbid: /写死的标准|拍十秒|定班/
+    need: /^$/,
+    forbid: /写死的标准|拍十秒|定班|你是在问|你想先听|能力怎么办/
   },
   {
     id: "join-conditions",

@@ -228,6 +228,16 @@ async function replay(cases) {
     if (c.expect?.answerIncludesAll?.length && !(c.expect.answerIncludesAll || []).every((x) => String(answer || "").includes(x))) {
       local.push(`all ${answer.slice(0, 60)}`);
     }
+    if (c.expect?.speakReason?.length) {
+      const got = String(r.speakReason || "");
+      if (!c.expect.speakReason.includes(got)) local.push(`speakReason ${got || "(empty)"}`);
+    }
+    if (c.expect?.titleIncludesAny?.length) {
+      const title = String(r.speakTitle || "");
+      if (!c.expect.titleIncludesAny.some((x) => title.includes(x))) {
+        local.push(`title ${title.slice(0, 40) || "(empty)"}`);
+      }
+    }
     if (local.length) fails.push(`${c.id} ${local.join("; ")}`);
     else pass += 1;
 

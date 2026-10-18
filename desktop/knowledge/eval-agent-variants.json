@@ -203,7 +203,10 @@
     "expect": {
       "intent": ["other"],
       "answerForbids": ["你想先听哪一步", "收益保障"],
-      "answerIncludesAll": ["读准", "总部"]
+      "answerIncludesAll": ["读准", "总部"],
+      "speakReason": ["posterior", "progress"],
+      "titleIncludesAny": ["测评", "AI测评", "月度"],
+      "answerFromCard": true
     }
   },
   {
@@ -215,7 +218,10 @@
     "expect": {
       "intent": ["other"],
       "answerForbids": ["你想先听哪一步"],
-      "answerIncludesAll": ["机试", "口试"]
+      "answerIncludesAll": ["机试", "口试"],
+      "speakReason": ["posterior", "progress"],
+      "titleIncludesAny": ["测评", "AI测评", "月度"],
+      "answerFromCard": true
     }
   },
   {
@@ -227,7 +233,10 @@
     "expect": {
       "intent": ["other"],
       "answerForbids": ["你想先听哪一步", "收益保障"],
-      "answerIncludesAll": ["家长", "进步"]
+      "answerIncludesAll": ["家长", "进步"],
+      "speakReason": ["posterior", "progress"],
+      "titleIncludesAny": ["测评", "AI测评", "月度", "家长看得见"],
+      "answerFromCard": true
     }
   },
   {
@@ -239,7 +248,10 @@
     "expect": {
       "intent": ["other"],
       "answerForbids": ["你想先听哪一步", "收益保障", "百分之五十"],
-      "answerIncludesAll": ["家长", "进步"]
+      "answerIncludesAll": ["家长", "进步"],
+      "speakReason": ["progress", "posterior"],
+      "titleIncludesAny": ["测评", "AI测评", "月度"],
+      "answerFromCard": true
     }
   },
   {
@@ -251,7 +263,10 @@
     "expect": {
       "intent": ["other", "roi_confirm", "pricing_follow", "profit_how"],
       "answerForbids": ["你想先听哪一步", "机试", "证书"],
-      "answerIncludesAll": ["三万九", "成本"]
+      "answerIncludesAll": ["三万九", "成本"],
+      "speakReason": ["progress", "posterior"],
+      "titleIncludesAny": ["赚钱", "扭亏", "营收", "三笔账", "三万九"],
+      "answerFromCard": true
     }
   },
   {
@@ -264,7 +279,10 @@
       "intent": ["other"],
       "answerForbids": ["招生引擎", "一点八万", "你想先听哪一步"],
       "answerIncludesAll": ["退"],
-      "answerIncludesAny": ["一半", "三万九"]
+      "answerIncludesAny": ["一半", "三万九"],
+      "speakReason": ["posterior"],
+      "titleIncludesAny": ["收益保障", "退款"],
+      "answerFromCard": true
     }
   },
   {
@@ -277,7 +295,10 @@
       "intent": ["other"],
       "answerForbids": ["招生引擎", "一点八万", "五点四万", "你想先听哪一步"],
       "answerIncludesAll": ["退"],
-      "answerIncludesAny": ["一半", "三万九"]
+      "answerIncludesAny": ["一半", "三万九"],
+      "speakReason": ["posterior"],
+      "titleIncludesAny": ["收益保障", "退款"],
+      "answerFromCard": true
     }
   },
   {
@@ -290,7 +311,10 @@
       "intent": ["other"],
       "answerForbids": ["老师不必自己出题", "你想先听哪一步"],
       "answerIncludesAll": ["开口"],
-      "answerIncludesAny": ["成果展", "实拍"]
+      "answerIncludesAny": ["成果展", "实拍"],
+      "speakReason": ["posterior"],
+      "titleIncludesAny": ["成果展", "形式"],
+      "answerFromCard": true
     }
   },
   {
@@ -303,7 +327,10 @@
       "intent": ["other"],
       "answerForbids": ["老师不必自己出题", "你想先听哪一步", "AI测评每月做，机试加口试，形成报告和证书给家长看，也服务成果展"],
       "answerIncludesAll": ["开口"],
-      "answerIncludesAny": ["成果展", "实拍"]
+      "answerIncludesAny": ["成果展", "实拍"],
+      "speakReason": ["posterior"],
+      "titleIncludesAny": ["成果展", "形式"],
+      "answerFromCard": true
     }
   },
   {
@@ -316,7 +343,10 @@
       "intent": ["other"],
       "answerForbids": ["你想先听哪一步"],
       "answerIncludesAll": ["报告"],
-      "answerIncludesAny": ["实拍", "成果展"]
+      "answerIncludesAny": ["实拍", "成果展"],
+      "speakReason": ["posterior"],
+      "titleIncludesAny": ["家长看得见", "看见进步"],
+      "answerFromCard": true
     }
   }
 ]

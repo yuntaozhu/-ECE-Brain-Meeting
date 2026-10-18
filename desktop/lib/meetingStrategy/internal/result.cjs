@@ -201,6 +201,8 @@ function playAnswer(text, reason, state, a2aTrace, kbStatus, qFp, arkMode, meta 
     interventionText: answer,
     fullAnswer: answer,
     reason,
+    speakReason: meta.speakReason || "",
+    speakTitle: meta.speakTitle || "",
     latestToDos: [],
     nextStageRecommendation: "MainDiscussion",
     a2aTrace,

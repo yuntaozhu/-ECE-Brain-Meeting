@@ -228,8 +228,8 @@ function contentFocus(ask) {
   return focusPhrase(stripAsk(ask));
 }
 
-function probeLine(focus) {
-  return localAsk(focus);
+function probeLine(_focus) {
+  return "";
 }
 
 function usableHost(text) {
@@ -351,10 +351,31 @@ function cardOffer(ask, card, host, model) {
 }
 
 /**
- * 上一句已经播过资料、本句又是完整新问时，只在分句真正对上本句时往下念。
- * 别的卡的分句或标题达到闭题对齐且更高，就改念那张卡。
- * 全场都低于闭题对齐时，才继承上一张卡里还没念过的分句。
- * 不作答线，不改阈值。
+ * 把对本句已达闭题对齐的卡并进假设池，换卡走后验，不走 progress 旁路。
+ */
+function mergeAlignedHostCards(ask, host, list) {
+  const hostText = usableHost(host);
+  if (!hostText || !asksNewQuestion(ask)) return list || [];
+  const pack = hostCards();
+  const floor = H().closedAlignMin;
+  const out = (list || []).slice();
+  const seen = new Set(out.map((h) => plainChars(h.speak || h.snippet || "")));
+  for (const card of pack.cards) {
+    const offer = cardOffer(ask, card, hostText, pack.model);
+    if (offer.score < floor) continue;
+    const key = plainChars(card.speak);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ title: card.title, speak: card.speak, snippet: card.speak, score: 0 });
+  }
+  return out;
+}
+
+/**
+ * 上一句已经播过资料、本句又是完整新问时：
+ * 别的卡已达闭题线 → 不在此换卡（由 mergeAlignedHostCards + 后验处理）。
+ * 锚卡未播分句达闭题线 → progress。
+ * 全场都低于闭题线 → 仍继承锚卡未播分句（零交集短追问）。
  */
 function unspokenProgress(ask, host, ranked) {
   const pack = hostCards();
@@ -370,8 +391,7 @@ function unspokenProgress(ask, host, ranked) {
   }
   if (!anchor || hostAlign <= 0) return null;
   const anchorOffer = cardOffer(ask, anchor, host, pack.model);
-  let best = anchorOffer.score;
-  let winner = null;
+  let bestOther = -1;
   const pool = pack.cards.slice();
   for (const row of ranked || []) {
     const speak = String(row.speak || "");
@@ -382,22 +402,18 @@ function unspokenProgress(ask, host, ranked) {
   for (const card of pool) {
     if (plainChars(card.speak) === plainChars(anchor.speak)) continue;
     const offer = cardOffer(ask, card, host, pack.model);
-    if (offer.score > best) best = offer.score;
-    if (offer.score >= floor && offer.score > anchorOffer.clause.score && (!winner || offer.score > winner.score)) {
-      winner = offer;
-    }
+    if (offer.score > bestOther) bestOther = offer.score;
   }
-  if (winner) {
-    const clause = winner.clause.score >= floor ? winner.clause.text : String(winner.card.speak || "").trim();
-    if (clause) return { clause, title: winner.card.title };
+  if (bestOther >= floor && bestOther > anchorOffer.clause.score) {
+    return null;
   }
-  if (anchorOffer.clause.text && (anchorOffer.clause.score >= floor || best < floor)) {
+  if (anchorOffer.clause.text && (anchorOffer.clause.score >= floor || bestOther < floor)) {
     return { clause: anchorOffer.clause.text, title: anchor.title };
   }
   return null;
 }
 
-/** 豆包未出口时的本地一句。别的卡已经对上本句时，不复读上一句，也不拼焦点套话。 */
+/** 豆包未出口时的本地一句。别的卡已经对上本句时不复读；无证据不拼焦点菜单句。 */
 function offlineFollow(ask, lastHost, focus) {
   const host = usableHost(lastHost);
   if (host && asksNewQuestion(ask)) {
@@ -412,7 +428,7 @@ function offlineFollow(ask, lastHost, focus) {
     }
     if (top >= floor) return "";
   }
-  return hostRest(lastHost) || localAsk(focus);
+  return hostRest(lastHost) || "";
 }
 
 function boundaryFor(focus) {
@@ -505,7 +521,11 @@ function decideCore({ ask, hits, intent, script, prevDesign, lastHost, measure, 
   const model = faqAlignModel();
   const askLen = stripAsk(focused).length;
   const short = askLen > 0 && askLen <= cfg.shortAskLen;
-  const list = (hits || []).filter((h) => h && (h.title || h.snippet || h.speak));
+  const list = mergeAlignedHostCards(
+    focused,
+    lastHost,
+    (hits || []).filter((h) => h && (h.title || h.snippet || h.speak))
+  );
 
   const markovKey = prevDesign && (prevDesign.hypothesisId || prevDesign.type);
   const markov = priorScale
@@ -864,20 +884,20 @@ function decideCore({ ask, hits, intent, script, prevDesign, lastHost, measure, 
   if (focus) {
     return {
       action: "clarify",
-      speak: localAsk(focus),
-      reason: "probe",
+      speak: "",
+      reason: "no_evidence",
       posterior: p0,
       title: "",
       hypotheses,
       eig: 0,
-      design: designOf("clarify", "probe", [focus], "ask"),
+      design: designOf("clarify", "probe", focus ? [focus] : [], "ask"),
       downgraded
     };
   }
 
   return {
     action: "clarify",
-    speak: clarifyLine(),
+    speak: "",
     reason: "no_evidence",
     posterior: p0,
     title: "",

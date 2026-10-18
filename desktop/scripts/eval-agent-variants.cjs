@@ -1,5 +1,5 @@
 /**
- * Agent 口语变体评测 — intent + 禁止子串 + 知识锚点
+ * Agent 口语变体评测 — intent + 禁止子串 + 知识锚点 + reason/标题/分句归属
  *   node scripts/eval-agent-variants.cjs
  *   node scripts/eval-agent-variants.cjs --live   # 允许调豆包（较慢）
  */
@@ -12,7 +12,6 @@ require("dotenv").config({ path: fs.existsSync(rootEnv) ? rootEnv : deskEnv });
 
 const live = process.argv.includes("--live");
 if (!live) {
-  // 强制走本地 Understand 规则 + 软兜底，验证「亏损≠第二条路」
   process.env.DOUBAO_API_KEY = "";
   process.env.ARK_API_KEY = "";
 }
@@ -21,6 +20,7 @@ const { createMeetingSession } = require("../lib/meetingSession");
 const { runMeetingAnalysis, DEFAULT_AGENDA } = require("../lib/meetingStrategy");
 const { chatFallbackFor } = require("../lib/meetingStrategy/llm/fallback.cjs");
 const { ruleUnderstand } = require("../lib/meetingStrategy/agent/intent.cjs");
+const { getFaqRaw, extractFaqSpeakText } = require("../lib/knowledge/corpus.cjs");
 
 const file = path.join(__dirname, "..", "knowledge", "eval-agent-variants.json");
 const rows = JSON.parse(fs.readFileSync(file, "utf8"));
@@ -36,6 +36,80 @@ function includesNone(text, arr) {
 function includesAll(text, arr) {
   const t = String(text || "");
   return (arr || []).every((x) => t.includes(x));
+}
+
+function plain(s) {
+  return String(s || "").replace(/\s+/g, "");
+}
+
+function faqCards() {
+  const raw = String(getFaqRaw() || "");
+  const cards = [];
+  const blocks = raw.split(/\n(?=##\s*Q:)/);
+  for (const block of blocks) {
+    const m = block.match(/^##\s*Q:\s*(.+)$/m);
+    if (!m) continue;
+    const title = m[1].trim();
+    const speak = extractFaqSpeakText(block) || "";
+    if (title && speak) cards.push({ title, speak });
+  }
+  return cards;
+}
+
+let cardPack = null;
+function cards() {
+  if (!cardPack) cardPack = faqCards();
+  return cardPack;
+}
+
+function cardByTitleHints(title, hints) {
+  const t = String(title || "");
+  const list = cards();
+  if (t) {
+    const hit = list.find((c) => c.title === t || c.title.includes(t) || t.includes(c.title.slice(0, 12)));
+    if (hit) return hit;
+  }
+  for (const h of hints || []) {
+    const hit = list.find((c) => c.title.includes(h));
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function answerBelongsToCard(answer, card) {
+  if (!card || !answer) return false;
+  const a = plain(answer);
+  const s = plain(card.speak);
+  if (!a || !s) return false;
+  if (s.includes(a)) return true;
+  const parts = String(answer)
+    .split(/[。！？]/)
+    .map((x) => plain(x))
+    .filter((x) => x.length >= 4);
+  if (!parts.length) return s.includes(a);
+  return parts.every((p) => s.includes(p));
+}
+
+function checkDecision(r, e, answer, fails) {
+  const reason = String(r.speakReason || "");
+  const title = String(r.speakTitle || r.retrievalTitle || "");
+  if (e.speakReason?.length) {
+    if (!e.speakReason.includes(reason)) {
+      fails.push(`speakReason want ${e.speakReason.join("|")} got ${reason || "(empty)"}`);
+    }
+  }
+  if (e.titleIncludesAny?.length) {
+    if (!includesAny(title, e.titleIncludesAny)) {
+      fails.push(`title want any ${e.titleIncludesAny.join("|")} got ${title.slice(0, 40) || "(empty)"}`);
+    }
+  }
+  if (e.answerFromCard) {
+    const card = cardByTitleHints(title, e.titleIncludesAny);
+    if (!card) fails.push(`no card for title ${title.slice(0, 40) || "(empty)"}`);
+    else if (!answerBelongsToCard(answer, card)) {
+      fails.push(`answer not in card ${card.title.slice(0, 24)}`);
+    }
+  }
 }
 
 async function main() {
@@ -67,7 +141,8 @@ async function main() {
       forceRule: !live
     });
     let answer = String(r.interventionText || r.fullAnswer || r.spokenPrefix || "");
-    if (!answer || answer.length < 8) {
+    const allowEmpty = Boolean(row.expect?.allowEmpty);
+    if ((!answer || answer.length < 8) && !allowEmpty) {
       answer = chatFallbackFor(row.input.replace(/^大智[，,]\s*/, ""), state, DEFAULT_AGENDA);
     }
     const e = row.expect || {};
@@ -86,12 +161,13 @@ async function main() {
     if (e.answerIncludesAll?.length && !includesAll(answer, e.answerIncludesAll)) {
       fails.push(`missing all anchors; got: ${answer.slice(0, 80)}`);
     }
+    checkDecision(r, e, answer, fails);
     if (fails.length) {
       console.log(`FAIL ${row.id}`);
       fails.forEach((f) => console.log(`  - ${f}`));
     } else {
       pass += 1;
-      console.log(`OK   ${row.id} [${gotIntent}] :: ${answer.slice(0, 56)}`);
+      console.log(`OK   ${row.id} [${gotIntent}|${r.speakReason || "-"}] :: ${answer.slice(0, 56)}`);
     }
   }
 
