@@ -75,3 +75,7 @@
 5. 意图脚本降成假设池里的宽卡片，用特异度压低似然峰值，再删除按意图名写的覆盖。
 
 换行业时替换 `desktop/knowledge/` 与 `schema/`。半双工、责任链和决策引擎保持不动。
+
+## 5. 开发知识库（与会中库隔离）
+
+算法论文与引擎取舍在 `desktop/dev_knowledge/wiki/index.md`（Karpathy LLM Wiki：raw → wiki → schema）。会中召回与口播 **禁止** 读该目录；该目录句子 **禁止** 写入 `faq-meeting.txt`。改对齐、后验、豆包、评测前先 Query 开发 wiki；以代码与本文件为现状。
