@@ -214,7 +214,9 @@ function playAnswer(text, reason, state, a2aTrace, kbStatus, qFp, arkMode, meta 
     interactionMode: state.mode,
     kbStatus,
     questionFp: qFp || "",
-    wake: { lastFloor: "" }
+    wake: { lastFloor: "" },
+    oralize: Boolean(meta.oralize),
+    cardSpeak: meta.oralize ? answer : ""
   };
 }
 

@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "kind": "followup-chain",
+  "cardId": "faq_008",
+  "seedTitles": [
+    "家庭端",
+    "Family说",
+    "家园共育怎么做？",
+    "家园共育是什么？"
+  ],
+  "seedAnswer": "家庭端防止离园后英语中断：Family说日常表达、家庭美语指导、配合 ABCmouse，形成园内浸润、回家延续。",
+  "evidence": [
+    {
+      "title": "3.4 家庭端",
+      "score": 0.17
+    }
+  ],
+  "source": "rule",
+  "error": null,
+  "steps": [
+    {
+      "ask": "家庭端怎么做？",
+      "answer": "常见问题：家庭类 本文整理了关于家庭端（Family说）的常见问题，帮助家长了解如何配合孩子的英语学习，以及家庭端的具体内容和落地方法",
+      "cite": "常见问题：家庭类 本文整理了关于家庭端（Family说）的常见问题，帮助家长了解如何配合孩子的英语学习，以及家庭端的具体内容和落地方法。 **Q1：为什么要做家庭端（Family说）？** A： 孩子的语言学习不能只停留在校园。如果孩子下午离开幼儿园以后，英语环境立刻归零，那么校园里的学习效果也会大打折扣。 家庭端就是",
+      "gap": false,
+      "roundtrip": {
+        "ok": true,
+        "align": 0.5,
+        "hitCardId": "faq_008",
+        "hitTitle": "家庭端",
+        "reason": "seed"
+      },
+      "supportAlign": 1,
+      "accepted": true
+    },
+    {
+      "ask": "家庭端先做哪一步？",
+      "answer": "家庭端在全园美语系统中的核心定位 在完整的大地全园美语闭环中： ABCmouse做 输入 ABC说做 幼儿输出 Teacher说做 师资氛围 Family说做",
+      "cite": "家庭端 让孩子离开校园以后，美语环境不要马上中断 孩子的语言学习不能只停留在校园。如果孩子下午离开幼儿园以后，英语环境立刻归零，那么校园里的学习效果也会大打折扣。 家庭端，就是要解决这个关键问题： 孩子下午离开幼儿园以后，英语环境不要归零。 家庭端在全园美语系统中的核心定位 在完整的大地全园美语闭环中： ABCmous",
+      "gap": false,
+      "roundtrip": {
+        "ok": true,
+        "align": 0.2857,
+        "hitCardId": "faq_008",
+        "hitTitle": "家庭端",
+        "reason": "seed"
+      },
+      "supportAlign": 1,
+      "accepted": true
+    },
+    {
+      "ask": "家庭端具体怎么开展？",
+      "answer": "家庭端在全园美语系统中的核心定位 在完整的大地全园美语闭环中： ABCmouse做 输入 ABC说做 幼儿输出 Teacher说做 师资氛围 Family说做",
+      "cite": "家庭端 让孩子离开校园以后，美语环境不要马上中断 孩子的语言学习不能只停留在校园。如果孩子下午离开幼儿园以后，英语环境立刻归零，那么校园里的学习效果也会大打折扣。 家庭端，就是要解决这个关键问题： 孩子下午离开幼儿园以后，英语环境不要归零。 家庭端在全园美语系统中的核心定位 在完整的大地全园美语闭环中： ABCmous",
+      "gap": false,
+      "roundtrip": {
+        "ok": true,
+        "align": 0.2857,
+        "hitCardId": "faq_008",
+        "hitTitle": "家庭端",
+        "reason": "seed"
+      },
+      "supportAlign": 1,
+      "accepted": true
+    }
+  ],
+  "tuneSamples": [
+    {
+      "ask": "家庭端家长怎么看？",
+      "answer": "",
+      "cite": "家庭端防止离园后英语中断：Family说日常表达、家庭美语指导、配合 ABCmouse，形成园内浸润、回家延续",
+      "gap": true,
+      "roundtrip": {
+        "ok": true,
+        "align": 0.425,
+        "hitCardId": "faq_005",
+        "hitTitle": "四端联动是什么？",
+        "reason": "faq"
+      },
+      "supportAlign": 0,
+      "accepted": true
+    },
+    {
+      "ask": "家庭端下一步是什么？",
+      "answer": "",
+      "cite": "家庭端防止离园后英语中断：Family说日常表达、家庭美语指导、配合 ABCmouse，形成园内浸润、回家延续",
+      "gap": true,
+      "roundtrip": {
+        "ok": true,
+        "align": 0.2857,
+        "hitCardId": "faq_008",
+        "hitTitle": "家庭端",
+        "reason": "seed"
+      },
+      "supportAlign": 0,
+      "accepted": true
+    },
+    {
+      "ask": "家庭端要注意什么？",
+      "answer": "",
+      "cite": "家庭端防止离园后英语中断：Family说日常表达、家庭美语指导、配合 ABCmouse，形成园内浸润、回家延续",
+      "gap": true,
+      "roundtrip": {
+        "ok": true,
+        "align": 0.3333,
+        "hitCardId": "faq_008",
+        "hitTitle": "家庭端",
+        "reason": "seed"
+      },
+      "supportAlign": 0,
+      "accepted": true
+    }
+  ],
+  "ready": true,
+  "nextHints": [
+    "家庭端怎么做？",
+    "家庭端先做哪一步？",
+    "家庭端具体怎么开展？"
+  ],
+  "writtenAt": "2026-10-20T03:02:25.969Z"
+}

@@ -26,7 +26,9 @@ async function runSummaryPath(state, agenda, opts, a2aTrace, kbStatus, withTopic
   const rows = readSession(state.meetingId, { limit: 40 });
   const fallbackRows = rows;
   const body = formatSessionForPrompt(fallbackRows, 1800) || "（本段暂无足够转写）";
-  const localSummary = extractiveSummary(fallbackRows);
+  const localSummary = extractiveSummary(fallbackRows, {
+    pendingAsk: state.pendingAsk || ""
+  });
   let summaryText = "";
   let topicText = "";
   let arkMode = "extractive";

@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "kind": "followup-chain",
+  "cardId": "faq_001",
+  "seedTitles": [
+    "全园美语是什么？",
+    "什么是全园美语？",
+    "全园美语是什么项目？"
+  ],
+  "seedAnswer": "全园美语是面向大地合作园的全园型美语特色系统，不是单一英语课或账号采购；整合 ABCmouse、ABC说、菲教、Teacher说、Family说、AI测评等，用四端联动把美语做成校园特色和招生引擎。",
+  "evidence": [
+    {
+      "title": "什么是全园美语系统",
+      "score": 0.3336
+    },
+    {
+      "title": "2.1 一页看懂全园美语",
+      "score": 0.2355
+    }
+  ],
+  "source": "rule",
+  "error": null,
+  "steps": [
+    {
+      "ask": "全园美语怎么做？",
+      "answer": "一页看懂全园美语 项目名称 全园美语系统 项目服务价：39,000元/学期（外校园价：49,000元/学期） 项目定位 面向大地合作校园建立的 全园型美语特色建",
+      "cite": "一页看懂全园美语 项目名称 全园美语系统 项目服务价：39,000元/学期（外校园价：49,000元/学期） 项目定位 面向大地合作校园建立的 全园型美语特色建设项目 。 本项目不是单一的英语课程采购，也不是ABCmouse账号采购，而是整合大地现有美语资源，为校园建立覆盖 幼儿、教师、家庭、教学、测评、活动与招生运营",
+      "gap": false,
+      "roundtrip": {
+        "ok": true,
+        "align": 0.6,
+        "hitCardId": "faq_001",
+        "hitTitle": "全园美语是什么？",
+        "reason": "seed"
+      },
+      "supportAlign": 1,
+      "accepted": true
+    },
+    {
+      "ask": "全园美语先做哪一步？",
+      "answer": "本项目不是单一的英语课程采购，也不是ABCmouse账号采购，而是整合大地现有美语资源，为校园建立覆盖 幼儿、教师、家庭、教学、测评、活动与招生运营 的一体化美",
+      "cite": "一页看懂全园美语 项目名称 全园美语系统 项目服务价：39,000元/学期（外校园价：49,000元/学期） 项目定位 面向大地合作校园建立的 全园型美语特色建设项目 。 本项目不是单一的英语课程采购，也不是ABCmouse账号采购，而是整合大地现有美语资源，为校园建立覆盖 幼儿、教师、家庭、教学、测评、活动与招生运营",
+      "gap": false,
+      "roundtrip": {
+        "ok": true,
+        "align": 0.425,
+        "hitCardId": "faq_002",
+        "hitTitle": "今天会议主题是什么？",
+        "reason": "faq"
+      },
+      "supportAlign": 1,
+      "accepted": true
+    },
+    {
+      "ask": "全园美语具体怎么开展？",
+      "answer": "一页看懂全园美语 项目名称 全园美语系统 项目服务价：39,000元/学期（外校园价：49,000元/学期） 项目定位 面向大地合作校园建立的 全园型美语特色建",
+      "cite": "一页看懂全园美语 项目名称 全园美语系统 项目服务价：39,000元/学期（外校园价：49,000元/学期） 项目定位 面向大地合作校园建立的 全园型美语特色建设项目 。 本项目不是单一的英语课程采购，也不是ABCmouse账号采购，而是整合大地现有美语资源，为校园建立覆盖 幼儿、教师、家庭、教学、测评、活动与招生运营",
+      "gap": false,
+      "roundtrip": {
+        "ok": true,
+        "align": 0.375,
+        "hitCardId": "faq_001",
+        "hitTitle": "全园美语是什么？",
+        "reason": "seed"
+      },
+      "supportAlign": 1,
+      "accepted": true
+    }
+  ],
+  "tuneSamples": [
+    {
+      "ask": "全园美语家长怎么看？",
+      "answer": "",
+      "cite": "全园美语是面向大地合作园的全园型美语特色系统，不是单一英语课或账号采购",
+      "gap": true,
+      "roundtrip": {
+        "ok": true,
+        "align": 0.4286,
+        "hitCardId": "faq_001",
+        "hitTitle": "全园美语是什么？",
+        "reason": "seed"
+      },
+      "supportAlign": 0,
+      "accepted": true
+    },
+    {
+      "ask": "全园美语下一步是什么？",
+      "answer": "",
+      "cite": "全园美语是面向大地合作园的全园型美语特色系统，不是单一英语课或账号采购",
+      "gap": true,
+      "roundtrip": {
+        "ok": true,
+        "align": 0.5,
+        "hitCardId": "faq_001",
+        "hitTitle": "全园美语是什么？",
+        "reason": "seed"
+      },
+      "supportAlign": 0,
+      "accepted": true
+    },
+    {
+      "ask": "全园美语要注意什么？",
+      "answer": "",
+      "cite": "全园美语是面向大地合作园的全园型美语特色系统，不是单一英语课或账号采购",
+      "gap": true,
+      "roundtrip": {
+        "ok": true,
+        "align": 0.5714,
+        "hitCardId": "faq_020",
+        "hitTitle": "加入全园美语要准备什么？",
+        "reason": "faq"
+      },
+      "supportAlign": 0,
+      "accepted": true
+    }
+  ],
+  "ready": true,
+  "nextHints": [
+    "全园美语怎么做？",
+    "全园美语先做哪一步？",
+    "全园美语具体怎么开展？"
+  ],
+  "writtenAt": "2026-10-20T03:02:25.903Z"
+}

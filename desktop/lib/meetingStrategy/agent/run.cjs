@@ -10,6 +10,7 @@ const {
   topScore,
   isAnswerable,
   repeatLine,
+  isTruncatedAsk,
   focusAsk,
   offlineFollow
 } = require("./relevance.cjs");
@@ -420,13 +421,19 @@ async function runMeetingAgent(ctx) {
     if (!kb || softBan.test(kb)) {
       kb = knowledgeSpeakLine(intentObj, askText, retrieval, state, lastHost);
     }
-    finalAnswer = (kb && !softBan.test(kb) ? kb : "") || repeatLine();
-    fallbackGate = kb && !softBan.test(kb) ? "kb-fallback" : "clarify";
+    const truncated = isTruncatedAsk(askText);
+    finalAnswer = (kb && !softBan.test(kb) ? kb : "") || (truncated ? repeatLine() : "");
+    fallbackGate = kb && !softBan.test(kb) ? "kb-fallback" : truncated ? "clarify" : "silent";
     pushAgent(a2aTrace, {
       runId,
       role: "MeetingAgent",
       action: "FALLBACK",
-      summary: fallbackGate === "kb-fallback" ? "豆包未出口，改用知识库原句" : "豆包未出口，请对方把这句说完整",
+      summary:
+        fallbackGate === "kb-fallback"
+          ? "豆包未出口，改用知识库原句"
+          : fallbackGate === "clarify"
+            ? "豆包未出口，请对方把这句说完整"
+            : "豆包未出口，这句完整但不作复述",
       detail: {
         ...check,
         riskRewrite: false,

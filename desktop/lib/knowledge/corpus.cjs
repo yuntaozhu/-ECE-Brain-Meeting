@@ -344,6 +344,7 @@ module.exports = {
   getFaqRaw,
   retrieveKnowledge,
   matchFaqInstant,
+  getFaqSections,
   extractFaqSpeakText,
   knowledgeStatus,
   detectWake,

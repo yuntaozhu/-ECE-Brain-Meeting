@@ -10,7 +10,7 @@ const {
   isBizDeicticFollowUp,
   peelWakePayload
 } = require("../../meetingSession");
-const { load, rx } = require("../../knowledge/schemaStore.cjs");
+const { load, rx, words, hp, speakLine, speakFill } = require("../../knowledge/schemaStore.cjs");
 const {
   peelClosedFaqCore,
   isResidualUtterance,
@@ -27,6 +27,231 @@ function lim(name) {
 
 function pat(name) {
   return rx("classify", name);
+}
+
+function commitOnlyLine(text) {
+  const t = String(text || "");
+  return rx("commands", "commitAct").test(t) && !rx("operators", "interrogative").test(t);
+}
+
+function peelSkeleton(text) {
+  let s = String(text || "");
+  const tail = load().classify.patterns.peelTailMark;
+  if (tail) s = s.replace(new RegExp(tail, "g"), "");
+  const keys = [...words("operators", "dropWords"), ...words("operators", "topicDrop")]
+    .filter((w) => w && String(w).length >= 2)
+    .sort((a, b) => b.length - a.length);
+  for (const w of keys) {
+    if (s.includes(w)) s = s.split(w).join("");
+  }
+  return s.replace(/[^\u4e00-\u9fffA-Za-z0-9]/g, "");
+}
+
+function dropGeneric(text) {
+  let s = String(text || "");
+  const max = hp("genericTopicMax");
+  const list = [...words("operators", "genericTopic")].sort((a, b) => b.length - a.length);
+  for (const g of list) {
+    if (g.length < max && s.includes(g)) s = s.split(g).join("");
+  }
+  return s;
+}
+
+/** 疑问词留在谓语里；指代、弱尾、泛词从实体槽拿掉。 */
+function entityFillers() {
+  const inter = rx("operators", "interrogative");
+  const bag = new Set();
+  for (const name of ["dropWords", "topicDrop", "weakTail"]) {
+    for (const w of words("operators", name)) {
+      if (!w || String(w).length < 2 || inter.test(w)) continue;
+      bag.add(w);
+    }
+  }
+  return [...bag].sort((a, b) => b.length - a.length);
+}
+
+function stripEntityFillers(text) {
+  let s = String(text || "");
+  for (const w of entityFillers()) {
+    if (s.includes(w)) s = s.split(w).join("");
+  }
+  return dropGeneric(s).replace(/[^\u4e00-\u9fffA-Za-z0-9]/g, "");
+}
+
+/** 疑问骨架左边去掉指代/泛词/弱尾后不足两字，实体槽是空的。 */
+function entitySlotEmpty(ask) {
+  const bare = String(ask || "").replace(/[？?。！!\s]/g, "");
+  const how = bare.match(rx("operators", "interrogative"));
+  const left = how ? bare.slice(0, how.index) : bare;
+  return stripEntityFillers(left).length < 2;
+}
+
+/** 从疑问骨架起保留谓语，并带上紧挨着的「有/是」。尾部再去掉指代和泛词。 */
+function anchorFromTitle(title, fallback) {
+  const cfg = load().faq || {};
+  const generic = String(cfg.genericEntity || "");
+  const hits = (cfg.entities || []).filter((e) => e && e !== generic && String(title).includes(e));
+  hits.sort((a, b) => b.length - a.length);
+  const specific = hits.find((e) => /[\u4e00-\u9fff]/.test(e));
+  if (specific) return specific;
+  if (generic && String(title).includes(generic)) return generic;
+  return fallback();
+}
+
+function predicateTail(ask) {
+  const bare = String(ask || "").replace(/[？?。！!\s]/g, "");
+  const how = bare.match(rx("operators", "interrogative"));
+  if (!how) return "";
+  let start = how.index;
+  if (start > 0 && (bare[start - 1] === "有" || bare[start - 1] === "是")) {
+    if (stripEntityFillers(bare.slice(0, start - 1)).length < 2) start -= 1;
+  }
+  let tail = bare.slice(start);
+  tail = dropGeneric(tail);
+  const inter = rx("operators", "interrogative");
+  const weak = words("operators", "weakTail");
+  const noise = [...words("operators", "topicDrop"), ...words("operators", "dropWords")]
+    .filter((w) => w && String(w).length >= 2 && !inter.test(w) && !weak.has(w))
+    .sort((a, b) => b.length - a.length);
+  for (const w of noise) {
+    if (tail.includes(w)) tail = tail.split(w).join("");
+  }
+  return tail.replace(/[^\u4e00-\u9fffA-Za-z0-9]/g, "");
+}
+
+/** 剥掉「我问的是 / 的是」纠正壳，再判实体槽与谓语。 */
+function peelCorrectShell(ask) {
+  let q = String(ask || "").trim();
+  const peel = load().commands?.patterns?.correctPeel;
+  if (peel) {
+    try {
+      q = q.replace(new RegExp(peel), "");
+    } catch (_) {
+      /* schema 坏了则保持原句 */
+    }
+  }
+  q = q.replace(/^[的是]+/, "");
+  return q.trim() || String(ask || "").trim();
+}
+
+/**
+ * 上一张卡已答、本轮实体槽是空的：检索前把标题焦点接到本轮疑问尾。
+ * 句中已有专名或已含该焦点则不改写。只改问句，不续播上一句口播。
+ */
+function isAgendaTitle(title) {
+  const t = String(title || "");
+  if (!t) return false;
+  try {
+    if (rx("speak", "localAgenda").test(t)) return true;
+  } catch (_) {
+    /* schema 未就绪 */
+  }
+  return /会议主题|开什么会|今天主题/.test(t);
+}
+
+function expandEllipsis(ask, lastTitle) {
+  const title = String(lastTitle || "").trim();
+  if (!title || title === "carry" || title === "probe") return "";
+  // 议程/主题卡不是业务实体，接到「怎么收费」会变成「会议主题怎么收费」。
+  if (isAgendaTitle(title)) return "";
+  let q = peelCorrectShell(ask);
+  if (!q) return "";
+  if (commitOnlyLine(q)) return "";
+  if (rx("commands", "urgeAct").test(q) || rx("commands", "dialogueControl").test(q)) return "";
+  const { contentFocus, isTruncatedAsk } = require("../agent/relevance.cjs");
+  if (!rx("operators", "interrogative").test(q) || isTruncatedAsk(q)) return "";
+  if (!entitySlotEmpty(q)) return "";
+  const head = title
+    .replace(/^Q[:：]\s*/, "")
+    .split(/[／/]/)[0]
+    .trim();
+  const titlePlain = peelSkeleton(head);
+  if (titlePlain.length < 2) return "";
+  const anchor = anchorFromTitle(title, () => contentFocus(titlePlain));
+  if (!anchor || anchor.length < 2 || q.includes(anchor)) return "";
+  if (isAgendaTitle(anchor) || /主题|会议/.test(anchor)) return "";
+  if (definesOwnTopic(q, anchor) || namesOtherEntity(q, anchor)) return "";
+  const tail = predicateTail(q);
+  // 「怎么做」仅 3 字，纠正追问常见；门槛用 3。
+  if (!tail || tail.length < 3 || tail.includes(anchor)) return "";
+  const out = `${anchor}${tail}`.slice(0, 80);
+  return /[？?]$/.test(out) ? out : `${out}？`;
+}
+
+/** 上一张资料卡标题里的专名。carry / probe / script 不是对话实体。 */
+function dialogueAnchor(title) {
+  const t = String(title || "").trim();
+  if (!t || t === "carry" || t === "probe" || t === "script") return "";
+  return anchorFromTitle(t, () => "");
+}
+
+/** 「什么是招生引擎」这类已经自带话题的问句，不再把上一张卡的实体接上去。 */
+function definesOwnTopic(ask, anchor) {
+  const bare = String(ask || "").replace(/[？?。！!\s]/g, "");
+  const mark = load().classify.patterns.peelTailMark;
+  if (!mark) return false;
+  const hit = bare.match(new RegExp(mark));
+  if (!hit) return false;
+  const rest = stripEntityFillers(bare.slice(hit.index + hit[0].length));
+  const before = stripEntityFillers(bare.slice(0, hit.index));
+  const owned = rest.length >= 2 ? rest : before;
+  if (owned.length < 2) return false;
+  if (anchor && String(owned).includes(anchor)) return false;
+  return true;
+}
+
+function namesOtherEntity(ask, anchor) {
+  const generic = String(load().faq?.genericEntity || "");
+  return (load().faq?.entities || []).some((name) => {
+    if (!name || name === generic || name === anchor) return false;
+    return String(ask || "").includes(name);
+  });
+}
+
+function hasDoubaoKey() {
+  return Boolean((process.env.DOUBAO_API_KEY || process.env.ARK_API_KEY || "").trim());
+}
+
+/**
+ * 实体槽为空时，豆包只补一句独立问句。失败则交给已经拼好的规则改写。
+ * @returns {Promise<string>} 可用的独立问句；空字符串表示沿用规则结果
+ */
+async function rewriteStandalone(ask, lastTitle) {
+  const rule = expandEllipsis(ask, lastTitle);
+  const anchor = dialogueAnchor(lastTitle);
+  if (!rule || !anchor || !hasDoubaoKey()) return "";
+  const system = speakLine("rewriteAskSystem");
+  const user = speakFill("rewriteAskUser", {
+    entity: anchor,
+    title: String(lastTitle || "").slice(0, 80),
+    ask: String(ask || "").slice(0, 80)
+  });
+  if (!system || !user) return "";
+  const ms = hp("rewriteAskMs");
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), ms);
+  try {
+    const { arkChat } = require("../llm");
+    const res = await arkChat(system, user, {
+      fast: true,
+      temperature: 0.2,
+      signal: ac.signal,
+      timeoutMs: ms
+    });
+    const draft = String(res?.content || "")
+      .trim()
+      .split(/\n/)[0]
+      .replace(/^["「]|["」]$/g, "")
+      .trim();
+    if (!res?.ok || draft.length < 4 || draft.length > 80) return "";
+    if (!draft.includes(anchor)) return "";
+    if (rx("classify", "gluedTail").test(draft)) return "";
+    return draft.slice(0, 80);
+  } catch (_) {
+    return "";
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function choiceInviteRe() {
@@ -162,6 +387,10 @@ function rewriteQueryRuleBased(opts = {}) {
   }
   cleaned = cleaned.replace(pat("whoToWhat"), "是什么$1");
 
+  const held = Boolean(dialogueAnchor(opts.lastCardTitle));
+  const expanded = expandEllipsis(cleaned, opts.lastCardTitle);
+  if (expanded) cleaned = expanded;
+
   const residual =
     isResidualUtterance(cleaned) ||
     isResidualUtterance(lastFloor) ||
@@ -170,6 +399,8 @@ function rewriteQueryRuleBased(opts = {}) {
   const hostLooksBiz = lastHost && pat("hostLooksBiz").test(lastHost);
   const deictic = !residual && isBizDeicticFollowUp(cleaned);
   const isFollow =
+    !expanded &&
+    !held &&
     !skipFollowGlue &&
     !residual &&
     (!closed || deictic) &&
@@ -181,13 +412,15 @@ function rewriteQueryRuleBased(opts = {}) {
         pat("followShortCue").test(cleaned) &&
         !pat("followShortBlock").test(cleaned)));
 
+  const commitOnly = commitOnlyLine(cleaned);
   let contextHint = "";
-  if (isFollow) {
+  if (!commitOnly && isFollow) {
     const priorUser = [...recent]
       .reverse()
       .find(
         (l) =>
           l !== lastFloor &&
+          !commitOnlyLine(l) &&
           (pat("priorUserCue").test(l) || l.length >= lim("priorUserMin"))
       );
     if (priorUser) {
@@ -203,6 +436,9 @@ function rewriteQueryRuleBased(opts = {}) {
       cleaned = `针对上一答「${lastHost.slice(0, 48)}」：${cleaned}`;
     }
   } else if (
+    !expanded &&
+    !held &&
+    !commitOnly &&
     !skipFollowGlue &&
     !residual &&
     cleaned.length < lim("followHostAltMax") &&
@@ -212,7 +448,7 @@ function rewriteQueryRuleBased(opts = {}) {
   ) {
     const priorUser = [...recent]
       .reverse()
-      .find((l) => l !== lastFloor && l.length >= lim("priorAltMin"));
+      .find((l) => l !== lastFloor && !commitOnlyLine(l) && l.length >= lim("priorAltMin"));
     if (priorUser) {
       contextHint = priorUser.slice(0, 80);
       cleaned = `${contextHint}。追问：${cleaned}`;
@@ -239,7 +475,8 @@ function rewriteQueryRuleBased(opts = {}) {
     residual,
     followUp: Boolean(isFollow),
     choicePick: false,
-    choice: ""
+    choice: "",
+    ellipsis: Boolean(expanded)
   };
 }
 
@@ -250,5 +487,8 @@ module.exports = {
   extractOfferedChoices,
   matchOfferedChoice,
   stripEchoPrefix,
-  rewriteQueryRuleBased
+  expandEllipsis,
+  peelCorrectShell,
+  rewriteQueryRuleBased,
+  rewriteStandalone
 };

@@ -8,6 +8,7 @@ const S = require("./consult/kit.cjs");
 const { handleGate } = require("./consult/gate.cjs");
 const { prepareAsk } = require("./consult/rewritePrepare.cjs");
 const { tryLocalAnswer } = require("./consult/localAnswer.cjs");
+const { oralizeCommitted } = require("./consult/oralize.cjs");
 const { runMeetingAgent } = require("../agent/index.cjs");
 
 async function handleConsult(ctx) {
@@ -25,11 +26,11 @@ async function handleConsult(ctx) {
   const gated = handleGate(ctx);
   if (gated) return gated;
 
-  const prepared = prepareAsk(ctx);
+  const prepared = await prepareAsk(ctx);
   if (prepared) return prepared;
 
   const local = tryLocalAnswer(ctx);
-  if (local) return local;
+  if (local) return await oralizeCommitted(local, ctx);
 
   return await runMeetingAgent(ctx);
 }

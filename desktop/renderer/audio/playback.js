@@ -5,6 +5,27 @@ import { selectedLabel, assertVirtualOrAllowed, deviceSnapshot } from "./devices
 import { openInput, closeInput, measureCapturePeak } from "./capture.js";
 import { extendHostMute } from "../policy.js";
 
+function trackSpeechSource(src) {
+  if (!S.speechSources) S.speechSources = [];
+  S.speechSources.push(src);
+  src.onended = () => {
+    S.speechSources = (S.speechSources || []).filter((item) => item !== src);
+  };
+}
+
+function stopQueuedSpeech() {
+  for (const src of S.speechSources || []) {
+    try {
+      src.stop();
+    } catch (_) {
+      /* already stopped */
+    }
+  }
+  S.speechSources = [];
+  if (S.playCtx) S.nextPlay = S.playCtx.currentTime;
+  if (S.monitorCtx) S.monitorNext = S.monitorCtx.currentTime;
+}
+
 async function playWavToDevice(wavAb, sinkId, label) {
   const blob = new Blob([wavAb], { type: "audio/wav" });
   const url = URL.createObjectURL(blob);
@@ -175,6 +196,7 @@ function playPcmToMonitor(audioBuf) {
   const src = S.monitorCtx.createBufferSource();
   src.buffer = audioBuf;
   src.connect(S.monitorCtx.destination);
+  trackSpeechSource(src);
   const now = S.monitorCtx.currentTime;
   if (S.monitorNext < now + 0.02) S.monitorNext = now + 0.05;
   src.start(S.monitorNext);
@@ -236,6 +258,7 @@ function playPcm16Base64(b64, sampleRate) {
   const src = S.playCtx.createBufferSource();
   src.buffer = audioBuf;
   src.connect(S.playCtx.destination);
+  trackSpeechSource(src);
   const now = S.playCtx.currentTime;
   if (S.nextPlay < now + 0.02) S.nextPlay = now + 0.05;
   src.start(S.nextPlay);
@@ -273,4 +296,4 @@ function playPcm16Base64(b64, sampleRate) {
 }
 
 
-export { playWavToDevice, makeBeepWav, playBeepToSink, audioBufferToWav, ensureMonitorCtx, playPcmToMonitor, ensurePlayCtx, playPcm16Base64 };
+export { playWavToDevice, makeBeepWav, playBeepToSink, audioBufferToWav, ensureMonitorCtx, playPcmToMonitor, ensurePlayCtx, playPcm16Base64, stopQueuedSpeech };

@@ -16,7 +16,7 @@ flowchart LR
 
 ## 落点
 - `engine-hyperparams.json` → `markov` 全 1、`posteriorMin` 0.42
-- 影子后验在 `relevance.cjs` attachShadow，不参与开口
+- 影子后验在 `relevance.cjs` attachShadow，不参与开口；分歧见 [[shadow-divergence-catalog]]
 
 ## 相关
 - [[bayesian-card-selection]]

@@ -415,6 +415,16 @@ function unspokenProgress(ask, host, ranked) {
 
 /** 豆包未出口时的本地一句。别的卡已经对上本句时不复读；无证据不拼焦点菜单句。 */
 function offlineFollow(ask, lastHost, focus) {
+  const raw = String(ask || "").trim();
+  // 催答、控制话轮、残句：不续播上一句资料后半句
+  try {
+    const { rx } = require("../../knowledge/schemaStore.cjs");
+    if (rx("commands", "urgeAct").test(raw) || rx("commands", "dialogueControl").test(raw)) return "";
+    if (rx("commands", "commitAct").test(raw) && !rx("operators", "interrogative").test(raw)) return "";
+  } catch (_) {
+    /* schema 未就绪时仍走下面 */
+  }
+  if (raw.length <= 8 && !asksNewQuestion(raw)) return "";
   const host = usableHost(lastHost);
   if (host && asksNewQuestion(ask)) {
     const progressed = unspokenProgress(ask, host, []);
@@ -428,6 +438,8 @@ function offlineFollow(ask, lastHost, focus) {
     }
     if (top >= floor) return "";
   }
+  // 完整新问对不上卡时保持沉默，不要拿上一句尾巴顶替
+  if (asksNewQuestion(ask)) return "";
   return hostRest(lastHost) || "";
 }
 

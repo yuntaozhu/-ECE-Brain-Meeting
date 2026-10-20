@@ -24,6 +24,15 @@ async function handle(ctx) {
   const lastFloor = ctx.lastFloor;
 
   if (cmd.command === "REASK") {
+    // 纠正强调（我问的是怎么做）留给改写扩实体，不要整句替换成上一问定义。
+    if (rx("commands", "correctReask").test(lastFloor)) {
+      cmd.command = null;
+      state.haLockedUntil = Date.now() + 90000;
+      S.setMode(state, S.INTERACTION_MODE.HA_ASK);
+      S.setLifecycle(state, S.MEETING_LIFE.CONSULT);
+      S.debugLog.info("Strategy", "纠正追问扩实体", { text: lastFloor.slice(0, 40) });
+      return null;
+    }
     const pending = resolveReask(state, ctx.floors, lastFloor);
     if (pending) {
       ctx.lastFloor = pending;

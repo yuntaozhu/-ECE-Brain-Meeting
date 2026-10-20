@@ -1,0 +1,22 @@
+{"ts":1792409365145,"speaker":"大智","text":"我是大智，正在旁听记录。需要时请呼叫大智；人与人讨论时我会轻量拉回议程。","mode":"IDLE_LISTEN","segmentId":"seg_1792409363021"}
+{"ts":1792409377617,"speaker":"会场","text":"这是做会议的主题是什么？","mode":"IDLE_LISTEN","segmentId":"seg_1792409363021"}
+{"ts":1792409385717,"speaker":"会场","text":"大智，这次会议的主题是什么？","mode":"IDLE_LISTEN","segmentId":"seg_1792409363021"}
+{"ts":1792409385739,"speaker":"大智","text":"今天主题是全园美语系统教研：四端联动、校园经营与家园共育。想先听哪一块？","mode":"HA_ASK","segmentId":"seg_1792409363021"}
+{"ts":1792409398241,"speaker":"会场","text":"家园共育。","mode":"HA_ASK","segmentId":"seg_1792409363021"}
+{"ts":1792409402782,"speaker":"大智","text":"家庭端防止离园后英语中断：Family说日常表达、家庭美语指导、配合 ABCmouse，形成园内浸润、回家延续。","mode":"HA_ASK","segmentId":"seg_1792409363021"}
+{"ts":1792409428759,"speaker":"会场","text":"回家园区。","mode":"HA_ASK","segmentId":"seg_1792409363021"}
+{"ts":1792409430787,"speaker":"大智","text":"这句我还没对上。请把问题再说完整一点，或换个说法。","mode":"HA_ASK","segmentId":"seg_1792409363021"}
+{"ts":1792409442260,"speaker":"会场","text":"什么概念？","mode":"HA_ASK","segmentId":"seg_1792409363021"}
+{"ts":1792409448402,"speaker":"会场","text":"回家延续是个什么概念？","mode":"HA_ASK","segmentId":"seg_1792409363021"}
+{"ts":1792409451316,"speaker":"大智","text":"家庭端防止离园后英语中断：Family说日常表达、家庭美语指导、配合 ABCmouse，形成园内浸润、回家延续。","mode":"HA_ASK","segmentId":"seg_1792409363021"}
+{"ts":1792409463174,"speaker":"大智","text":"这句我还没对上。请把问题再说完整一点，或换个说法。","mode":"HA_ASK","segmentId":"seg_1792409363021"}
+{"ts":1792409475261,"speaker":"会场","text":"我的园所经营不好。","mode":"HA_ASK","segmentId":"seg_1792409363021"}
+{"ts":1792409479181,"speaker":"会场","text":"想引入全园美语课程？","mode":"HA_ASK","segmentId":"seg_1792409363021"}
+{"ts":1792409479224,"speaker":"大智","text":"这句我还没对上。请把问题再说完整一点，或换个说法。","mode":"HA_ASK","segmentId":"seg_1792409363021"}
+{"ts":1792409493051,"speaker":"会场","text":"引入全园美语课程来改善园所。","mode":"HA_ASK","segmentId":"seg_1792409363021"}
+{"ts":1792409494731,"speaker":"大智","text":"这句我还没对上。请把问题再说完整一点，或换个说法。","mode":"HA_BIZ","segmentId":"seg_1792409363021"}
+{"ts":1792409513151,"speaker":"会场","text":"音不好，想引入全园美语课程来进行升级，如何操作？","mode":"HA_BIZ","segmentId":"seg_1792409363021"}
+{"ts":1792409513191,"speaker":"大智","text":"这句我还没对上。请把问题再说完整一点，或换个说法。","mode":"HA_ASK","segmentId":"seg_1792409363021"}
+{"ts":1792409537267,"speaker":"会场","text":"我的园所军营不好，想引入全园美语课程，改善园所经营。","mode":"HA_ASK","segmentId":"seg_1792409363021"}
+{"ts":1792409539416,"speaker":"会场","text":"如何操作？","mode":"HA_ASK","segmentId":"seg_1792409363021"}
+{"ts":1792409548472,"speaker":"大智","text":"家庭端防止离园后英语中断：Family说日常表达、家庭美语指导、配合 ABCmouse，形成园内浸润、回家延续。","mode":"HA_ASK","segmentId":"seg_1792409363021"}

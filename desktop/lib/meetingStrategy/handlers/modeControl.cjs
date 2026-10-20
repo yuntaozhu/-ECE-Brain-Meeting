@@ -33,13 +33,18 @@ async function handle(ctx) {
     state.interrupted = false;
     state.interruptBuffer = null;
     state.holdFloorLines = [];
-    state.listenNotes = [];
     state.haLockedUntil = 0;
     state.bizFollowUps = 0;
+    state.steerCount = 0;
+    state.lastSteerAt = 0;
     S.setLifecycle(state, state.meetingOpen ? S.MEETING_LIFE.SILENT : S.MEETING_LIFE.OFF);
-    S.debugLog.info("Strategy", "停说并旁听", { floor: String(ctx.lastFloor || "").slice(0, 40) });
+    const { speakLine } = require("../../knowledge/schemaStore.cjs");
+    const handoff = speakLine("stopHandoff");
+    S.debugLog.info("Strategy", "停说并退回聆听", { floor: String(ctx.lastFloor || "").slice(0, 40) });
     return S.baseResult({
-      shouldIntervene: false,
+      shouldIntervene: true,
+      interventionText: handoff,
+      fullAnswer: handoff,
       reason: "STOP",
       interruptTts: true,
       a2aTrace,

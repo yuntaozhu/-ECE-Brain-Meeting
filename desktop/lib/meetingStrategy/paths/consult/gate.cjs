@@ -3,6 +3,15 @@
  */
 const S = require("./kit.cjs");
 
+/** 粘滞到期只截断之后的闲聊；当前这句完整问仍要改写并检索。 */
+function currentAskSurvivesTimeout(text) {
+  const q = String(text || "").trim();
+  if (!q || !S.rx("operators", "interrogative").test(q)) return false;
+  const { isTruncatedAsk } = require("../../agent/relevance.cjs");
+  if (isTruncatedAsk(q)) return false;
+  return q.replace(/[^\u4e00-\u9fffA-Za-z0-9]/g, "").length >= 4;
+}
+
 /**
  * @returns {object|null} 结果或 null（继续）
  */
@@ -14,7 +23,8 @@ function handleGate(ctx) {
     !cmd.named &&
     cmd.command !== "CONTINUE" &&
     cmd.command !== "WAKE_ASK" &&
-    Date.now() > (state.haLockedUntil || 0)
+    Date.now() > (state.haLockedUntil || 0) &&
+    !currentAskSurvivesTimeout(lastFloor)
   ) {
     S.setMode(state, S.INTERACTION_MODE.IDLE_LISTEN);
     S.debugLog.info("Strategy", "咨询粘滞到期，回静默", { stickyMs: S.HA_STICKY_MS });

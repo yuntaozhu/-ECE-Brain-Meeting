@@ -788,12 +788,11 @@ class ListenSession {
         }
         // independent 模式：会场转写走 HostAsr，dialog 仅观测；播报中 barge-in 仍可短路
         if (this.getAsrMode() === "independent") {
-          if (final) {
-            const speaking = this.expectingSpeak || this.phase === PHASE.SPEAKING;
-            const t = String(text);
-            if (speaking && looksLikeBargeInCommand(t)) {
-              this.handleBargeInAsr(t, "dialog");
-            }
+          const speaking = this.expectingSpeak || this.phase === PHASE.SPEAKING;
+          const hold = this.phase === PHASE.COOLDOWN || Date.now() < (this.holdUntil || 0);
+          const t = String(text);
+          if ((speaking || hold) && looksLikeBargeInCommand(t)) {
+            this.handleBargeInAsr(t, final ? "dialog" : "dialog-partial");
           }
           return;
         }
@@ -1040,8 +1039,9 @@ class ListenSession {
     if (!text) return;
     if (final) {
       const speaking = this.expectingSpeak || this.phase === PHASE.SPEAKING;
+      const hold = this.phase === PHASE.COOLDOWN || Date.now() < (this.holdUntil || 0);
       const t = String(text);
-      if (speaking && looksLikeBargeInCommand(t)) {
+      if ((speaking || hold) && looksLikeBargeInCommand(t)) {
         this.handleBargeInAsr(t, "dialog");
         return;
       }
@@ -1063,14 +1063,22 @@ class ListenSession {
   handleBargeInAsr(text, source) {
     const t = String(text || "");
     const cmd = detectMeetingCommand(t);
-    if (cmd.interrupt || cmd.command === "INTERRUPT" || cmd.stop || cmd.command === "STOP") {
-      debugLog.info("ASR", "barge-in 短路打断", {
-        command: cmd.command,
-        text: t.slice(0, 40),
-        source
-      });
-      this.interruptSpeak(cmd.command === "STOP" || cmd.stop ? "barge-in-stop" : "barge-in-asr");
-    }
+    const isStop =
+      cmd.interrupt ||
+      cmd.command === "INTERRUPT" ||
+      cmd.stop ||
+      cmd.command === "STOP";
+    if (!isStop) return;
+    const now = Date.now();
+    // partial 可能连续触发，短窗内只打断一次
+    if (now - (this.lastBargeInAt || 0) < 1200) return;
+    this.lastBargeInAt = now;
+    debugLog.info("ASR", "barge-in 短路打断", {
+      command: cmd.command,
+      text: t.slice(0, 40),
+      source
+    });
+    this.interruptSpeak(cmd.command === "STOP" || cmd.stop ? "barge-in-stop" : "barge-in-asr");
     this.emit({
       type: "asr",
       text: t,
@@ -1099,14 +1107,16 @@ class ListenSession {
       hotwords,
       onResult: ({ text, final }) => {
         if (!text || this.getAsrMode() !== "independent") return;
+        const speaking = this.expectingSpeak || this.phase === PHASE.SPEAKING;
+        const hold = this.phase === PHASE.COOLDOWN || Date.now() < (this.holdUntil || 0);
+        // 停止/打断口令在中间结果上就切，不等整句定稿
+        if ((speaking || hold) && looksLikeBargeInCommand(text)) {
+          this.handleBargeInAsr(text, final ? "host-asr" : "host-asr-partial");
+          return;
+        }
         if (final) {
           this.asrFinalCount += 1;
           this.asrStartedAt = 0;
-          const speaking = this.expectingSpeak || this.phase === PHASE.SPEAKING;
-          if (speaking && looksLikeBargeInCommand(text)) {
-            this.handleBargeInAsr(text, "host-asr");
-            return;
-          }
           if (speaking) {
             this.emit({
               type: "asr",

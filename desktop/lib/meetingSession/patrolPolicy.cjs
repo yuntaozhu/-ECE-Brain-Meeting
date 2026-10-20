@@ -103,6 +103,9 @@ function shouldImmediatePatrolForUi(text, opts = {}) {
   if (!last || last.length < 2) return false;
 
   if (re("patrolForce").test(last)) return true;
+  if (re("correctReask").test(last)) return true;
+
+  if (isConsultMode(mode) && re("commitAct").test(last)) return true;
 
   if (isConsultMode(mode) && looksLikeOfferedChoicePick(text, lastHost)) {
     return true;

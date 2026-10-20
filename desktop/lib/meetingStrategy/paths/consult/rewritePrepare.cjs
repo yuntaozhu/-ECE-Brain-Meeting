@@ -7,7 +7,7 @@ const S = require("./kit.cjs");
 /**
  * @returns {object|null} 早退结果，或 null 且 ctx 已填充 askText/rw/useBiz
  */
-function prepareAsk(ctx) {
+async function prepareAsk(ctx) {
   const { opts, state, a2aTrace, kbStatus, floors, cmd, qFp } = ctx;
   const lastFloor = ctx.lastFloor;
   const supplement = String(ctx.continuePayload || "").trim();
@@ -22,18 +22,55 @@ function prepareAsk(ctx) {
     : (cmd.named && cmd.payload && cmd.payload.length >= 2 && cmd.payload) ||
       S.peelWakePayload(lastFloor) ||
       lastFloor;
+  const storeEarly = require("../../../knowledge/schemaStore.cjs");
+  const lastCardTitle =
+    state?.lastDesign?.type === "answer" ? String(state.lastDesign.hypothesisId || "") : "";
+  const lastRealAsk = String(state?.lastRealAsk || "").trim();
+  // 议程/主题问不当扩实体锚点（避免「怎么收费」→「会议主题怎么收费」）。
+  const agendaLike = (t) => {
+    const s = String(t || "");
+    if (!s) return true;
+    try {
+      return storeEarly.rx("speak", "localAgenda").test(s);
+    } catch (_) {
+      return /会议主题|开什么会|今天主题/.test(s);
+    }
+  };
+  const expandTitle = (() => {
+    if (lastCardTitle && !agendaLike(lastCardTitle)) return lastCardTitle;
+    if (lastRealAsk && !agendaLike(lastRealAsk)) return lastRealAsk;
+    return "";
+  })();
+  const correctReask = storeEarly.rx("commands", "correctReask").test(lastFloor) ||
+    storeEarly.rx("commands", "correctReask").test(peeledAsk);
   const rw = S.rewriteQueryRuleBased({
     lastFloor: peeledAsk,
     recentFloors: floors,
     lastHostAnswer: String(opts.lastHostSpeakText || ""),
+    lastCardTitle: expandTitle,
     preferPeeled: !keepFloor,
     peeledPayload: keepFloor ? "" : cmd.payload || S.peelWakePayload(lastFloor),
     skipFollowGlue:
       Boolean(cmd.command === "STOP" || cmd.command === "INTERRUPT" || cmd.stop || cmd.interrupt) ||
       S.isCasualChitchat(lastFloor) ||
-      S.isCasualChitchat(peeledAsk)
+      S.isCasualChitchat(peeledAsk) ||
+      correctReask
   });
-  const askText = rw.rewritten || peeledAsk;
+  let askText = rw.rewritten || peeledAsk;
+  if (correctReask && expandTitle) {
+    const { expandEllipsis, rewriteStandalone } = require("../../query/rewrite.cjs");
+    const ruleExpanded =
+      expandEllipsis(peeledAsk, expandTitle) || expandEllipsis(lastFloor, expandTitle);
+    if (ruleExpanded) askText = ruleExpanded;
+    else if (!opts?.forceRule) {
+      const drafted = await rewriteStandalone(peeledAsk, expandTitle);
+      if (drafted) askText = drafted;
+    }
+  } else if (rw.ellipsis && expandTitle && !opts?.forceRule) {
+    const { rewriteStandalone } = require("../../query/rewrite.cjs");
+    const drafted = await rewriteStandalone(peeledAsk, expandTitle);
+    if (drafted) askText = drafted;
+  }
   const { pushAgent } = require("../../agent/events.cjs");
   pushAgent(a2aTrace, {
     role: "MeetingAgent",
@@ -65,7 +102,15 @@ function prepareAsk(ctx) {
     return S.playAnswer(S.CHITCHAT_LINE, "WAKE_ANSWER", state, a2aTrace, kbStatus, qFp, "template");
   }
 
+  const store = require("../../../knowledge/schemaStore.cjs");
+  const actRaw = String(lastFloor || askText || "");
+  const commitOrUrge =
+    (store.rx("commands", "commitAct").test(actRaw) &&
+      !store.rx("operators", "interrogative").test(actRaw)) ||
+    store.rx("commands", "urgeAct").test(actRaw);
   if (
+    !commitOrUrge &&
+    !correctReask &&
     !rw.choicePick &&
     (rw.residual || S.isResidualUtterance(askText) || S.isResidualUtterance(lastFloor)) &&
     !cmd.named &&

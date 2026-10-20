@@ -1,5 +1,6 @@
 {
   "stickyMs": 90000,
+  "rewriteAskMs": 4500,
   "negationWindow": 1,
   "faqKeywordAnswerable": 45,
   "wikiKeywordAnswerable": 5,
@@ -36,6 +37,11 @@
     "carry": { "absent": 1, "script": 1, "doc": 1 },
     "probe": { "absent": 1, "script": 1, "doc": 1 },
     "answer": { "absent": 1, "script": 1, "doc": 1 }
+  },
+  "shadowMarkov": {
+    "absent": { "absent": 1, "script": 1, "doc": 1 },
+    "script": { "absent": 1, "script": 1, "doc": 1 },
+    "doc": { "absent": 1, "script": 1, "doc": 1 }
   },
   "posteriorMin": 0.42,
   "bayesFactor": 3,

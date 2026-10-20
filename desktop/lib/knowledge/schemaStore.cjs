@@ -29,7 +29,8 @@ function load() {
       diagnose: readJson("advisor-diagnose.json"),
       verify: readJson("intent-verify.json"),
       plans: readJson("advisor-plans.json"),
-      faq: readJson("faq-match.json")
+      faq: readJson("faq-match.json"),
+      distillChains: readJson("distill-chains.json")
     };
   }
   return bag;

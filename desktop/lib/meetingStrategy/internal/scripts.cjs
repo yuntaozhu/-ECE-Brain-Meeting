@@ -34,14 +34,24 @@ function looksLikeQuestionLine(text) {
   return rx("speak", "questionCue").test(t);
 }
 
-function formatAskRecap(rows) {
+function isPresenceOrControlAsk(text) {
+  const t = String(text || "").trim();
+  if (!t) return true;
+  if (rx("commands", "urgeAct").test(t)) return true;
+  if (rx("commands", "dialogueControl").test(t)) return true;
+  if (/^(还在吗|在吗|听得到|你好|点好了吗)/.test(t)) return true;
+  return false;
+}
+
+function formatAskRecap(rows, opts = {}) {
   const list = Array.isArray(rows) ? rows : [];
+  const pendingAsk = String(opts.pendingAsk || "").trim();
   const asks = [];
   for (let i = 0; i < list.length; i++) {
     const row = list[i];
     if (row?.speaker !== "会场" || !looksLikeQuestionLine(row.text)) continue;
     const q = String(row.text).replace(/^大智[，,\s]*/, "").trim();
-    if (q.length < 4) continue;
+    if (q.length < 4 || isPresenceOrControlAsk(q)) continue;
     let answered = false;
     for (let j = i + 1; j < list.length; j++) {
       if (list[j]?.speaker === "会场" && looksLikeQuestionLine(list[j].text)) break;
@@ -51,7 +61,10 @@ function formatAskRecap(rows) {
         break;
       }
     }
-    asks.push({ q: q.slice(0, 22), answered });
+    asks.push({ q: q.slice(0, 36), answered });
+  }
+  if (pendingAsk && !asks.some((a) => a.q === pendingAsk.slice(0, 36))) {
+    asks.push({ q: pendingAsk.slice(0, 36), answered: false });
   }
   const uniq = [];
   for (const a of asks) {
@@ -65,10 +78,10 @@ function formatAskRecap(rows) {
   return speakFill("askRecapOpen", { head, open: open.map((a) => a.q).join("；") });
 }
 
-function extractiveSummary(rows) {
-  const recap = formatAskRecap(rows);
+function extractiveSummary(rows, opts = {}) {
+  const recap = formatAskRecap(rows, opts);
   if (rx("speak", "summarySparseMark").test(recap)) return speakLine("summarySparse");
-  return recap.replace(/。这几句都答过了。$/, "。").slice(0, 90);
+  return recap.replace(/。这几句都答过了。$/, "。").slice(0, 120);
 }
 
 module.exports = {

@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "kind": "followup-chain",
+  "cardId": "faq_009",
+  "seedTitles": [
+    "校园经营怎么做？",
+    "校园经营是什么？",
+    "园所经营怎么做？"
+  ],
+  "seedAnswer": "校园经营这块，先把美语做成家长看得见的选择理由：样板班开口实拍、月度测评、成果展；先护收费盘面再做增量。",
+  "evidence": [
+    {
+      "title": "5.5 校园经营测算",
+      "score": 0.1683
+    }
+  ],
+  "source": "rule",
+  "error": null,
+  "steps": [
+    {
+      "ask": "校园经营先做哪一步？",
+      "answer": "校园经营测算 用数据看清全园美语系统的投入产出 很多园长在评估39,000元全园美语系统时，最关心的问题是：投入39,000元，到底能不能产生回报",
+      "cite": "校园经营测算 用数据看清全园美语系统的投入产出 很多园长在评估39,000元全园美语系统时，最关心的问题是：投入39,000元，到底能不能产生回报？能产生多少回报？ 本文基于项目文档中的参考数据，从多个维度进行经营测算，帮助园长用数据看清全园美语系统的投入产出。 （ 说明：以下测算均为参考测算，实际数据取决于校园的执行",
+      "gap": false,
+      "roundtrip": {
+        "ok": true,
+        "align": 0.425,
+        "hitCardId": "faq_002",
+        "hitTitle": "今天会议主题是什么？",
+        "reason": "faq"
+      },
+      "supportAlign": 1,
+      "accepted": true
+    },
+    {
+      "ask": "校园经营具体怎么开展？",
+      "answer": "这意味着美语服务可以延伸到毕业生、社区儿童、0—3岁家庭、6—12岁学生、托管及才艺班学生、校园员工及员工子女、铁粉家长转介绍的亲友家庭",
+      "cite": "校园经营测算 用数据看清全园美语系统的投入产出 很多园长在评估39,000元全园美语系统时，最关心的问题是：投入39,000元，到底能不能产生回报？能产生多少回报？ 本文基于项目文档中的参考数据，从多个维度进行经营测算，帮助园长用数据看清全园美语系统的投入产出。 （ 说明：以下测算均为参考测算，实际数据取决于校园的执行",
+      "gap": false,
+      "roundtrip": {
+        "ok": true,
+        "align": 0.375,
+        "hitCardId": "faq_009",
+        "hitTitle": "校园经营怎么做？",
+        "reason": "seed"
+      },
+      "supportAlign": 1,
+      "accepted": true
+    },
+    {
+      "ask": "校园经营家长怎么看？",
+      "answer": "",
+      "cite": "校园经营这块，先把美语做成家长看得见的选择理由：样板班开口实拍、月度测评、成果展",
+      "gap": true,
+      "roundtrip": {
+        "ok": true,
+        "align": 0.5714,
+        "hitCardId": "faq_009",
+        "hitTitle": "校园经营怎么做？",
+        "reason": "seed"
+      },
+      "supportAlign": 0,
+      "accepted": true
+    }
+  ],
+  "tuneSamples": [
+    {
+      "ask": "校园经营家长怎么看？",
+      "answer": "",
+      "cite": "校园经营这块，先把美语做成家长看得见的选择理由：样板班开口实拍、月度测评、成果展",
+      "gap": true,
+      "roundtrip": {
+        "ok": true,
+        "align": 0.5714,
+        "hitCardId": "faq_009",
+        "hitTitle": "校园经营怎么做？",
+        "reason": "seed"
+      },
+      "supportAlign": 0,
+      "accepted": true
+    },
+    {
+      "ask": "校园经营下一步是什么？",
+      "answer": "",
+      "cite": "校园经营这块，先把美语做成家长看得见的选择理由：样板班开口实拍、月度测评、成果展",
+      "gap": true,
+      "roundtrip": {
+        "ok": true,
+        "align": 0.5,
+        "hitCardId": "faq_009",
+        "hitTitle": "校园经营怎么做？",
+        "reason": "seed"
+      },
+      "supportAlign": 0,
+      "accepted": true
+    },
+    {
+      "ask": "校园经营要注意什么？",
+      "answer": "",
+      "cite": "校园经营这块，先把美语做成家长看得见的选择理由：样板班开口实拍、月度测评、成果展",
+      "gap": true,
+      "roundtrip": {
+        "ok": true,
+        "align": 0.4286,
+        "hitCardId": "faq_009",
+        "hitTitle": "校园经营怎么做？",
+        "reason": "seed"
+      },
+      "supportAlign": 0,
+      "accepted": true
+    }
+  ],
+  "ready": true,
+  "nextHints": [
+    "校园经营先做哪一步？",
+    "校园经营具体怎么开展？",
+    "校园经营家长怎么看？"
+  ],
+  "writtenAt": "2026-10-20T03:02:26.040Z"
+}

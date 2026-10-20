@@ -80,7 +80,7 @@
     "peelWhatIsHead": "什么是|谁是",
     "peelEndMark": "(是什么|什么是|是谁|谁是|多少钱|多少元|什么意思)\\s*[？?]?\\s*$",
     "residualIsEnd": "是$",
-    "residualIsOk": "(什么|谁|多少|哪些|吗|呢|在吗)",
+    "residualIsOk": "(什么|谁|多少|哪些|吗|呢|在吗|怎么)",
     "residualCommand": "(大智|李老师|总结|暂停|继续|要总结)",
     "residualTinyOk": "(大智|在吗)",
     "complexNotBenefit": "(落地|实施|开展|步骤|招生|倒闭|起死回生)",

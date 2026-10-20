@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "kind": "followup-chain-index",
+  "writtenAt": "2026-10-20T03:02:26.196Z",
+  "count": 5,
+  "readyCount": 5,
+  "sourceMode": "rule",
+  "cards": [
+    {
+      "cardId": "faq_001",
+      "seed": "全园美语是什么？",
+      "steps": 3,
+      "ready": true,
+      "source": "rule",
+      "slug": "faq_001-全园美语是什么？"
+    },
+    {
+      "cardId": "faq_008",
+      "seed": "家庭端",
+      "steps": 3,
+      "ready": true,
+      "source": "rule",
+      "slug": "faq_008-家庭端"
+    },
+    {
+      "cardId": "faq_009",
+      "seed": "校园经营怎么做？",
+      "steps": 3,
+      "ready": true,
+      "source": "rule",
+      "slug": "faq_009-校园经营怎么做？"
+    },
+    {
+      "cardId": "faq_020",
+      "seed": "从签约到落地要做哪些准备？",
+      "steps": 3,
+      "ready": true,
+      "source": "rule",
+      "slug": "faq_020-从签约到落地要做哪些准备？"
+    },
+    {
+      "cardId": "faq_037",
+      "seed": "如何做学期成果展？",
+      "steps": 3,
+      "ready": true,
+      "source": "rule",
+      "slug": "faq_037-如何做学期成果展？"
+    }
+  ]
+}

@@ -11,7 +11,7 @@ import { renderTranscript } from "../ui/transcript.js";
 import { renderTodos } from "../ui/panels.js";
 import { handleAsrEvent, setAudioTestEnabled, flushPendingHoldAsr } from "../asr.js";
 import { closeInput } from "../audio/capture.js";
-import { playPcm16Base64 } from "../audio/playback.js";
+import { playPcm16Base64, stopQueuedSpeech } from "../audio/playback.js";
 import {
   rememberHostUtterance,
   estimateHoldMsLocal,
@@ -43,6 +43,7 @@ export function handleBridgeEvent(msg) {
       } else if (msg.type === "asr") {
         handleAsrEvent(msg);
       } else if (msg.type === "host-interrupted") {
+        stopQueuedSpeech();
         S.agentHoldListening = true;
         S.duplexPhase = PHASE.IDLE;
         S.hostSpeakingUntil = Date.now() + 400;

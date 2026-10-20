@@ -119,6 +119,12 @@ function includesAny(text, arr) {
   return (arr || []).some((x) => String(text || "").includes(x));
 }
 
+function shortWinner(id) {
+  const s = String(id || "").replace(/\s+/g, " ").trim();
+  if (!s) return "(empty)";
+  return s.length > 36 ? s.slice(0, 36) + "…" : s;
+}
+
 function diagLine(id, d, completeness) {
   const s = (d && d.shadow) || {};
   return [
@@ -133,7 +139,10 @@ function diagLine(id, d, completeness) {
     "req=" + (s.reqSlots || []).join("|"),
     "missing=" + (s.missingSlots || []).join("|"),
     "card=" + (s.cardSlots || []).join("|"),
-    "complete=" + (completeness == null ? "" : Number(completeness).toFixed(2))
+    "complete=" + (completeness == null ? "" : Number(completeness).toFixed(2)),
+    "div=" + (s.isDiverged ? "1" : "0"),
+    "shadow=" + (s.shadowAction || "") + ":" + shortWinner(s.shadowWinner),
+    "formal=" + shortWinner(s.formalWinnerId)
   ].join("\t");
 }
 
@@ -154,6 +163,7 @@ async function replay(cases) {
   const actions = {};
   let shadowCompared = 0;
   let shadowDiverged = 0;
+  const divergedIds = [];
   console.log("[benchmark] diagnosis");
 
   for (const c of cases) {
@@ -255,13 +265,17 @@ async function replay(cases) {
     actions[d.action] = (actions[d.action] || 0) + 1;
     if (d.shadow && d.shadow.shadowAction) {
       shadowCompared += 1;
-      if (d.shadow.isDiverged) shadowDiverged += 1;
+      if (d.shadow.isDiverged) {
+        shadowDiverged += 1;
+        divergedIds.push(c.id);
+      }
     }
     console.log(diagLine(c.id, d, evaluateSyntacticCompleteness(ask)));
   }
 
   console.log("[benchmark] actions " + Object.entries(actions).map(([k, v]) => `${k}=${v}`).join(" "));
   console.log(`[benchmark] shadow diverged ${shadowDiverged}/${shadowCompared}`);
+  if (divergedIds.length) console.log("[benchmark] shadow ids " + divergedIds.join(", "));
   return { pass, total: cases.length, fails };
 }
 
