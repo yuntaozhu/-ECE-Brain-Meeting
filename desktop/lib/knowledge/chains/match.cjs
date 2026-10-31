@@ -273,12 +273,38 @@ function repairHowDoHit(hit, chain, liveAsk) {
   return { ...hit, answer: "", gap: true, repaired: true };
 }
 
+function bestSeedTitleAlign(ask, chain, model) {
+  let best = 0;
+  for (const t of chain.seedTitles || []) {
+    const a = alignScore(ask, t, model);
+    if (a > best) best = a;
+  }
+  return best;
+}
+
 function finalizeHit(hit, ask, lastChain, topicChain) {
   if (!hit) return null;
   const chain =
     (hit.cardId && loadChains().find((c) => c.cardId === hit.cardId)) ||
     lastChain ||
     topicChain;
+  // Live ask is the seed question itself → speak seed FAQ line, not a deepen-step paraphrase.
+  if (chain && chain.seedAnswer) {
+    const model = buildDf([...(chain.seedTitles || []), String(ask || ""), chain.seedAnswer]);
+    const floor = Number(distillCfg().matchAlignMin) || 0.28;
+    const titleA = bestSeedTitleAlign(ask, chain, model);
+    if (titleA >= floor && titleA >= Number(hit.align || 0)) {
+      return {
+        cardId: chain.cardId,
+        ask: (chain.seedTitles && chain.seedTitles[0]) || ask,
+        answer: chain.seedAnswer.slice(0, 160),
+        align: titleA,
+        seedAlign: titleA,
+        index: -1,
+        seedDirect: true
+      };
+    }
+  }
   const fixed = repairHowDoHit(hit, chain, ask);
   if (fixed && fixed.gap && !fixed.answer) return null;
   return fixed;

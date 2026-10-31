@@ -1,0 +1,12 @@
+---
+description: 本地 Whisper / VAD / 术语纠错约定
+globs: desktop/lib/asr/**/*
+alwaysApply: false
+---
+
+# ASR / Whisper
+
+- `HOST_ASR_MODE=local` 走 `LocalWhisperSession`（外挂 server 或 CLI），禁止新增 Electron 原生 whisper addon。
+- 送 Whisper 前必须经 `vadGate`：优先 Silero（若已安装可选依赖），否则能量 VAD；连续静音勿整段盲送。
+- 转写结果经 `glossaryCorrect`（`dev_knowledge/glossary/project_terms.json`）后再上抛。
+- 细节：`desktop/dev_knowledge/adr/002-intent-gating-vad.md`、`adr/003-local-whisper-abi.md`。

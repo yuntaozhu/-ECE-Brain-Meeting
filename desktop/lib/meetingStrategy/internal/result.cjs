@@ -26,6 +26,9 @@ function rememberRealAsk(state, question) {
   if (detectUserTone(q)) return;
   const { rx } = require("../../knowledge/schemaStore.cjs");
   if (rx("speak", "realAskSkip").test(q) && q.length < 16) return;
+  const prev = String(state.lastRealAsk || "").trim();
+  // Short how-do tails must not overwrite a longer grounded business ask.
+  if (prev && rx("speak", "realAskShortHowDo").test(q) && prev.length > q.length + 2) return;
   state.lastRealAsk = q.slice(0, 200);
   state.lastRealAskAt = Date.now();
 }

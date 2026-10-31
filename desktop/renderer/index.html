@@ -63,6 +63,24 @@
         background: #450a0a; border-radius: 4px; padding: 1px 6px; margin-left: 6px;
       }
       #routeHint { font-size: 11px; color: #93a4c7; margin-top: 8px; line-height: 1.4; }
+      .sr-meta { font-size: 11px; color: #93a4c7; margin: 0 0 8px; min-height: 1.2em; }
+      .sr-empty { margin: 0; color: #64748b; font-size: 12px; }
+      .sr-cards { display: grid; gap: 8px; }
+      .sr-card {
+        background: #070b16; border: 1px solid #31415f; border-radius: 10px; padding: 10px 12px;
+      }
+      .sr-card header {
+        font-size: 11px; color: #67e8f9; letter-spacing: 0.03em; margin-bottom: 6px; font-weight: 600;
+      }
+      .sr-card p {
+        margin: 0; font-size: 16px; line-height: 1.45; color: #f1f5f9; font-weight: 600;
+      }
+      .sr-actions { display: flex; gap: 6px; margin-top: 8px; }
+      .sr-actions button { padding: 6px 10px; font-size: 11px; }
+      .sr-facts { margin: 10px 0 0; padding-left: 18px; color: #94a3b8; font-size: 11px; }
+      .win-controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 8px; }
+      .win-controls label { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; color: #c5d2ea; }
+      .win-controls input[type="range"] { width: 120px; }
     </style>
   </head>
   <body>
@@ -98,10 +116,22 @@
         <label class="check"><input id="virtualOnly" type="checkbox" checked /> 列表只显示虚拟设备（推荐）</label>
         <label class="check"><input id="allowPhysical" type="checkbox" /> 允许绑定物理设备（调试用，正式开会请勿勾选）</label>
 
-        <label>① EXE 采集 ← 虚拟音频输出另一端（会议声进来）
-          <span class="badge-virtual">应对 CABLE-A Output / SysVAD Capture</span>
+        <label>① Others 会场环路采集
+          <span class="badge-virtual">CABLE Output / 系统内录</span>
         </label>
+        <select id="othersSource">
+          <option value="cable" selected>VB-Cable / 虚拟环路（推荐）</option>
+          <option value="display">系统内录 displayMedia（实验）</option>
+        </select>
         <select id="inputDevice"></select>
+
+        <label class="check"><input id="dualTrackMe" type="checkbox" checked /> 启用双通道 Me（本机麦，与会场分离）</label>
+        <label>①b Me 本机麦
+          <span class="badge-phys">可用物理麦</span>
+        </label>
+        <select id="meDevice"></select>
+        <label>Me 电平</label>
+        <div class="meter"><div id="meLevel"></div></div>
 
         <label>② EXE 播放 → 虚拟麦克风另一端（AI 声进会）
           <span class="badge-virtual">应对 CABLE-B Input / SysVAD Render</span>
@@ -110,7 +140,8 @@
 
         <div id="routeHint"></div>
         <label class="check"><input id="localMonitor" type="checkbox" checked /> 本机同时听测试音/Host（调试用；正式开会可关）</label>
-        <label>输入电平</label>
+        <label class="check"><input id="showCapsule" type="checkbox" checked /> 显示悬浮胶囊（建议卡扫视）</label>
+        <label>Others 输入电平</label>
         <div class="meter"><div id="level"></div></div>
         <div class="row">
           <button id="refresh" class="ghost" type="button">刷新设备</button>
@@ -149,10 +180,42 @@
       </section>
 
       <section>
-        <h2>会场转写</h2>
+        <h2>会场转写 <span style="font-weight:400;font-size:11px;color:#64748b">会场=Others · 大智=Host</span></h2>
         <p id="asrStats" class="status warn" style="margin:0 0 6px;font-size:11px">启动听会后，此处显示实时转写（含中间结果）</p>
         <p id="duplexStats" class="status warn" style="margin:0 0 6px;font-size:11px">听写：IDLE</p>
         <div id="transcript"></div>
+      </section>
+
+      <section>
+        <h2>副驾驶建议卡 <span style="font-weight:400;font-size:11px;color:#64748b">扫视 · 不自动口播</span></h2>
+        <div class="win-controls">
+          <label><input id="winAlwaysOnTop" type="checkbox" /> 窗口置顶</label>
+          <label>透明度 <input id="winOpacity" type="range" min="55" max="100" value="100" /></label>
+          <span style="font-size:11px;color:#64748b">Ctrl+Shift+H 一键隐藏/显示</span>
+        </div>
+        <div class="win-controls" style="margin-bottom:6px">
+          <button type="button" id="copilotModeBtn" class="ghost">模式: auto</button>
+          <button type="button" id="copilotPushAskBtn" class="ghost">Push-to-Ask (Alt+Z)</button>
+          <span style="font-size:11px;color:#64748b">Alt+Shift+Z 切换 Auto/Manual</span>
+        </div>
+        <p id="smartRepliesMeta" class="sr-meta"></p>
+        <div id="smartReplies"><p class="sr-empty">巡检触发后，此处显示 Option A/B/C 建议口径</p></div>
+      </section>
+
+      <section>
+        <h2>会中参谋 <span style="font-weight:400;font-size:11px;color:#64748b">Catch Me Up · Quick Jot · 截屏</span></h2>
+        <div class="win-controls" style="margin-bottom:6px;flex-wrap:wrap;gap:6px">
+          <button type="button" id="catchMeUpBtn" class="ghost">Catch Me Up（近5分钟）</button>
+          <button type="button" id="screenCtxBtn" class="ghost">截取屏幕上下文</button>
+          <button type="button" id="expandJotsBtn" class="ghost">扩写速记草稿</button>
+        </div>
+        <div class="row" style="gap:6px;margin-bottom:6px">
+          <input id="quickJotInput" type="text" placeholder="Quick Jot：网关超时 -> 改异步队列" style="flex:1;min-width:160px" />
+          <button type="button" id="quickJotBtn" class="ghost">记下</button>
+        </div>
+        <pre id="catchMeUpBox" class="sr-meta" style="white-space:pre-wrap;max-height:160px;overflow:auto;margin:0 0 6px"></pre>
+        <pre id="mermaidBox" class="sr-meta" style="white-space:pre-wrap;max-height:120px;overflow:auto;margin:0;display:none"></pre>
+        <ul id="jotList" class="sr-facts" style="margin:6px 0 0"></ul>
       </section>
 
       <section>

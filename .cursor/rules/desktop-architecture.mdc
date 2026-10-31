@@ -13,3 +13,24 @@ alwaysApply: true
 - 流水线固定：转写 → `meetingSession` → 知识库召回 → `decideSpeak` → 写回 `lastDesign` / `lastOpenAsk` → 合成。知识库不决定开口。`desktop/renderer/` 不做策略。不要改仓库根目录的 React 示例。
 - 现存 `slotOk`、`DROP`、口令正则、意图覆盖是迁移债。对应算子落地且场景冒烟与变体评测仍全绿之前，禁止整段重写 `decideSpeak`，也禁止为了零字面量先删这些分支。
 - 主进程或 `faq-meeting.txt` 改完后，会场要重新执行 `npm run desktop` 才生效。
+
+## 研发知识导航（Wave A，Cursor 优先）
+
+本项目 **以 `.cursor/rules/*.mdc` + `desktop/dev_knowledge/` 为 AI 总控**，不依赖根目录 `CLAUDE.md`。
+
+| 主题 | 打开 |
+|------|------|
+| 导航索引 | `desktop/dev_knowledge/INDEX.md` |
+| 双通道音频 | `adr/001-dual-channel-audio.md` · `rules/desktop-audio-capture.md` |
+| VAD / 门控 | `adr/002-intent-gating-vad.md` |
+| Whisper 外挂 | `adr/003-local-whisper-abi.md` |
+| 悬浮胶囊 | `rules/desktop-stealth-window.md` |
+| 术语纠错 | `glossary/project_terms.json` |
+| Wave B 预检索/手动触发 | `adr/004-speculative-rag-manual-trigger.md` |
+| Wave C 速览/速记/MCP | `adr/005-wave-c-meeting-aid-mcp.md` |
+| Wave D Mermaid/OCR/DeepDive | `adr/006-wave-d-mermaid-ocr-deepdive.md` |
+| Wave E Wiki2 Fast Read | `adr/007-wiki2-fast-read.md` · `desktop/knowledge_wiki/` |
+| Wave F 豆包编译/主题 | `adr/008-wiki2-llm-themes.md` |
+| 会中 FAQ | `desktop/knowledge/faq-meeting.txt` |
+
+红线摘要：`[Me]`/`[Others]` 禁混轨；本地 Whisper 不绑 Electron native addon；静音须 VAD；BYOK 当前仅 `doubao`。

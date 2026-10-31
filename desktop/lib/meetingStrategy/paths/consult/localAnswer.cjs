@@ -80,11 +80,13 @@ function completeAsk(askText) {
   );
 }
 
-/** 已经答出的资料卡。近义确认、续播尾巴和探针不是可延续的实体。 */
+/** 已经答出的资料卡。近义确认、续播尾巴、脚本和探针不是可延续的实体。 */
 function materialAnswer(design) {
   if (!design || design.type !== "answer") return false;
   const id = String(design.hypothesisId || "");
-  return id.length >= 4 && id !== "carry" && id !== "probe";
+  if (id.length < 4) return false;
+  if (id === "carry" || id === "probe" || id === "script" || id === "alternate_path") return false;
+  return true;
 }
 
 /** 近义确认和复述不能被「往下看」提交成再念一遍。 */
@@ -223,24 +225,37 @@ function tryLocalAnswer(ctx) {
   const probeSegs = (state?.lastDesign?.segments || []).map((s) => String(s || "").trim()).filter((s) => s && !askText.includes(s));
   const wide = S.isClosedFaqQuestion(askText);
   let hits = S.retrieveKnowledge(askText, wide ? 8 : 4)?.hits || [];
-  for (const seg of probeSegs.slice(0, 2)) {
-    const more = S.retrieveKnowledge(seg, 3)?.hits || [];
-    const seen = new Set(hits.map((h) => String(h.title || "")));
-    for (const h of more) {
-      const key = String(h?.title || "");
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-      hits.push(h);
+  // 仅二选一澄清的 segments 可并入短追问；完整新问或单焦点 probe 跳过，避免污染。
+  const splitClarify =
+    state?.lastDesign?.type === "clarify" && (state.lastDesign.segments || []).length === 2;
+  if (!completeAsk(askText) && splitClarify) {
+    for (const seg of probeSegs.slice(0, 2)) {
+      const more = S.retrieveKnowledge(seg, 3)?.hits || [];
+      const seen = new Set(hits.map((h) => String(h.title || "")));
+      for (const h of more) {
+        const key = String(h?.title || "");
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        hits.push(h);
+      }
     }
   }
   const retrieved = { hits };
   const lastHost = String(ctx.opts?.lastHostSpeakText || "");
+  // 资料卡与澄清 probe 可作 prev；脚本/alternate_path 不当粘滞。
+  const prevForBayes = (() => {
+    const d = state?.lastDesign;
+    if (!d) return null;
+    if (materialAnswer(d)) return d;
+    if (d.type === "clarify" && (d.hypothesisId === "probe" || (d.segments || []).length === 2)) return d;
+    return null;
+  })();
   const bayes = decideSpeak({
     ask: askText,
     hits: retrieved?.hits || [],
     intent,
     script,
-    prevDesign: state?.lastDesign || null,
+    prevDesign: prevForBayes,
     lastHost,
     meetingId: state?.meetingId || ""
   });
@@ -255,11 +270,11 @@ function tryLocalAnswer(ctx) {
       const hitChain =
         (preferredTitle && findChainForHypothesis(preferredTitle)) ||
         (loadChains() || []).find((c) => c.cardId && c.cardId === chainHit.cardId) ||
-        findChainForHypothesis(state.lastDesign.hypothesisId);
+        findChainForHypothesis(state.lastDesign && state.lastDesign.hypothesisId);
       const keepId = String(
         (hitChain && hitChain.seedTitles && hitChain.seedTitles[0]) ||
           preferredTitle ||
-          state.lastDesign.hypothesisId ||
+          (state.lastDesign && state.lastDesign.hypothesisId) ||
           ""
       ).slice(0, 120);
       state.lastDesign = {
@@ -347,15 +362,77 @@ function tryLocalAnswer(ctx) {
       (bayes && bayes.shadow && bayes.shadow.formalWinnerId) || (bayes && bayes.title) || ""
     ).trim();
     const late = playChainHit(
-      matchChainStep(askText, state.lastDesign.hypothesisId, { preferredTitle }),
+      matchChainStep(askText, state.lastDesign && state.lastDesign.hypothesisId, { preferredTitle }),
       preferredTitle
     );
     if (late) return late;
   }
-  // 经营题放行 MeetingAgent；闭题追问 miss 才立刻 pendingMiss。
+
+  // Formal empty / clarify, but shadow already grounded → kb-fallback (no silent).
+  // Ability-probe style underspecified asks stay abstaining (shadow catalog).
+  function playShadowKb() {
+    const sh = bayes && bayes.shadow;
+    if (!sh || sh.shadowAction !== "answer") return null;
+    const ask = String(askText || "");
+    if (S.rx("speak", "shadowRecoverSkip").test(ask)) return null;
+    const preferredTitle = String(sh.shadowWinner || "").trim();
+    const hypo = String((state && state.lastDesign && state.lastDesign.hypothesisId) || preferredTitle || "");
+    const viaChain = playChainHit(matchChainStep(askText, hypo, { preferredTitle }), preferredTitle);
+    if (viaChain) return viaChain;
+    let speak = String(sh.shadowSpeak || "").trim();
+    if (!speak) {
+      const faq =
+        S.matchFaqInstant(askText) || (preferredTitle ? S.matchFaqInstant(preferredTitle) : null);
+      speak = String((faq && faq.answer) || "").trim();
+    }
+    if (!speak) return null;
+    if (isHowDoAsk(askText) && S.isDefinitionSpeak(speak)) return null;
+    if (state) {
+      state.lastDesign = {
+        type: "answer",
+        hypothesisId: preferredTitle || String(askText).slice(0, 40),
+        segments: [],
+        depth: "final"
+      };
+      state.lastOpenAsk = "";
+      state.pendingAsk = "";
+    }
+    S.debugLog.info("Strategy", "shadow kb-fallback", {
+      text: askText.slice(0, 40),
+      title: preferredTitle.slice(0, 40)
+    });
+    return S.playAnswer(
+      S.stripIntroBoilerplate(S.clipUtterance(speak, 160)),
+      useBiz && !S.isClosedFaqQuestion(askText) ? "BIZ_ANSWER" : "WAKE_ANSWER",
+      state,
+      a2aTrace,
+      kbStatus,
+      qFp,
+      "kb-fallback",
+      {
+        cacheQuestion: askText,
+        // Shadow already cleared the answer gate on a FAQ card; keep posterior for eval/logs.
+        speakReason: "posterior",
+        speakTitle: preferredTitle || "",
+        oralize: true
+      }
+    );
+  }
+
+  if (
+    completeAsk(askText) &&
+    (bayes.action === "clarify" || bayes.action === "repeat") &&
+    !definitionMismatch
+  ) {
+    const kb = playShadowKb();
+    if (kb) return kb;
+  }
+
+  // 仅「怎么做」类追问在链未命中时立刻 pendingMiss；其它题继续走澄清/Agent。
   if (
     hadMaterial &&
     completeAsk(askText) &&
+    isHowDoAsk(askText) &&
     !useBiz &&
     (bayes.action === "clarify" || bayes.action === "repeat")
   ) {

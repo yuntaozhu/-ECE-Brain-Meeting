@@ -6,6 +6,29 @@ const CONTINUE_SCRIPT = speakLine("continue");
 const CHAT_ASK_SYSTEM = speakLine("chatAskSystem");
 const CHAT_TALK_SYSTEM = speakLine("chatTalkSystem");
 const THINKING_FILLER = speakLine("thinkingFiller");
+
+/** Rotate short fillers from schema; stage = early|mid|late. */
+function pickThinkingFiller(stage = "early", salt = 0) {
+  const pack = speakHp("thinkingFillers");
+  const list = Array.isArray(pack?.[stage]) ? pack[stage].filter(Boolean) : [];
+  if (!list.length) return THINKING_FILLER;
+  const i = Math.abs(Number(salt) || 0) % list.length;
+  return String(list[i] || THINKING_FILLER);
+}
+
+function thinkingTimingMs() {
+  try {
+    const t = speakHp("thinkingTimingMs");
+    return {
+      early: Number(t?.early) || 650,
+      mid: Number(t?.mid) || 3500,
+      late: Number(t?.late) || 8000,
+      maxFillers: Math.max(1, Number(t?.maxFillers) || 2)
+    };
+  } catch (_) {
+    return { early: 650, mid: 3500, late: 8000, maxFillers: 2 };
+  }
+}
 const VISIT_HANDOFF = speakLine("visitHandoff");
 const TRUST_LINES = speakLine("trustLines");
 const APOLOGY_RETRY = speakLine("apologyRetry");
@@ -90,6 +113,8 @@ module.exports = {
   CHAT_ASK_SYSTEM,
   CHAT_TALK_SYSTEM,
   THINKING_FILLER,
+  pickThinkingFiller,
+  thinkingTimingMs,
   VISIT_HANDOFF,
   TRUST_LINES,
   APOLOGY_RETRY,

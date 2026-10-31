@@ -34,6 +34,8 @@ import { runPatrol } from "./patrol/runPatrol.js";
 import { startCaptureToListen } from "./audio/uplink.js";
 import { setHoldChangeHandler } from "./policy.js";
 import { handleBridgeEvent } from "./bridge/events.js";
+import { bindCopilotControls } from "./ui/smartReplies.js";
+import { bindMeetingAidControls } from "./ui/meetingAid.js";
 
 setHoldChangeHandler(({ why, prev, until }) => {
   if (until - prev > 800) {
@@ -302,6 +304,76 @@ $("stop").onclick = async () => {
 
 $("patrol").onclick = () => void runPatrol("manual");
 
+$("winAlwaysOnTop")?.addEventListener("change", async (e) => {
+  const on = Boolean(e.target?.checked);
+  try {
+    const res = await window.bridge.setAlwaysOnTop(on);
+    slog("INFO", "Window", "置顶", res);
+  } catch (err) {
+    slog("ERROR", "Window", err.message || String(err));
+  }
+});
+
+$("winOpacity")?.addEventListener("input", async (e) => {
+  const pct = Number(e.target?.value || 100);
+  try {
+    await window.bridge.setOpacity(pct / 100);
+  } catch (err) {
+    slog("ERROR", "Window", err.message || String(err));
+  }
+});
+
+$("showCapsule")?.addEventListener("change", async (e) => {
+  const on = Boolean(e.target?.checked);
+  try {
+    await window.bridge.setCapsuleVisible(on);
+    slog("INFO", "Capsule", on ? "显示悬浮胶囊" : "隐藏悬浮胶囊");
+  } catch (err) {
+    slog("ERROR", "Capsule", err.message || String(err));
+  }
+});
+
+$("dualTrackMe")?.addEventListener("change", async () => {
+  updateRouteHint();
+  try {
+    localStorage.setItem(
+      "ece_bridge_devices",
+      JSON.stringify({
+        input: $("inputDevice").value,
+        output: $("outputDevice").value,
+        me: $("meDevice")?.value || "",
+        dualTrackMe: Boolean($("dualTrackMe")?.checked),
+        othersSource: $("othersSource")?.value || "cable"
+      })
+    );
+  } catch (_) {}
+  if (S.listening) {
+    const enable = Boolean($("dualTrackMe")?.checked);
+    S.dualTrackEnabled = enable;
+    try {
+      if (enable) {
+        const { openMeInput, startMeters } = await import("./audio/capture.js");
+        await openMeInput();
+        startMeters();
+        const { startCaptureToListen } = await import("./audio/uplink.js");
+        startCaptureToListen();
+        await window.bridge.setDualTrackMe(true);
+      } else {
+        const { closeMeInput, startMeters } = await import("./audio/capture.js");
+        await closeMeInput();
+        startMeters();
+        await window.bridge.setDualTrackMe(false);
+        const { startCaptureToListen } = await import("./audio/uplink.js");
+        startCaptureToListen();
+      }
+    } catch (err) {
+      slog("ERROR", "DualTrack", err.message || String(err));
+    }
+  }
+});
+
+$("othersSource")?.addEventListener("change", () => updateRouteHint());
+
 $("btnSessions")?.addEventListener("click", async () => {
   try {
     const res = await window.bridge.sessionOpenDir();
@@ -369,6 +441,8 @@ async function bootApp() {
       return;
     }
     renderArch();
+    bindCopilotControls();
+    bindMeetingAidControls();
     S.unsubMainLog = window.bridge.onLog((entry) => {
       appendLogLine(entry.level || "INFO", entry.tag || "Main", entry.message, entry.detail);
     });
@@ -412,6 +486,14 @@ $("agenda")?.addEventListener("input", () => {
 });
 
 
-bootApp().catch((e) => {
-  console.error("[App] 启动失败", e);
-});
+bootApp()
+  .then(async () => {
+    if ($("showCapsule")?.checked) {
+      try {
+        await window.bridge.setCapsuleVisible(true);
+      } catch (_) {}
+    }
+  })
+  .catch((e) => {
+    console.error("[App] 启动失败", e);
+  });

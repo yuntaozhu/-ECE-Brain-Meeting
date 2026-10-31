@@ -29,7 +29,7 @@ export function flushPendingHoldAsr(why = "hold-end") {
   return true;
 }
 
-function queueHoldWakeQuestion(text) {
+function enqueueHoldWakeQuestion(text) {
   if (!text) return;
   if (S.pendingHoldAsr === text) return;
   S.pendingHoldAsr = text;
@@ -40,16 +40,19 @@ function queueHoldWakeQuestion(text) {
   });
 }
 
-function acceptFinal(text, { bargeIn, hold }) {
+function acceptFinal(text, { bargeIn, hold, role = "others" }) {
+  const isMe = role === "me";
+  const speaker = isMe ? "我" : "会场";
   const last = S.transcriptLines[S.transcriptLines.length - 1];
-  if (last && last.speaker === "会场") {
+  if (last && last.speaker === speaker && last.role === role) {
     if (last.text === text) {
-      slog("DEBUG", "ASR", "忽略重复 final", { text });
+      slog("DEBUG", "ASR", "忽略重复 final", { text, role });
       renderTranscript();
       return;
     }
     const within2s = S.lastAsrFinalAt && Date.now() - S.lastAsrFinalAt < 2000;
     if (
+      !isMe &&
       within2s &&
       !bargeIn &&
       !looksLikeBargeInLocal(text) &&
@@ -64,7 +67,7 @@ function acceptFinal(text, { bargeIn, hold }) {
       renderTranscript();
       S.lastSpeechRmsAt = Date.now();
       setChip("chipMeetingAudio", true, "good");
-      slog("INFO", "ASR", "合并短句", { text: last.text, total: S.asrFinalCount, within2s });
+      slog("INFO", "ASR", "合并短句", { text: last.text, total: S.asrFinalCount, role });
       if (shouldImmediatePatrol(last.text) || looksLikeBargeInLocal(last.text)) {
         void runPatrol(looksLikeBargeInLocal(last.text) ? "barge-in" : "wake");
       } else if (S.agentHoldListening) {
@@ -77,21 +80,34 @@ function acceptFinal(text, { bargeIn, hold }) {
     }
   }
   S.asrFinalCount += 1;
-  S.asrAcceptedCount += 1;
+  if (!isMe) S.asrAcceptedCount += 1;
   S.lastAsrFinalAt = Date.now();
-  S.transcriptLines.push({ speaker: "会场", text });
+  S.transcriptLines.push({ speaker, text, role });
   try {
-    window.bridge?.sessionAppend?.({ speaker: "会场", text });
+    window.bridge?.sessionAppend?.({ speaker, text, role });
   } catch (_) {}
   renderTranscript();
   S.lastSpeechRmsAt = Date.now();
-  setChip("chipMeetingAudio", true, "good");
-  slog("INFO", "ASR", "会场转写(final)", {
+  if (!isMe) setChip("chipMeetingAudio", true, "good");
+  slog("INFO", "ASR", isMe ? "Me 转写(final)" : "会场转写(final)", {
     text,
     total: S.asrFinalCount,
     bargeIn,
+    role,
     hold: S.agentHoldListening
   });
+
+  // Me：仅口令触发巡检；普通发言只标定上屏，避免「自己回复自己」
+  if (isMe) {
+    if (bargeIn || looksLikeBargeInLocal(text)) {
+      void runPatrol("barge-in");
+    } else if (shouldImmediatePatrol(text)) {
+      void runPatrol("wake");
+    }
+    renderDuplexStats();
+    return;
+  }
+
   if (bargeIn || looksLikeBargeInLocal(text)) {
     slog("INFO", "Strategy", "检测到打断/续说口令，立即巡检", { text: text.slice(0, 80) });
     void runPatrol("barge-in");
@@ -102,7 +118,7 @@ function acceptFinal(text, { bargeIn, hold }) {
     void runPatrol("hold");
   } else {
     schedulePatrol();
-    if (S.transcriptLines.filter((l) => l.speaker === "会场").length - S.lastLineCountAtPatrol >= 4) {
+    if (S.transcriptLines.filter((l) => l.role !== "me" && l.speaker === "会场").length - S.lastLineCountAtPatrol >= 4) {
       void runPatrol("lines");
     }
   }
@@ -110,9 +126,12 @@ function acceptFinal(text, { bargeIn, hold }) {
 }
 
 export function handleAsrEvent(msg) {
+  const role = String(msg.role || "others").toLowerCase() === "me" ? "me" : "others";
   if (msg.final) {
-    let text = displayCorrectAsr(msg.text || S.partialAsr || "");
-    S.partialAsr = "";
+    const partialFallback = role === "me" ? S.partialAsrMe : S.partialAsr;
+    let text = displayCorrectAsr(msg.text || partialFallback || "");
+    if (role === "me") S.partialAsrMe = "";
+    else S.partialAsr = "";
     if (!text) {
       renderTranscript();
       return;
@@ -120,10 +139,12 @@ export function handleAsrEvent(msg) {
     const speaking = S.duplexPhase === PHASE.SPEAKING;
     const inMuteHold = Date.now() < S.hostSpeakingUntil;
     const bargeIn = msg.bargeIn === true || looksLikeBargeInLocal(text);
+    const wakeInterrupt = msg.wakeInterrupt === true;
     const wakeAsk = shouldImmediatePatrol(text);
     const fromQueue = msg.fromHoldQueue === true;
 
-    if (msg.likelyEcho && !bargeIn && !fromQueue) {
+    // Me 通道不做会场回灌过滤（本机麦）
+    if (role !== "me" && msg.likelyEcho && !bargeIn && !wakeInterrupt && !fromQueue) {
       S.echoDiscardCount += 1;
       slog("DEBUG", "ASR", "丢弃播报期疑似回灌", { text: text.slice(0, 60) });
       renderTranscript();
@@ -131,12 +152,21 @@ export function handleAsrEvent(msg) {
       return;
     }
 
-    // hold/播报中：打断口令立即放行；唤醒/问句排队，避免被 回灌窗压死
-    if ((speaking || inMuteHold) && !S.agentHoldListening && !bargeIn && !fromQueue) {
+    if (wakeInterrupt) {
+      S.hostSpeakingUntil = Math.min(S.hostSpeakingUntil, Date.now() + 400);
+      S.agentHoldListening = false;
+      S.pendingHoldAsr = "";
+      S.pendingHoldAsrAt = 0;
+      slog("INFO", "ASR", "唤醒口令放行", { text: text.slice(0, 60), role });
+      acceptFinal(text, { bargeIn: false, hold: false, role });
+      return;
+    }
+
+    if (role !== "me" && (speaking || inMuteHold) && !S.agentHoldListening && !bargeIn && !fromQueue) {
       if (wakeAsk) {
         const echo = looksLikeHostEcho(text);
         if (!echo.echo) {
-          queueHoldWakeQuestion(text);
+          enqueueHoldWakeQuestion(text);
           renderDuplexStats();
           return;
         }
@@ -145,8 +175,6 @@ export function handleAsrEvent(msg) {
       if (S.echoDiscardCount <= 3 || S.echoDiscardCount % 40 === 0) {
         slog("DEBUG", "ASR", "丢弃 TTS/回灌窗口内转写", {
           text: text.slice(0, 60),
-          phase: S.duplexPhase,
-          holdLeft: Math.max(0, S.hostSpeakingUntil - Date.now()),
           discarded: S.echoDiscardCount
         });
       }
@@ -156,24 +184,30 @@ export function handleAsrEvent(msg) {
     }
     if (bargeIn && (speaking || inMuteHold)) {
       S.hostSpeakingUntil = Math.min(S.hostSpeakingUntil, Date.now() + 400);
-      slog("INFO", "ASR", "barge-in 口令放行", { text: text.slice(0, 60), phase: S.duplexPhase });
+      slog("INFO", "ASR", "barge-in 口令放行", { text: text.slice(0, 60), role });
     }
-    const echo = looksLikeHostEcho(text);
-    if (echo.echo && !bargeIn && !S.agentHoldListening && !fromQueue) {
-      S.echoDiscardCount += 1;
-      slog("WARN", "ASR", "丢弃疑似 Host 自语回灌", {
-        text: text.slice(0, 80),
-        score: echo.score,
-        reason: echo.reason
-      });
-      extendHostMute(echo.reason.startsWith("post-hold") || echo.reason === "faq-theme" ? 3500 : 4000, "echo-final");
-      renderTranscript();
-      renderDuplexStats();
-      return;
+    if (role !== "me") {
+      const echo = looksLikeHostEcho(text);
+      if (echo.echo && !bargeIn && !wakeInterrupt && !S.agentHoldListening && !fromQueue) {
+        S.echoDiscardCount += 1;
+        slog("WARN", "ASR", "丢弃疑似 Host 自语回灌", {
+          text: text.slice(0, 80),
+          score: echo.score,
+          reason: echo.reason
+        });
+        extendHostMute(
+          echo.reason.startsWith("post-hold") || echo.reason === "faq-theme" ? 3500 : 4000,
+          "echo-final"
+        );
+        renderTranscript();
+        renderDuplexStats();
+        return;
+      }
     }
-    acceptFinal(text, { bargeIn, hold: S.agentHoldListening });
+    acceptFinal(text, { bargeIn, hold: S.agentHoldListening, role });
   } else {
     if (
+      role !== "me" &&
       (Date.now() < S.hostSpeakingUntil || S.duplexPhase === PHASE.SPEAKING) &&
       !S.agentHoldListening
     ) {
@@ -181,23 +215,24 @@ export function handleAsrEvent(msg) {
     }
     const t = displayCorrectAsr(msg.text || "");
     if (!t) return;
-    const echo = looksLikeHostEcho(t);
-    if (echo.echo) {
-      if (S.asrDeltaCount % 20 === 0) {
-        slog("DEBUG", "ASR", "中间结果疑似回灌，已忽略", {
-          text: t.slice(0, 60),
-          reason: echo.reason
-        });
+    if (role !== "me") {
+      const echo = looksLikeHostEcho(t);
+      if (echo.echo) {
+        if (S.asrDeltaCount % 20 === 0) {
+          slog("DEBUG", "ASR", "中间结果疑似回灌，已忽略", {
+            text: t.slice(0, 60),
+            reason: echo.reason
+          });
+        }
+        return;
       }
-      return;
+      S.partialAsr = t;
+    } else {
+      S.partialAsrMe = t;
     }
-    S.partialAsr = t;
     S.asrDeltaCount += 1;
     renderTranscript();
     S.lastSpeechRmsAt = Date.now();
-    if (S.asrDeltaCount === 1 || S.asrDeltaCount % 8 === 0) {
-      slog("DEBUG", "ASR", "中间结果", { text: t.slice(0, 80), n: S.asrDeltaCount });
-    }
   }
 }
 

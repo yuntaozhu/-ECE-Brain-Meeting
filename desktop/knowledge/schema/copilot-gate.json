@@ -1,0 +1,49 @@
+{
+  "enabledDefault": true,
+  "triggerMode": "auto",
+  "limits": {
+    "minChars": 4,
+    "maxSuggestionChars": 60,
+    "throttleMs": 2500,
+    "manualWindowMs": 60000
+  },
+  "prefetch": {
+    "enabled": true,
+    "minSpeakingMs": 3000,
+    "resetGapMs": 8000,
+    "ttlMs": 15000
+  },
+  "patterns": {
+    "directQuestion": "(你|您|大智|老师|园长).{0,12}(吗|呢|吧|？|\\?)|(能不能|可不可以|怎么|如何|为什么|多少钱|贵不贵|值不值).{0,20}(？|\\?|$)|(请问|想问|问一下)",
+    "opinionSeeking": "(怎么看|你觉得|你们觉得|有没有更好|方案|选型|评审|分歧|反对|赞同|要不要|值不值得|能不能落地|怎么推进)",
+    "informationSharing": "(汇报一下|给大家同步|接下来讲|这一页|翻到|PPT|先说一下背景|目前进度是)",
+    "chitchat": "(哈哈|呵呵|嗯嗯|好累|累了|没事了|测一下麦|听得到吗|可以听到吗|虚拟声卡|设备调试)",
+    "prefetchCue": "(怎么|如何|为什么|方案|架构|接口|延迟|配额|ASR|TTS|Whisper|选型|评审|风险|排期|值得|贵不贵|\\?|？)"
+  },
+  "urgencyByCategory": {
+    "DIRECT_QUESTION": "High",
+    "OPINION_SEEKING": "Medium",
+    "INFORMATION_SHARING": "Low",
+    "CHITCHAT": "Ignore"
+  },
+  "triggerCategories": ["DIRECT_QUESTION", "OPINION_SEEKING"],
+  "templates": {
+    "push_forward_generic": "这个方向我认同，建议先把关键决策点定下来，再排执行节奏。",
+    "push_back_generic": "我建议先核对成本与交付风险，再决定是否按当前方案推进。",
+    "counter_inquiry_generic": "关于这一点，目前最卡的是资源、时间，还是验收标准？",
+    "push_forward_with_fact": "可以，按现有口径先推进：{fact}",
+    "push_back_with_topic": "关于{topic}，我建议先确认边界与代价，再拍板。",
+    "counter_inquiry_with_topic": "围绕{topic}，对方最关心的成功标准是什么？"
+  },
+  "labels": {
+    "push_forward": "Option A · 快速赞同/推进",
+    "push_back": "Option B · 谨慎权衡/质疑",
+    "counter_inquiry": "Option C · 澄清反问/引导",
+    "speakerOthers": "Others",
+    "speakerMe": "Me",
+    "speakerHost": "大智"
+  },
+  "deepDive": {
+    "systemHint": "技术与战略架构师，负责深度支撑发言说服力。输出：核心论点一句话、2~3点论据、约100字可口述话术。"
+  }
+}

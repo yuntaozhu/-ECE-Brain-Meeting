@@ -18,6 +18,16 @@ function looksPhysical(label) {
 
 function preferVirtual(select, list) {
   const virtual = list.filter((d) => isVirtualLabel(d.label) && !isBannedCableLabel(d.label));
+  if (select.id === "meDevice") {
+    // Me：优先物理麦，便于与 Others 环路分离
+    const physical = list.filter((d) => !isVirtualLabel(d.label) && !isBannedCableLabel(d.label));
+    if (physical.length) {
+      select.value = physical[0].deviceId;
+      return;
+    }
+    if (virtual.length) select.value = virtual[0].deviceId;
+    return;
+  }
   if (!virtual.length) return;
   if (select.id === "inputDevice") {
     const cableOut = virtual.find((d) => /cable\s*output/i.test(d.label));
@@ -89,15 +99,19 @@ function updateRouteHint() {
   const outOk = isVirtualLabel(outL);
   setChip("chipVirtual", inOk && outOk, inOk && outOk ? "good" : "bad");
 
+  const meOn = Boolean($("dualTrackMe")?.checked);
+  const meL = selectedLabel("meDevice");
+  const othersMode = $("othersSource")?.value || "cable";
   $("routeHint").innerHTML =
-    `VB-Cable 约定：<b>CABLE Input=播放端</b>，<b>CABLE Output=录音端</b>。<br>` +
-    `听会：腾讯会议 <b>AI 扬声器必须=CABLE Input</b> → EXE 采集 <b>${inL || "未选"}</b>（须为 CABLE Output）→ 独立听写 ASR<br>` +
-    `出声：EXE→播放 <b>${outL || "未选"}</b>（须为 CABLE Input）→ 会议 <b>AI 麦=CABLE Output</b> → 测试账号耳机<br>` +
-    `<b>转写为空？</b>①「会场声」灯与输入电平不跳 → AI 扬声器没进 Cable；②电平跳但无字 → 看日志 HostAsr / AsrHealth。<br>` +
-    `<b>听不到 AI？</b>AI 账号取消静音；勾选「本机同时听」可先确认 EXE 本机有声。<br>` +
+    `<b>双通道</b>：Others=会场环路（${othersMode === "display" ? "系统内录实验" : "CABLE Output"}）；` +
+    `Me=本机麦（${meOn ? meL || "未选" : "关闭"}）。<br>` +
+    `VB-Cable：<b>CABLE Input=播放端</b>，<b>CABLE Output=录音端</b>。<br>` +
+    `听会 Others：AI 扬声器=<b>CABLE Input</b> → EXE 采集 <b>${inL || "未选"}</b> → ASR[Others]<br>` +
+    `出声：EXE→<b>${outL || "未选"}</b>（CABLE Input）→ AI 麦=CABLE Output。<br>` +
+    `Me 口令（谢谢大智/唤醒）走本机麦，不与会场混音；普通 Me 发言只上屏不定策略。<br>` +
     (inOk && outOk
-      ? '<span class="ok">已绑定虚拟设备。单 Cable 易串扰，正式场景建议 Cable-A 听会 + Cable-B 出声。</span>'
-      : '<span class="bad">请改为虚拟设备。物理麦/显示器音频不能用于 AI 环路。</span>');
+      ? '<span class="ok">虚拟环路已绑定。正式开会建议 Cable-A 听会 + Cable-B 出声。</span>'
+      : '<span class="bad">Others/出声请用虚拟设备；Me 可用物理麦。</span>');
 
   updateMeetingGate();
   slog("DEBUG", "Route", "路由提示已更新", deviceSnapshot());
@@ -159,7 +173,10 @@ async function refreshDevices() {
       "ece_bridge_devices",
       JSON.stringify({
         input: $("inputDevice").value,
-        output: $("outputDevice").value
+        output: $("outputDevice").value,
+        me: $("meDevice")?.value || "",
+        dualTrackMe: Boolean($("dualTrackMe")?.checked),
+        othersSource: $("othersSource")?.value || "cable"
       })
     );
   } catch (_) {}
@@ -183,6 +200,10 @@ function applyDeviceFilter() {
     outputs,
     only ? "无虚拟输出 — 请安装 VB-Cable / SysVAD" : "无输出设备"
   );
+  // Me：列表含物理麦（不受 virtualOnly 限制），便于双通道
+  if ($("meDevice")) {
+    fill($("meDevice"), S.allInputs, "无本机麦");
+  }
   try {
     const saved = JSON.parse(localStorage.getItem("ece_bridge_devices") || "{}");
     const inOk =
@@ -193,8 +214,19 @@ function applyDeviceFilter() {
       saved.output &&
       [...$("outputDevice").options].some((o) => o.value === saved.output) &&
       !isBannedCableLabel(selectedLabelFromValue("outputDevice", saved.output));
+    const meOk =
+      saved.me &&
+      $("meDevice") &&
+      [...$("meDevice").options].some((o) => o.value === saved.me);
     if (inOk) $("inputDevice").value = saved.input;
     if (outOk) $("outputDevice").value = saved.output;
+    if (meOk) $("meDevice").value = saved.me;
+    if (saved.dualTrackMe != null && $("dualTrackMe")) {
+      $("dualTrackMe").checked = Boolean(saved.dualTrackMe);
+    }
+    if (saved.othersSource && $("othersSource")) {
+      $("othersSource").value = saved.othersSource;
+    }
   } catch (_) {}
   updateRouteHint();
 }

@@ -72,6 +72,48 @@ function howDoCue(text, cfg) {
   return cues.some((c) => c && s.includes(c));
 }
 
+/** Spoken paraphrases: subject × cue × object → offline asks (no runtime literals). */
+function paraphraseAsks(cfg) {
+  const subjects = Array.isArray(cfg.paraphraseSubjects) ? cfg.paraphraseSubjects : [];
+  const objects = Array.isArray(cfg.paraphraseObjects) ? cfg.paraphraseObjects : [];
+  const cues = Array.isArray(cfg.paraphraseCues) ? cfg.paraphraseCues : [];
+  const tpl = String(cfg.paraphraseAskTpl || "{subject}{cue}{object}");
+  const max = Math.max(1, Number(cfg.paraphraseMax) || 4);
+  const out = [];
+  const seen = new Set();
+  for (const cue of cues) {
+    if (!cue) continue;
+    for (const subject of subjects) {
+      for (const object of objects) {
+        let ask = fillTpl(tpl, {
+          subject: String(subject || ""),
+          cue: String(cue),
+          object: String(object || "")
+        }).replace(/\s+/g, "");
+        if (!ask || ask.length < 4) continue;
+        if (!/[？?]$/.test(ask)) ask = `${ask}？`;
+        const key = ask.replace(/[？?]/g, "");
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(ask);
+        if (out.length >= max * 3) return out;
+      }
+    }
+  }
+  return out;
+}
+
+function seedNeedsParaphrase(card, cfg) {
+  const need = String(cfg.paraphraseSeedNeed || "");
+  if (!need) return false;
+  const blob = `${(card.titles || []).join(" ")} ${card.spokenText || ""}`;
+  try {
+    return new RegExp(need).test(blob);
+  } catch (_) {
+    return false;
+  }
+}
+
 function distinctFromSeed(answer, seed, cfg) {
   const a = String(answer || "").trim();
   const seedText = String(seed || "").trim();
@@ -189,7 +231,21 @@ function ruleSteps(card, evidencePacks, cfg) {
     });
   };
 
-  for (let i = 0; i < cues.length && steps.length < (Number(cfg.maxSteps) || 6); i += 1) {
+  const maxSteps = Number(cfg.maxSteps) || 6;
+  const paraCap = Math.min(Number(cfg.paraphraseMax) || 4, maxSteps);
+  if (seedNeedsParaphrase(card, cfg)) {
+    const prefer = ["落地", "实施", "开展", "推进", "行事历", "老师", "家长"];
+    let added = 0;
+    for (const ask of paraphraseAsks(cfg)) {
+      if (added >= paraCap || steps.length >= maxSteps) break;
+      const before = steps.length;
+      const picked = howDoAnswer(card, packs, cfg, usedHowAnswers, prefer);
+      push(ask, picked.answer, picked.cite, picked.gap);
+      if (steps.length > before) added += 1;
+    }
+  }
+
+  for (let i = 0; i < cues.length && steps.length < maxSteps; i += 1) {
     const cue = cues[i];
     const ask = makeAsk(anchor, cue, cfg);
     if (howDoCue(cue, cfg) || howDoCue(ask, cfg)) {
@@ -210,7 +266,7 @@ function ruleSteps(card, evidencePacks, cfg) {
     push(ask, answer, cite, !answer);
   }
 
-  for (let i = 0; i < packs.length && steps.length < (Number(cfg.maxSteps) || 6); i += 1) {
+  for (let i = 0; i < packs.length && steps.length < maxSteps; i += 1) {
     const pack = packs[i];
     const focus = focusFromClause(pack.title || "");
     if (!focus) continue;
@@ -220,7 +276,7 @@ function ruleSteps(card, evidencePacks, cfg) {
     push(ask, ans, String(pack.text || "").slice(0, 120), false);
   }
 
-  return steps.slice(0, Number(cfg.maxSteps) || 6);
+  return steps.slice(0, maxSteps);
 }
 
 async function arkSteps(card, evidencePacks, cfg) {
@@ -257,7 +313,12 @@ function decorateSteps(steps, seedCard, allCards, evidencePacks) {
       !step.gap &&
       step.answer &&
       String(step.cite || "").includes(String(step.answer).slice(0, 20));
-    const accepted = Boolean(rt.ok && (step.gap || support.ok || citeHit));
+    const sameCard =
+      !rt.hitCardId ||
+      rt.hitCardId === seedCard.cardId ||
+      rt.reason === "seed" ||
+      rt.reason === "evidence";
+    const accepted = Boolean(rt.ok && sameCard && (step.gap || support.ok || citeHit));
     const row = {
       ...step,
       roundtrip: rt,

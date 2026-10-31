@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "ece-meeting-context": {
+      "command": "node",
+      "args": ["desktop/scripts/meeting-context-mcp.cjs"],
+      "env": {}
+    }
+  }
+}

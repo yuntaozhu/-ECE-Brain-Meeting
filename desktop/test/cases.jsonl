@@ -18,6 +18,8 @@
 {"id":"ability-probe","suite":"smoke","kind":"ask","q":"他不具备这个能力怎么办？","need":"^$","forbid":"写死的标准|拍十秒|定班|你是在问|你想先听|能力怎么办"}
 {"id":"join-conditions","suite":"smoke","kind":"ask","q":"我们校园想要加入全园美语系统，要有什么条件？","need":"投影|园长|训练","forbid":"怎么收费|你是说"}
 {"id":"too-expensive","suite":"smoke","kind":"ask","q":"太贵了，我们现在经营都困难，都没什么生源了，一下子要我付39000，我感觉很困难，有什么好办法没有？","need":"收益保障|每学期","forbid":"家长看得见的选择理由"}
+{"id":"too-expensive-benefit","suite":"smoke","kind":"ask","q":"39,000有些贵，我们园所的效益不好，怎么办？","need":"收益保障|每学期|三万九","forbid":"家长看得见的选择理由|^$"}
+{"id":"card-switch-expensive","suite":"smoke","kind":"ask","q":"一年3万九，太贵了，经营困难，我们付不起。","setup":{"lastHostSpeakText":"大地合作园项目服务价是三万九千元每学期；外校园价四万九。按「一套校园美语系统」计费，不以在籍人数乘单价。"},"need":"收益保障|每学期|一半|退差额","forbid":"不以在籍人数乘单价|一套校园美语系统计费"}
 {"id":"trunc-skip-how-do","suite":"smoke","kind":"trunc-skip","q":"你如何做？"}
 {"id":"ability-follow","suite":"smoke","kind":"ask","prior":["他不具备这个能力怎么办？"],"q":"不会做阅读测评","need":"报告|机试|十秒|系统出","forbid":"写死的标准|不定场次|你是在问"}
 {"id":"bare-listen-cmd","suite":"smoke","kind":"command","q":"听我说。","command":"INTERRUPT"}

@@ -55,7 +55,10 @@ function roundtripAsk(ask, seedCard, allCards, evidencePacks) {
     bestTitleView(ask, seedTitle, model).align || 0,
     alignScore(ask, seedCard.spokenText || "", model)
   );
-  if (seedAlign >= floor && seedAlign >= best.align) {
+  // Prefer seed whenever it clears the floor: deepen cues must stay on-card,
+  // not migrate to a loosely overlapping FAQ (e.g. 先做哪一步 → 会议主题).
+  const margin = Number(cfg.topicSwitchMargin) || 0.08;
+  if (seedAlign >= floor && (seedAlign + margin >= best.align || best.hitCardId === seedCard.cardId)) {
     best = {
       align: seedAlign,
       hitCardId: seedCard.cardId || "",

@@ -1,0 +1,5 @@
+{
+  "name": "ece-llm-providers",
+  "private": true,
+  "main": "index.cjs"
+}

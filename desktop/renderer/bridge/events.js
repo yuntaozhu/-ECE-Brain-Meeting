@@ -18,6 +18,12 @@ import {
   applyHoldUntil,
   extendHostMute
 } from "../policy.js";
+import {
+  renderSmartReplies,
+  updateCopilotModeUi,
+  runCopilotPushAsk
+} from "../ui/smartReplies.js";
+import { renderCatchMeUp, refreshJotList } from "../ui/meetingAid.js";
 
 export function handleBridgeEvent(msg) {
       if (msg.type === "listen-ready") {
@@ -42,13 +48,41 @@ export function handleBridgeEvent(msg) {
         }
       } else if (msg.type === "asr") {
         handleAsrEvent(msg);
+      } else if (msg.type === "smart-replies") {
+        renderSmartReplies(msg);
+        slog("INFO", "Copilot", msg.should_trigger ? "建议卡" : "未触发", {
+          category: msg.category,
+          urgency: msg.urgency,
+          topic: msg.target_topic,
+          mode: msg.trigger_mode,
+          prefetch: msg.prefetch?.used
+        });
+      } else if (msg.type === "copilot-mode") {
+        S.copilotMode = msg.mode || S.copilotMode;
+        updateCopilotModeUi();
+        showAlert(`副驾驶模式：${S.copilotMode}`, "ok");
+        slog("INFO", "Copilot", "模式切换", { mode: S.copilotMode });
+      } else if (msg.type === "copilot-push-ask") {
+        void runCopilotPushAsk();
+      } else if (msg.type === "catch-me-up") {
+        renderCatchMeUp(msg);
+      } else if (msg.type === "jot-added") {
+        void refreshJotList();
+      } else if (msg.type === "screen-context") {
+        showAlert("屏幕上下文已更新", "ok");
+        slog("INFO", "Copilot", "Screen context", { path: msg.path });
       } else if (msg.type === "host-interrupted") {
         stopQueuedSpeech();
-        S.agentHoldListening = true;
+        const isWake = /wake/i.test(String(msg.reason || ""));
+        // 谢谢大智/听我说：进入 hold 听续说；叫名唤醒：直接让出麦给新问
+        S.agentHoldListening = !isWake;
         S.duplexPhase = PHASE.IDLE;
         S.hostSpeakingUntil = Date.now() + 400;
         S.holdUntil = Date.now() + 400;
-        setStatus("已打断播报 · 请讲，说完请说「请继续」", "ok");
+        setStatus(
+          isWake ? "已打断 · 正在唤起" : "已打断播报 · 请讲，说完请说「请继续」",
+          "ok"
+        );
         slog("INFO", "Host", "口令打断", {
           reason: msg.reason,
           preview: String(msg.interruptBuffer?.fullText || "").slice(0, 40)
@@ -59,10 +93,10 @@ export function handleBridgeEvent(msg) {
         S.duplexPhase = msg.phase || S.duplexPhase;
         if (msg.holdUntil) S.holdUntil = msg.holdUntil;
         if (msg.cooldownUntil) S.cooldownUntil = msg.cooldownUntil;
-        // 打断回 IDLE：不要用长 hold 盖住 barge-in 后的会场句
-        if (msg.why && /barge-in|interrupt|INTERRUPT/i.test(String(msg.why))) {
+        // 打断回 IDLE：不要用长 hold 盖住 barge-in / 唤醒后的会场句
+        if (msg.why && /barge-in|interrupt|INTERRUPT|wake/i.test(String(msg.why))) {
           S.hostSpeakingUntil = Math.min(S.hostSpeakingUntil, msg.holdUntil || Date.now() + 400);
-          S.agentHoldListening = true;
+          if (!/wake/i.test(String(msg.why))) S.agentHoldListening = true;
         } else if (msg.holdUntil) {
           S.hostSpeakingUntil = Math.max(S.hostSpeakingUntil, msg.holdUntil);
         }
@@ -131,11 +165,31 @@ export function handleBridgeEvent(msg) {
         S.duplexPhase = PHASE.IDLE;
         const reason = msg.reason || "unknown";
         const channel = msg.channel || "";
+        const quotaType = msg.quotaType || "";
+        const businessCode = msg.businessCode || "";
         setStatus(`TTS 失败：${reason}`, "bad");
-        showAlert(
-          `Host TTS 失败（${reason}${channel ? ` / ${channel}` : ""}）。请确认 HOST_TTS_MODE=independent；若仍失败核对 DOUBAO_TTS_*。45000000 多为会话异常，桥接会自动重连，不一定是协议非法。`,
-          "bad"
-        );
+        let alertText;
+        if (
+          businessCode === "TTS_QUOTA_EXHAUSTED" ||
+          quotaType === "text_words_lifetime" ||
+          /text_words_lifetime/i.test(String(reason))
+        ) {
+          alertText =
+            msg.alert ||
+            "[TTS] 豆包语音合成2.0字符额度已耗尽（text_words_lifetime）。请在控制台为 seed-tts-2.0 购买字符资源包或开通后付费；配置约 5–10 分钟生效。桥接不会对此错误自动重试。";
+        } else if (quotaType === "concurrency" || businessCode === "TTS_QUOTA_CONCURRENCY") {
+          alertText =
+            "Host TTS 并发配额超限。请增购并发包或降低同时合成路数；桥接会对并发错误做有限退避重试。";
+        } else if (businessCode === "TTS_CONFIG_INVALID") {
+          alertText = `独立 TTS 配置无效：${reason}。请确认 HOST_TTS_MODE=independent，并设置 DOUBAO_TTS_API_KEY（或 DOUBAO_SPEECH_API_KEY）、DOUBAO_TTS_RESOURCE_ID=seed-tts-2.0、DOUBAO_TTS_SPEAKER（2.0 音色）。`;
+        } else if (businessCode === "TTS_BAD_SPEAKER_OR_TEXT" || /4500200|45000001/.test(String(reason))) {
+          alertText = `Host TTS 音色或文本参数错误（${reason}）。请确认 speaker 为 seed-tts-2.0 的 2.0 音色 ID。`;
+        } else if (businessCode === "TTS_BAD_PAYLOAD" || /45000000|unmarshal/i.test(String(reason))) {
+          alertText = `Host TTS 请求体协议错误（${reason}）。请检查桥接日志中的 payload 片段；此错误不会按网络抖动重连。`;
+        } else {
+          alertText = `Host TTS 失败（${reason}${channel ? ` / ${channel}` : ""}）。5xx/网络抖动可有限重试；配额类错误不会重试。`;
+        }
+        showAlert(alertText, "bad");
         slog("ERROR", "TTS", "合成失败", msg);
         const last = S.transcriptLines[S.transcriptLines.length - 1];
         if (last && /（合成中…）$/.test(last.text)) {

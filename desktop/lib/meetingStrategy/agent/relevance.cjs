@@ -285,11 +285,55 @@ function plainChars(text) {
   return String(text || "").replace(/[^\u4e00-\u9fffA-Za-z0-9]/g, "");
 }
 
-/** 完整新问：句中有疑问骨架，或带问号。残句不算。 */
+/** 完整新问：疑问骨架 / 问号 / 异议完整句（付不起等）。残句不算。 */
 function asksNewQuestion(ask) {
   const raw = String(ask || "");
-  if (!rx("operators", "interrogative").test(raw)) return false;
+  let hit = false;
+  try {
+    hit = rx("operators", "interrogative").test(raw);
+    if (!hit) hit = rx("operators", "objectionComplete").test(raw);
+  } catch (_) {
+    hit = /[？?]|(怎么|怎样|如何|吗|呢)/.test(raw);
+  }
+  if (!hit) return false;
   return !isTruncatedAsk(raw);
+}
+
+/** 候选口播是否明显异于上一句资料（换卡，非同一卡续尾） */
+function speakDiffersFromHost(speak, host) {
+  const a = plainChars(speak);
+  const h = plainChars(host);
+  if (!a || !h || a.length < 8) return false;
+  if (a === h) return false;
+  if (h.includes(a) && a.length >= 10) return false;
+  if (a.includes(h) && h.length >= 24) return false;
+  const head = a.slice(0, Math.min(16, a.length));
+  if (head && h.startsWith(head)) return false;
+  return true;
+}
+
+/** 近胜出异卡：posterior 未过线也可念新卡全文，禁止旧口播 carry 顶答 */
+function cardSwitchAnswer(best, host, hypotheses, downgraded, cfg) {
+  if (!best || !best.speak || !host) return null;
+  if (!speakDiffersFromHost(best.speak, host)) return null;
+  const align = Number(best.align) || 0;
+  const p = Number(best.p) || 0;
+  // 近胜出：对齐过闭题线，或后验已明显高于「没有证据」底
+  if (align < cfg.closedAlignMin && p < 0.25) return null;
+  return {
+    action: "answer",
+    speak: best.speak,
+    reason: best.p >= cfg.posteriorMin ? "posterior" : "card-switch",
+    posterior: best.p,
+    title: best.title || "",
+    align: best.align,
+    extra: best.extra,
+    hypotheses,
+    eig: 0,
+    design: designOf("answer", best.title || "", [], "final"),
+    downgraded: Boolean(downgraded),
+    speakSource: "card-switch"
+  };
 }
 
 let hostCardPack = null;
@@ -788,13 +832,20 @@ function decideCore({ ask, hits, intent, script, prevDesign, lastHost, measure, 
         hypotheses,
         eig: 0,
         design: designOf("answer", progressed.title, [], "final"),
-        downgraded
+        downgraded,
+        speakSource: "progress"
       };
     }
+    // 新问已指向另一张卡但未过 posterior 线：念近胜出全文，勿落到 carry
+    const switched = cardSwitchAnswer(bestSlot || best, host, hypotheses, downgraded, cfg);
+    if (switched) return switched;
   }
   const topic = host ? sharedTopic(focused, host) : "";
   const rest = topic && !freshQuestion ? hostRest(host) : "";
   if (topic && rest) {
+    // 换卡 carry 禁令：标题/近胜出已是异卡 → 禁止续播旧口播尾巴
+    const switched = cardSwitchAnswer(bestSlot || best, host, hypotheses, downgraded, cfg);
+    if (switched) return switched;
     const alreadyCarried = prevDesign?.hypothesisId === "carry" && (prevDesign.segments || []).includes(topic);
     if (!alreadyCarried) {
       return {
@@ -806,7 +857,8 @@ function decideCore({ ask, hits, intent, script, prevDesign, lastHost, measure, 
         hypotheses,
         eig: 0,
         design: designOf("answer", "carry", [topic], "final"),
-        downgraded
+        downgraded,
+        speakSource: "carry"
       };
     }
   }
@@ -985,6 +1037,7 @@ function attachShadow(args, result) {
     if (result.design) result.design.winnerBucket = bucket;
     let shadowAction = "";
     let shadowWinner = "";
+    let shadowSpeak = "";
     let isDiverged = false;
     try {
       const alt = decideCore({
@@ -999,10 +1052,12 @@ function attachShadow(args, result) {
       });
       shadowAction = alt.action || "";
       shadowWinner = winnerIdOf(alt, args && args.intent);
+      shadowSpeak = shadowAction === "answer" ? String(alt.speak || "").trim() : "";
       isDiverged = shadowAction !== result.action || shadowWinner !== formalId;
     } catch (_) {
       shadowAction = "";
       shadowWinner = "";
+      shadowSpeak = "";
       isDiverged = false;
     }
     const intent = args && args.intent;
@@ -1013,6 +1068,7 @@ function attachShadow(args, result) {
       formalWinnerId: formalId,
       shadowAction,
       shadowWinner,
+      shadowSpeak,
       isDiverged,
       doubaoConfidence: intent && intent.source === "llm" ? Number(intent.confidence) || 0 : null
     };

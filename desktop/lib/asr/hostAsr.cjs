@@ -27,6 +27,9 @@ const ASR_URL_DEFAULT = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel";
 const ASR_RESOURCE_DEFAULT = ASR_RESOURCE.SEEDASR_DURATION;
 /** SAUC 等包超时；hold 停喂真实麦时必须改喂静音，否则会刷 45000081 */
 const ASR_PACKET_TIMEOUT_RE = /45000081|Timeout waiting next packet|waiting next packet timeout/i;
+/** 并发配额；频繁关连重连会打满 */
+const ASR_CONCURRENCY_RE = /45000292|quota exceeded.*concurrency/i;
+const SILENCE_200MS = Buffer.alloc(16000 * 0.2 * 2);
 
 function speechApiKey() {
   return (
@@ -59,9 +62,12 @@ function useLegacyAsrAuth() {
 }
 
 function hostAsrMode() {
-  // independent（默认）| dialog — USE_DIALOG_ASR=1 强制 dialog
+  // independent（默认）| dialog | local(whisper) — USE_DIALOG_ASR=1 强制 dialog
   if (process.env.USE_DIALOG_ASR === "1") return "dialog";
+  const backend = (process.env.HOST_ASR_BACKEND || "").trim().toLowerCase();
+  if (backend === "whisper" || backend === "local") return "local";
   const m = (process.env.HOST_ASR_MODE || "independent").trim().toLowerCase();
+  if (m === "local" || m === "whisper") return "local";
   return m === "dialog" ? "dialog" : "independent";
 }
 
@@ -97,6 +103,12 @@ class HostAsrSession {
     const apiKey = speechApiKey();
     if (!apiKey) {
       this.opts.onError?.({ code: "missing_speech_key", message: "missing_speech_key" });
+      return false;
+    }
+    if (Date.now() < (this._concurrencyLatchedUntil || 0)) {
+      const left = this._concurrencyLatchedUntil - Date.now();
+      debugLog.warn("HostAsr", "并发冷却中，推迟连接", { leftMs: left });
+      this._scheduleReconnect(left);
       return false;
     }
     this._intentionalClose = false;
@@ -256,6 +268,10 @@ class HostAsrSession {
             this._handlePacketTimeout(codeNum || parsed.code, msgStr);
             return;
           }
+          if (codeNum === 45000292 || ASR_CONCURRENCY_RE.test(msgStr)) {
+            this._handleConcurrencyQuota(codeNum || parsed.code, msgStr);
+            return;
+          }
           debugLog.error("HostAsr", "服务端错误", { code: parsed.code, msg: msgStr.slice(0, 200) });
           this._emitErrorThrottled({
             code: "asr_server",
@@ -351,14 +367,47 @@ class HostAsrSession {
     }
   }
 
+  _handleConcurrencyQuota(code, msg) {
+    const waitMs = 35000;
+    this._concurrencyLatchedUntil = Date.now() + waitMs;
+    this.ready = false;
+    debugLog.warn("HostAsr", "并发配额耗尽，暂停重连", {
+      code,
+      msg: String(msg).slice(0, 120),
+      waitMs
+    });
+    this._emitErrorThrottled(
+      {
+        code: "asr_concurrency",
+        message: "HostAsr 并发配额耗尽，稍后重连",
+        asrCode: code || 45000292,
+        recoverable: true
+      },
+      15000
+    );
+    try {
+      this.ws?.close();
+    } catch (_) {}
+    this.ws = null;
+    if (!this._intentionalClose && !this.closed) {
+      this._scheduleReconnect(waitMs);
+    }
+  }
+
   _scheduleReconnect(delayMs = 2000) {
     if (this._reconnectTimer) return;
+    const latchLeft = Math.max(0, (this._concurrencyLatchedUntil || 0) - Date.now());
+    const wait = Math.max(delayMs, latchLeft);
     this._reconnectTimer = setTimeout(() => {
       this._reconnectTimer = null;
       if (this._intentionalClose || this.closed) return;
+      if (Date.now() < (this._concurrencyLatchedUntil || 0)) {
+        this._scheduleReconnect(1000);
+        return;
+      }
       debugLog.info("HostAsr", "尝试重连");
       void this.connect();
-    }, delayMs);
+    }, wait);
   }
 
   /**
@@ -383,6 +432,49 @@ class HostAsrSession {
       debugLog.warn("HostAsr", "send audio failed", { message: e?.message });
       return false;
     }
+  }
+
+  /**
+   * 开播时清空本地假说缓存，减轻回灌与下一句口令粘连去重。
+   * （不关 WS；服务端句边界仍靠静音窗）
+   */
+  resetHypothesis() {
+    this.lastText = "";
+    this.lastEmittedFinal = "";
+  }
+
+  /**
+   * 同连接注入静音，触发 end_window 定稿，不关 WS（避免并发配额爆掉）。
+   * 调用方须同步暂停真麦上行，否则静音与人声交错无效。
+   * @param {number} [ms]
+   * @param {string} [why]
+   */
+  injectSilenceBurst(ms = 1000, why = "silence-break") {
+    if (!this.isOpen()) return false;
+    const now = Date.now();
+    // 与 listenSession 短窗配合；过长冷却会错过下一次回灌切开
+    if (now - (this._lastSilenceBurstAt || 0) < 1200) return false;
+    this._lastSilenceBurstAt = now;
+    const n = Math.max(2, Math.ceil(ms / 200));
+    try {
+      for (let i = 0; i < n; i++) {
+        const frame = buildAudioOnlyRequest(this.seq, SILENCE_200MS, false);
+        this.seq += 1;
+        this.audioPackets += 1;
+        this.ws.send(frame);
+      }
+      this.resetHypothesis();
+      debugLog.info("HostAsr", "静音断句", { why, frames: n, ms });
+      return true;
+    } catch (e) {
+      debugLog.warn("HostAsr", "静音断句失败", { message: e?.message });
+      return false;
+    }
+  }
+
+  /** @deprecated 勿再关连重连；请用 injectSilenceBurst / resetHypothesis */
+  forceSegmentBoundary(why = "boundary") {
+    return this.injectSilenceBurst(1000, why) || (this.resetHypothesis(), false);
   }
 
   close() {

@@ -21,15 +21,49 @@ const {
   setLifecycle
 } = require("../lib/meetingSession");
 const { appendSession, clearMeetingCache } = require("../lib/runtime");
+const {
+  buildCopilotPacketThrottled,
+  getTriggerMode
+} = require("../lib/copilot/index.cjs");
 
 function createStrategyEvaluate(rt) {
   return async function handleStrategyEvaluate(_e, payload) {
     const transcript = payload?.transcript || "";
     const agenda = payload?.agenda || DEFAULT_AGENDA;
     const phase = rt.listen?.phase || PHASE.IDLE;
+    const forceCopilot = Boolean(payload?.forceCopilot || payload?.reason === "push-ask");
     const emitUi = (msg) => {
+      if (typeof rt.broadcast === "function") {
+        rt.broadcast(msg);
+        return;
+      }
       if (rt.win && !rt.win.isDestroyed()) rt.win.webContents.send("bridge:event", msg);
     };
+    // 副驾驶旁路：意图门控 + Option 建议卡（不改 decideSpeak / 口播）
+    try {
+      const copilot = buildCopilotPacketThrottled(transcript, {
+        agenda,
+        force: forceCopilot
+      });
+      if (copilot?.enabled && !copilot.throttled) {
+        emitUi({ type: "smart-replies", ...copilot });
+        if (copilot.should_trigger) {
+          debugLog.info("Copilot", "建议卡已推送", {
+            category: copilot.category,
+            urgency: copilot.urgency,
+            topic: copilot.target_topic,
+            faq: copilot.faq_title || null,
+            mode: getTriggerMode().mode,
+            force: forceCopilot || undefined,
+            prefetchUsed: copilot.prefetch?.used || false
+          });
+        }
+      }
+    } catch (err) {
+      debugLog.warn("Copilot", "建议卡生成失败（已忽略，不影响口播）", {
+        error: String(err?.message || err)
+      });
+    }
     const speakSoft = (text, tag) => {
       const t = stripIntroBoilerplate(String(text || "").trim());
       if (!t || !rt.listen?.isOpen()) return { ok: false };
@@ -74,9 +108,22 @@ function createStrategyEvaluate(rt) {
       signal: thisAbort.signal,
       interruptChunks: rt.listen?.interruptBuffer?.chunks || 0,
       onStatus: (st) => emitUi({ type: "strategy-status", ...st }),
-      // P0：思考占位仅 UI，不走 TTS（避免双次触发 / cancel 风暴 / 拆段播报）
+      // 思考占位：短 TTS 填空气；正答到达后 speakViaChat 会清定时器，不再追加占位
       onThinking: (text) => {
-        emitUi({ type: "strategy-thinking", text });
+        const line = String(text || "").trim();
+        emitUi({ type: "strategy-thinking", text: line });
+        if (!line) return;
+        const res = speakSoft(line, "思考占位");
+        if ((res?.ok || res?.queued) && rt.meetingState) {
+          appendSession(rt.meetingState.meetingId, {
+            speaker: "大智",
+            text: line.slice(0, 80),
+            mode: rt.meetingState.mode,
+            segmentId: rt.meetingState.segmentId,
+            filler: true
+          });
+        }
+        return res;
       },
       // 听清后立刻播短句；后文在这句播放时生成，说完由排队接上
       onEarlySpeak: (text) => {
@@ -185,6 +232,36 @@ function createStrategyEvaluate(rt) {
       }
       if (result.reason === "CONTINUE" && rt.listen) {
         rt.listen.interruptBuffer = null;
+      }
+      // barge-in 已停播：STOP 只切模式，不排队念「退回聆听」（防连环再打断）
+      // 须清空 fullAnswer/displayText，否则渲染端仍用 fullAnswer 显示「合成中」
+      if (result.reason === "STOP" && (result.interventionText || result.fullAnswer) && rt.listen) {
+        const bargedAt = rt.listen.lastBargeInAt || 0;
+        const recentBarge = Date.now() - bargedAt < 3500;
+        const bargeWhy = String(rt.listen.interruptBuffer?.reason || "");
+        const sameHandoff =
+          rt.lastHostSpeakText &&
+          String(result.interventionText || result.fullAnswer || "").trim() ===
+            String(rt.lastHostSpeakText).trim() &&
+          Date.now() - (rt.lastHostSpeakAt || 0) < 12000;
+        if (recentBarge) {
+          debugLog.info("Strategy", "STOP 交接句跳过（刚 barge-in 已停）", {
+            bargeWhy,
+            agoMs: Date.now() - bargedAt
+          });
+          result.interventionText = "";
+          result.fullAnswer = "";
+          result.displayText = "";
+          result.suppressed = true;
+          speakResult = { ok: true, skipped: true, suppressed: true };
+        } else if (sameHandoff) {
+          debugLog.info("Strategy", "STOP 交接句去重跳过");
+          result.interventionText = "";
+          result.fullAnswer = "";
+          result.displayText = "";
+          result.suppressed = true;
+          speakResult = { ok: true, skipped: true, suppressed: true };
+        }
       }
       // 防御：先开口已播完全文（或尾巴与已播相同）时清空，避免同一句再排队
       if (result.earlySpoken && result.interventionText) {

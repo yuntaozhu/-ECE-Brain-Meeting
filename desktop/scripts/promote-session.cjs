@@ -101,7 +101,9 @@ function extractQAPairs(rows) {
       const nxt = list[j];
       if (isHostSpeaker(nxt.speaker)) {
         const t = String(nxt.text || "").trim();
-        if (/我是大智，请讲|嗯，我想一下|要我帮您总结/.test(t)) continue;
+        if (/我是大智，请讲|嗯，我想一下|对照一下资料|我先理一句|还在对资料|马上，别急|再核一下口径|稍慢一点|要我帮您总结/.test(t)) {
+          continue;
+        }
         if (t.length >= 12) {
           answer = t;
           break;

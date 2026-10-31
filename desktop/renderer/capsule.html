@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>大智 · 副驾驶胶囊</title>
+    <style>
+      :root {
+        --bg: rgba(10, 14, 24, 0.88);
+        --line: rgba(103, 232, 249, 0.35);
+        --text: #f8fafc;
+        --muted: #94a3b8;
+        --accent: #67e8f9;
+      }
+      html, body {
+        margin: 0;
+        background: transparent;
+        overflow: hidden;
+        font-family: "Segoe UI", "PingFang SC", sans-serif;
+        color: var(--text);
+        user-select: none;
+      }
+      #shell {
+        margin: 8px;
+        padding: 12px 14px;
+        border-radius: 16px;
+        background: var(--bg);
+        border: 1px solid var(--line);
+        backdrop-filter: blur(12px);
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+        -webkit-app-region: drag;
+        min-height: 120px;
+      }
+      .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .brand {
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        color: var(--accent);
+        font-weight: 700;
+      }
+      .meta {
+        font-size: 11px;
+        color: var(--muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 220px;
+      }
+      .actions {
+        display: flex;
+        gap: 6px;
+        -webkit-app-region: no-drag;
+      }
+      button {
+        border: 0;
+        border-radius: 8px;
+        padding: 5px 8px;
+        font-size: 11px;
+        cursor: pointer;
+        background: #1e293b;
+        color: #e2e8f0;
+      }
+      button:hover { background: #334155; }
+      .cards { display: grid; gap: 8px; -webkit-app-region: no-drag; }
+      .card {
+        border: 1px solid rgba(49, 65, 95, 0.9);
+        border-radius: 12px;
+        padding: 8px 10px;
+        background: rgba(7, 11, 22, 0.75);
+      }
+      .card header {
+        font-size: 10px;
+        color: var(--accent);
+        margin-bottom: 4px;
+        font-weight: 600;
+      }
+      .card p {
+        margin: 0;
+        font-size: 15px;
+        line-height: 1.4;
+        font-weight: 650;
+      }
+      .card .row { margin-top: 6px; display: flex; gap: 6px; }
+      .empty {
+        font-size: 13px;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+      .live {
+        margin-top: 8px;
+        font-size: 11px;
+        color: var(--muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="shell">
+      <div class="top">
+        <div class="brand">DAZHI COPILOT</div>
+        <div class="meta" id="meta">待命</div>
+        <div class="actions">
+          <button type="button" id="btnHide" title="Ctrl+Shift+H">隐藏</button>
+        </div>
+      </div>
+      <div id="cards" class="cards">
+        <p class="empty">听会巡检后，这里显示可脱口而出的 Option A/B/C</p>
+      </div>
+      <div class="live" id="live"></div>
+    </div>
+    <script type="module" src="capsule.js"></script>
+  </body>
+</html>

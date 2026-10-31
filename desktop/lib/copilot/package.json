@@ -1,0 +1,5 @@
+{
+  "name": "ece-copilot",
+  "private": true,
+  "main": "index.cjs"
+}

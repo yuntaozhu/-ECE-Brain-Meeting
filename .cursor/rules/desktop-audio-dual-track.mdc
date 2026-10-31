@@ -1,0 +1,11 @@
+---
+description: Me/Others 双通道采音约定
+globs: desktop/renderer/audio/**/*
+alwaysApply: false
+---
+
+# 双通道采音
+
+- Others = CABLE Output 或 displayMedia 系统内录；Me = 本机麦。禁止混成单轨再送策略 ASR。
+- 策略/巡检只消费 Others；Me 仅口令与转写标定。
+- 详见 `desktop/dev_knowledge/adr/001-dual-channel-audio.md` 与 `rules/desktop-audio-capture.md`。

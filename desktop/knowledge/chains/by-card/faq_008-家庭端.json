@@ -78,7 +78,7 @@
         "reason": "faq"
       },
       "supportAlign": 0,
-      "accepted": true
+      "accepted": false
     },
     {
       "ask": "家庭端下一步是什么？",
@@ -117,5 +117,5 @@
     "家庭端先做哪一步？",
     "家庭端具体怎么开展？"
   ],
-  "writtenAt": "2026-10-20T03:02:25.969Z"
+  "writtenAt": "2026-10-20T03:43:23.583Z"
 }

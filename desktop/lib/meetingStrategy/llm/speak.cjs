@@ -1,32 +1,56 @@
-/** 整段一次口播。思考占位只走 UI。 */
+/** 整段一次口播。思考占位：schema 短句池轮换，正答到达即取消后续占位。 */
 // debugLog / stripIntro 直连底层模块，避开 deps 循环依赖
 const { debugLog } = require("../../platform/debugLog.cjs");
 const { stripIntroBoilerplate } = require("../../duplex");
-const { THINKING_FILLER, FAST_LLM_MS } = require("../internal/scripts.cjs");
+const { THINKING_FILLER, FAST_LLM_MS, pickThinkingFiller, thinkingTimingMs } = require("../internal/scripts.cjs");
 const { newEvent, clipSpeak } = require("../internal/result.cjs");
 const { arkChat } = require("./transport.cjs");
 
 /**
- * P0：思考占位仅 UI；正式答整段一次 TTS（不再 early+queue 拆播）。
+ * 思考占位可走短 TTS（onThinking）；正式答整段一次。
  * stream 超时走非流式短请求；失败不写业务软句，交给调用方知识库兜底。
  */
 async function speakViaChat(system, userTask, opts, a2aTrace) {
-  let thinkingTimer = null;
+  const timers = [];
   let bridged = false;
+  let fillerCount = 0;
+  const timing = thinkingTimingMs();
+  const salt = Date.now();
+
+  const emitFiller = (stage) => {
+    if (fillerCount >= timing.maxFillers) return;
+    if (bridged) return;
+    const text = pickThinkingFiller(stage, salt + fillerCount);
+    if (!text) return;
+    fillerCount += 1;
+    a2aTrace.push(
+      newEvent("HostAgent", "AudioBridge", "THINKING_FILLER", {
+        text,
+        stage,
+        uiOnly: false
+      })
+    );
+    Promise.resolve(opts.onThinking?.(text, { stage, filler: true })).catch(() => {});
+    const bridge = String(opts.bridgeText || "").trim();
+    if (bridge && !bridged) {
+      bridged = true;
+      Promise.resolve(opts.onEarlySpeak?.(bridge)).catch(() => {});
+    }
+  };
+
   const armThinking = () => {
-    thinkingTimer = setTimeout(() => {
-      a2aTrace.push(newEvent("HostAgent", "AudioBridge", "THINKING_FILLER", { text: THINKING_FILLER, uiOnly: true }));
-      Promise.resolve(opts.onThinking?.(THINKING_FILLER)).catch(() => {});
-      const bridge = String(opts.bridgeText || "").trim();
-      if (bridge && !bridged) {
-        bridged = true;
-        Promise.resolve(opts.onEarlySpeak?.(bridge)).catch(() => {});
-      }
-    }, 650);
+    timers.push(
+      setTimeout(() => emitFiller("early"), timing.early),
+      setTimeout(() => emitFiller("mid"), timing.mid)
+    );
+    if (timing.maxFillers > 2) {
+      timers.push(setTimeout(() => emitFiller("late"), timing.late));
+    }
   };
   const clearThinking = () => {
-    if (thinkingTimer) clearTimeout(thinkingTimer);
-    thinkingTimer = null;
+    while (timers.length) {
+      clearTimeout(timers.pop());
+    }
   };
   let answer = "";
   let arkBillingOverdue = false;
@@ -183,4 +207,4 @@ async function speakViaChat(system, userTask, opts, a2aTrace) {
   };
 }
 
-module.exports = { speakViaChat, FAST_LLM_MS };
+module.exports = { speakViaChat, FAST_LLM_MS, THINKING_FILLER };

@@ -1,0 +1,6 @@
+{"ts":"2026-10-31","wave":"A","note":"Cursor rules + ADR/glossary/VAD；不依赖 CLAUDE.md"}
+{"ts":"2026-10-31","wave":"B","note":"Speculative RAG prefetch + Auto/Manual Push-to-Ask (Alt+Z)"}
+{"ts":"2026-10-31","wave":"C","note":"Catch Me Up + Quick Jot + screen hook + meeting-context MCP"}
+{"ts":"2026-10-31","wave":"D","note":"Mermaid scan render + optional Win OCR + Deep Dive + .cursor/mcp.json"}
+{"ts":"2026-10-31","wave":"E","note":"Wiki2 knowledge_wiki + Fast Read JSON index + ingest/reconcile + copilot evidence"}
+{"ts":"2026-10-31","wave":"F","note":"Doubao compile ingest + co-occurrence themes + session promote pipeline"}

@@ -10,9 +10,11 @@ Doc2Query 把「这段资料会被问哪些问题」放在索引阶段完成。D
 
 会中：上一张是资料答卡且本句完整疑问时，若 `decideSpeak` 未定卡，则用 `matchChainStep` 对齐链上问句。须同时过步对齐与去掉加深尾巴后的核心对齐；仅共享「怎么做」一类尾巴不够。本句已指向别的 FAQ（`formalWinnerId`）或种子对齐已换题时，改跟新卡链，不沿用旧链。命中则念预备答复。对不上仍走澄清 / `pendingMiss`。作答线不改。
 
+口语变体（主语×落地线索×指代）在会前写入 `paraphraseSubjects` / `paraphraseObjects` / `paraphraseCues`，蒸馏进链步；高频变体升格到 FAQ 标题（含太贵/有些贵/效益等异议说法）。会中正式仍空卡时：若影子已 `answer` 且有 `shadowSpeak`，或检索头卡 `isAnswerable`，或链步已对齐，则 `kb-fallback` 念原句，禁止豆包超时后对本类完整问 silent。Compose 等待用 `thinkingFillers` 短句池填空气，正答打断占位。短「怎么做」不覆盖更长的 `lastRealAsk`。
+
 已有：省略句改写、卡片对齐、未播分句继承、追问线索、影子马尔可夫。这些不生成下一句原文。正式马尔可夫保持全 1。作答线不改：后验 ≥ 0.42，对齐 ≥ 0.28，闭题 ≥ 0.18，Bayes factor ≥ 3。
 
-不采用：训练 Doc2Query / T5、微调豆包、In-breadth 另起话题、会中当场编口径、把本页句子写入 `faq-meeting.txt`。
+不采用：训练 Doc2Query / T5、微调豆包、In-breadth 另起话题、会中当场编口径、在 `.cjs` 里为某一坏例加业务词。
 
 ## 流程
 
@@ -49,6 +51,7 @@ flowchart TD
 - [[dai-2022-dialog-inpainting]]
 - [[dai-2022-promptagator]]
 - [[bonifacio-2022-inpars]]
+
 - [[rosset-2020-question-suggestion]]
 - [[choi-2018-quac]]
 - [[feng-2020-doc2dial]]

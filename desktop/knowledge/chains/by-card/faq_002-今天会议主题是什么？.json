@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "kind": "followup-chain",
+  "cardId": "faq_002",
+  "seedTitles": [
+    "今天会议主题是什么？",
+    "今天会议的主题是什么？",
+    "会议主题是什么？",
+    "今天开什么会？",
+    "这次会议的主题是什么？"
+  ],
+  "seedAnswer": "今天主题是全园美语系统教研：四端联动、校园经营与家园共育。想先听哪一块？",
+  "evidence": [
+    {
+      "title": "什么是全园美语系统",
+      "score": 0.1015
+    },
+    {
+      "title": "全园美语系统（39000）落地行事历",
+      "score": 0.0956
+    }
+  ],
+  "source": "rule",
+  "error": null,
+  "steps": [
+    {
+      "ask": "今天会议主题怎么做？",
+      "answer": "行事历中各项工作开展皆会以简讯、群通知、会议等形式再次提示",
+      "cite": "1、逐一落实开课前&各月重点美语工作； 2、更多细节美语工作落实可参考每学期工作行事历《大地美语工作学期性行事历 (2026.8-2027.1)》； 3、行事历中各项工作开展皆会以简讯、群通知、会议等形式再次提示。 时间 执行岗位 重要工作事项 参考学习资料及路径 第一阶段 园长、美语主任 了解大地校园美语系统项目说明",
+      "gap": false,
+      "roundtrip": {
+        "ok": true,
+        "align": 0.7143,
+        "hitCardId": "faq_002",
+        "hitTitle": "今天会议主题是什么？",
+        "reason": "seed"
+      },
+      "supportAlign": 1,
+      "accepted": true
+    },
+    {
+      "ask": "今天会议主题先做哪一步？",
+      "answer": "逐一落实开课前&各月重点美语工作",
+      "cite": "1、逐一落实开课前&各月重点美语工作； 2、更多细节美语工作落实可参考每学期工作行事历《大地美语工作学期性行事历 (2026.8-2027.1)》； 3、行事历中各项工作开展皆会以简讯、群通知、会议等形式再次提示。 时间 执行岗位 重要工作事项 参考学习资料及路径 第一阶段 园长、美语主任 了解大地校园美语系统项目说明",
+      "gap": false,
+      "roundtrip": {
+        "ok": true,
+        "align": 0.5,
+        "hitCardId": "faq_002",
+        "hitTitle": "今天会议主题是什么？",
+        "reason": "seed"
+      },
+      "supportAlign": 1,
+      "accepted": true
+    },
+    {
+      "ask": "今天会议主题具体怎么开展？",
+      "answer": "更多细节美语工作落实可参考每学期工作行事历《大地美语工作学期性行事历 (2026.8-2027.1)》",
+      "cite": "1、逐一落实开课前&各月重点美语工作； 2、更多细节美语工作落实可参考每学期工作行事历《大地美语工作学期性行事历 (2026.8-2027.1)》； 3、行事历中各项工作开展皆会以简讯、群通知、会议等形式再次提示。 时间 执行岗位 重要工作事项 参考学习资料及路径 第一阶段 园长、美语主任 了解大地校园美语系统项目说明",
+      "gap": false,
+      "roundtrip": {
+        "ok": true,
+        "align": 0.5,
+        "hitCardId": "faq_002",
+        "hitTitle": "今天会议主题是什么？",
+        "reason": "seed"
+      },
+      "supportAlign": 1,
+      "accepted": true
+    }
+  ],
+  "tuneSamples": [
+    {
+      "ask": "今天会议主题家长怎么看？",
+      "answer": "",
+      "cite": "今天主题是全园美语系统教研：四端联动、校园经营与家园共育",
+      "gap": true,
+      "roundtrip": {
+        "ok": true,
+        "align": 0.5556,
+        "hitCardId": "faq_002",
+        "hitTitle": "今天会议主题是什么？",
+        "reason": "seed"
+      },
+      "supportAlign": 0,
+      "accepted": true
+    },
+    {
+      "ask": "今天会议主题下一步是什么？",
+      "answer": "",
+      "cite": "今天主题是全园美语系统教研：四端联动、校园经营与家园共育",
+      "gap": true,
+      "roundtrip": {
+        "ok": true,
+        "align": 0.6,
+        "hitCardId": "faq_002",
+        "hitTitle": "今天会议主题是什么？",
+        "reason": "seed"
+      },
+      "supportAlign": 0,
+      "accepted": true
+    },
+    {
+      "ask": "今天会议主题要注意什么？",
+      "answer": "",
+      "cite": "今天主题是全园美语系统教研：四端联动、校园经营与家园共育",
+      "gap": true,
+      "roundtrip": {
+        "ok": true,
+        "align": 0.5556,
+        "hitCardId": "faq_002",
+        "hitTitle": "今天会议主题是什么？",
+        "reason": "seed"
+      },
+      "supportAlign": 0,
+      "accepted": true
+    }
+  ],
+  "ready": true,
+  "nextHints": [
+    "今天会议主题怎么做？",
+    "今天会议主题先做哪一步？",
+    "今天会议主题具体怎么开展？"
+  ],
+  "writtenAt": "2026-10-20T03:39:30.779Z"
+}

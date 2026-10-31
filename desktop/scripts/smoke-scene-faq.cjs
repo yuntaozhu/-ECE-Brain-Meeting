@@ -137,6 +137,21 @@ const cases = [
     q: "太贵了，我们现在经营都困难，都没什么生源了，一下子要我付39000，我感觉很困难，有什么好办法没有？",
     need: /收益保障|每学期/,
     forbid: /家长看得见的选择理由/
+  },
+  {
+    id: "too-expensive-benefit",
+    q: "39,000有些贵，我们园所的效益不好，怎么办？",
+    need: /收益保障|每学期|三万九/,
+    forbid: /家长看得见的选择理由|^$/
+  },
+  // 换卡 carry：收费口播后，无问号异议陈述句须念太贵卡，禁续收费卡后半句
+  {
+    id: "card-switch-expensive",
+    q: "一年3万九，太贵了，经营困难，我们付不起。",
+    lastHost:
+      "大地合作园项目服务价是三万九千元每学期；外校园价四万九。按「一套校园美语系统」计费，不以在籍人数乘单价。",
+    need: /收益保障|每学期|一半|退差额/,
+    forbid: /不以在籍人数乘单价|一套校园美语系统计费/
   }
 ];
 
@@ -152,11 +167,22 @@ async function main() {
     const state = createMeetingSession(`smoke_${c.id}`);
     state.mode = "HA_ASK";
     state.haLockedUntil = Date.now() + 120000;
+    if (c.lastHost) {
+      state.lastHostSpeakText = c.lastHost;
+      state.lastDesign = {
+        type: "answer",
+        hypothesisId:
+          "Q: 39000 / 3900 / 三万九是什么意思？ / 三万九买的是什么？ / 项目多少钱？ / 怎么收费？",
+        segments: [],
+        depth: "final"
+      };
+    }
     const r = await runMeetingAnalysis(`会场: ${c.q}`, DEFAULT_AGENDA, {
       agentState: state,
       meetingState: state,
       trigger: "wake",
-      forceRule: true
+      forceRule: true,
+      lastHostSpeakText: c.lastHost || ""
     });
     const answer = String(r.interventionText || r.fullAnswer || r.spokenPrefix || "");
     const fails = [];

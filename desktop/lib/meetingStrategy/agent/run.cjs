@@ -86,10 +86,52 @@ async function retrieveForIntent(intentObj, askText, opts, state) {
   return { hits, preview, instantAnswer, tool: "search_faq", mode: "bayes" };
 }
 
+/** Retrieval head card already grounded → speak FAQ line (no silent on Doubao fail). */
+function retrievalSpeakLine(retrieval, askText) {
+  const { rx } = require("../../knowledge/schemaStore.cjs");
+  if (rx("speak", "shadowRecoverSkip").test(String(askText || ""))) return "";
+  if (!isAnswerable(retrieval)) return "";
+  const hit = retrieval?.hits?.[0];
+  if (!hit || String(hit.source || "") !== "faq") return "";
+  const speak = String(hit.speak || retrieval.instantAnswer || "").trim();
+  if (!speak) return "";
+  try {
+    const { isHowDoAsk } = require("../../knowledge/chains/match.cjs");
+    if (isHowDoAsk(askText) && S.isDefinitionSpeak(speak)) return "";
+  } catch (_) {
+    /* optional */
+  }
+  return S.clipUtterance(speak, 160);
+}
+
 /** 豆包未出口：接上一句后半句。没有后半句就当场问一步，不念套话。 */
 function knowledgeSpeakLine(intentObj, askText, retrieval, state, lastHost) {
   const d = speakDecision(intentObj, askText, retrieval, state, lastHost);
   if (d.speak) return S.clipUtterance(d.speak, 160);
+  // Formal empty but shadow already answered → reuse grounded FAQ line (no silent).
+  const shadowSpeak = String(d.shadow?.shadowSpeak || "").trim();
+  if (d.shadow?.shadowAction === "answer" && shadowSpeak) {
+    const { isHowDoAsk } = require("../../knowledge/chains/match.cjs");
+    if (!(isHowDoAsk(askText) && S.isDefinitionSpeak(shadowSpeak))) {
+      return S.clipUtterance(shadowSpeak, 160);
+    }
+  }
+  // Only when shadow diverged to an answer winner: try chain on that card (not raw FAQ instant).
+  if (d.shadow?.shadowAction === "answer" && d.shadow?.shadowWinner) {
+    try {
+      const { matchChainStep, isHowDoAsk } = require("../../knowledge/chains/match.cjs");
+      const preferredTitle = String(d.shadow.shadowWinner || "").trim();
+      const hypo = String(state?.lastDesign?.hypothesisId || preferredTitle || "");
+      const hit = matchChainStep(askText, hypo, { preferredTitle });
+      if (hit?.answer && !(isHowDoAsk(askText) && S.isDefinitionSpeak(hit.answer))) {
+        return S.clipUtterance(hit.answer, 160);
+      }
+    } catch (_) {
+      /* chain optional */
+    }
+  }
+  const fromRetrieval = retrievalSpeakLine(retrieval, askText);
+  if (fromRetrieval) return fromRetrieval;
   if (d.design?.hypothesisId === "probe") {
     const focus = String(d.design.segments?.[0] || "");
     const line = offlineFollow(askText, lastHost, focus);
@@ -273,6 +315,20 @@ async function runMeetingAgent(ctx) {
         summary: `闸门改写：${check.reason}`,
         detail: { ...check, riskRewrite, gate: "rewrite" }
       });
+    } else if (!String(answer || "").trim()) {
+      // Formal clarify with empty speak: still use grounded FAQ retrieval when answerable.
+      const kb = knowledgeSpeakLine(intentObj, askText, retrieval, state, lastHost);
+      if (kb) {
+        answer = kb;
+        riskRewrite = true;
+        pushAgent(a2aTrace, {
+          runId,
+          role: "MeetingAgent",
+          action: "FALLBACK",
+          summary: "空答改用知识库原句",
+          detail: { riskRewrite: true, gate: "kb-fallback" }
+        });
+      }
     }
     return finishSpoken(
       { opts, state, a2aTrace, kbStatus, qFp, askText, lastFloor, runId, intentObj, t0 },

@@ -34,10 +34,11 @@ export function renderTodos(todos) {
 
 export function renderArch() {
   $("archBox").textContent = `
-腾讯会议 · 主持人账号          腾讯会议 · AI 专家账号              本 EXE（AI 大脑）
-真麦克风 / 真音箱              扬声器 → 虚拟音频输出 ───────────→ ① 采集（听会 ASR）
-                              麦克风 ← 虚拟麦克风   ←─────────── ② 播放（仅 Host TTS）
-                                    ↑ 电脑内部数字环路，无外接线 ↑
-驱动：VB-Cable / VoiceMeeter / 微软 SysVAD 类 Virtual Audio Device
+腾讯会议 · 主持人/远端           腾讯会议 · AI 账号                 本 EXE
+远端发言 → AI 扬声器=CABLE In ──────────────────────────────→ ① Others 采集 → ASR[Others] → 策略/建议卡
+本机操作员真麦 ─────────────────────────────────────────────→ ①b Me 采集 → ASR[Me]（口令/标定）
+                              AI 麦=CABLE Out ←────────────── ② Host TTS 播放
+环路驱动：VB-Cable（默认）| 系统内录 displayMedia（实验）
+悬浮胶囊：置顶扫视 Option A/B/C；Ctrl+Shift+H 隐藏；Alt+Z Push-to-Ask；Alt+Shift+Z Auto/Manual
 `.trim();
 }

@@ -43,10 +43,10 @@
       "gap": false,
       "roundtrip": {
         "ok": true,
-        "align": 0.425,
-        "hitCardId": "faq_002",
-        "hitTitle": "今天会议主题是什么？",
-        "reason": "faq"
+        "align": 0.375,
+        "hitCardId": "faq_001",
+        "hitTitle": "全园美语是什么？",
+        "reason": "seed"
       },
       "supportAlign": 1,
       "accepted": true
@@ -111,7 +111,7 @@
         "reason": "faq"
       },
       "supportAlign": 0,
-      "accepted": true
+      "accepted": false
     }
   ],
   "ready": true,
@@ -120,5 +120,5 @@
     "全园美语先做哪一步？",
     "全园美语具体怎么开展？"
   ],
-  "writtenAt": "2026-10-20T03:02:25.903Z"
+  "writtenAt": "2026-10-20T03:43:23.541Z"
 }

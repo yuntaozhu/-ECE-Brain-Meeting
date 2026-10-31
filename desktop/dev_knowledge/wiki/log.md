@@ -1,5 +1,69 @@
 # 开发 Wiki 日志
 
+## [2026-10-21] query | 换卡 carry 顶答
+
+- 现象：收费答后「一年3万九太贵了…付不起」认太贵卡却念收费卡后半句（`reason=carry`）。
+- 修：异卡近胜出 → `card-switch` 念新卡全文；`objectionComplete` 当新问；太贵卡补陈述标题。
+- 冒烟：`card-switch-expensive`。概念：[[card-switch-carry]]。
+
+## [2026-10-20] duplex | 夹名回灌假唤醒 + STOP 交接句 UI
+
+- 播窗唤醒须 `looksLikeCleanWakeBarge`（「大智」起首）；「整合 a 区大智」当回灌，不 `wake-asr`。
+- `looksLikeSpeakEcho`：句中夹名 + 二元组重叠。
+- STOP 刚 barge 后清空 `interventionText/fullAnswer/displayText` 并 `suppressed`，避免界面仍「退回聆听（合成中）」。
+
+## [2026-10-20] duplex | 回灌误唤醒 + 静音窗挡打断
+
+- `looksLikeSpeakEcho` 去标点；短「我是大智。」一律当回灌；句尾打断口令不当纯回灌。
+- 静音断句：注入成功才关真麦，窗约 380ms；定时 7s；见打断口令立即清窗。
+- 语音验收：`dev_knowledge/wiki/concepts/barge-in-voice-cases.md`。冒烟补标点回灌/短唤醒。
+
+## [2026-10-20] duplex | 静音断句替代重连（防 45000292）
+
+- 去掉播报期关连重连；改为同连接 `injectSilenceBurst` + 真麦静音窗触发 end_window。
+- `45000292` 并发配额：35s 冷却再连。STOP 交接句去重逻辑保留。
+
+## [2026-10-20] duplex | ASR 断句砍粘连 + STOP 不连环念
+
+- 开播/播完/打断：`forceSegmentBoundary` 软重连；播窗内约 1.6s 切假说，减轻回灌粘「谢谢大智」。
+- partial「谢谢大」升格「谢谢大智」。刚 barge-in-stop 后 STOP 只切模式，不排队「退回聆听」。
+
+## [2026-10-20] duplex | 打断跟本地播窗 + 句尾口令
+
+- 短路窗用 `playbackUntil`（可比合成 hold 长），避免 IDLE 后才认出「谢谢大智」。
+- 长回灌句扫尾 24 字；抽出「谢谢大智」再打断。问候回灌「我是大智」不唤醒。
+- 开播 `resetHypothesis`。冒烟含粘连句。
+
+## [2026-10-20] duplex | hold 开麦可打断/唤醒
+
+- P0：COOLDOWN/回灌 hold 仍向 HostAsr 喂真麦（renderer uplink + main appendAudio），不再喂静音；回灌靠转写丢弃。
+- 「谢谢大智 / 大智听我说」→ `barge-in-stop`；叫名「大智…」→ `wake-asr` 打断并立刻巡检。
+- 冒烟：`node scripts/smoke-barge-stop.cjs`。
+
+## [2026-10-20] duplex | 谢谢大智打断加强
+
+- SPEAKING 时 ASR partial「谢谢大 / 停止大」经 `stopBargePartial` 即 `barge-in-stop`，不必等整句定稿。
+- 归一：`谢了大智`→谢谢大智；热词加谢谢大/谢谢大致/停止大。排除「谢谢大家」。
+- 冒烟：`node scripts/smoke-barge-stop.cjs`。
+
+## [2026-10-20] query | 检索已 grounding 禁 silent + 中间态句池
+
+- 一类现象：检索有 FAQ、正式/影子空卡、豆包超时 → silent。兜底：`knowledgeSpeakLine` 在 answerable 时念检索头卡口播。
+- 太贵卡升格「有些贵 / 效益不好」；思考占位改为 schema early/mid 轮换并可短 TTS，正答取消后续占位。
+- ability-probe 仍走 `shadowRecoverSkip`。冒烟补 `too-expensive-benefit`。
+
+## [2026-10-20] query | 口语落地变体 + shadow kb-fallback
+
+- 蒸馏：`paraphraseSubjects/Objects/Cues` 扩「我们机构如何落地这个课程」类问法进链；FAQ 标题升格同批变体。
+- 会中：正式空卡时用 `shadowSpeak` / FAQ 秒命中 / 链步做 `kb-fallback`；豆包超时不再对本类 silent。
+- `lastRealAsk`：短 how-do 不覆盖更长业务问。冒烟见 `org-rollout`。作答线未改。
+
+## [2026-10-20] query | 怎么做≠定义 + 纠正追问扩实体
+
+- 规则蒸馏：how-do 步用详版落地句，`sameAnswerAlignMax` 拒定义半句；直播 `repairHowDoHit`。
+- 纠正句（的是怎么做 / 我问的是怎么做）巡检 + `correctPeel` 扩实体；扩写补问号；议程标题不作锚点。
+- how-do 在资料卡后优先走链。冒烟 9、chain 7、bench 56 绿。
+
 ## [2026-10-20] query | 链跟随拒绝换题弱挂
 
 - `matchChainStep`：步对齐 + 去尾巴核心对齐；种子换题或 formalWinner 换卡时跟新链。

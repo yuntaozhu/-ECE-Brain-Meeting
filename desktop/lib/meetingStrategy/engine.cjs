@@ -10,8 +10,10 @@ const { buildAnalysisContext, attachCommand } = require("./context.cjs");
 const { HANDLERS } = require("./pipeline.cjs");
 const { semanticStatus } = require("../knowledge");
 
+const { hasLlmKey, llmProviderStatus } = require("./llm/providers/resolve.cjs");
+
 function hasArkKey() {
-  return Boolean((process.env.DOUBAO_API_KEY || process.env.ARK_API_KEY || "").trim());
+  return hasLlmKey();
 }
 
 /**
@@ -50,6 +52,8 @@ async function runMeetingAnalysis(recentTranscript, currentAgenda, opts = {}) {
 module.exports = {
   runMeetingAnalysis,
   hasArkKey,
+  hasLlmKey,
+  llmProviderStatus,
   arkChat,
   DEFAULT_AGENDA,
   knowledgeStatus,

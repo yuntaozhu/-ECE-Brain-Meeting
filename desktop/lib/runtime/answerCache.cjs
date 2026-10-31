@@ -74,7 +74,9 @@ function rememberAnswer(meetingId, entry = {}) {
   const q = String(entry.question || "").trim();
   const tts = String(entry.tts || "").trim();
   if (!q || tts.length < 8) return { ok: false, reason: "empty" };
-  if (/我是大智，请讲|嗯，我想一下/.test(tts)) return { ok: false, reason: "ack" };
+  if (/我是大智，请讲|嗯，我想一下|对照一下资料|我先理一句|还在对资料|马上，别急|再核一下口径|稍慢一点，马上接上/.test(tts)) {
+    return { ok: false, reason: "ack" };
+  }
   const key = cacheKey(q);
   if (!key || key.length < 4) return { ok: false, reason: "key" };
   const m = meetingBucket(meetingId);

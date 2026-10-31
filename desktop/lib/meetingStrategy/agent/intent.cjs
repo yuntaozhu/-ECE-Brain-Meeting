@@ -175,7 +175,7 @@ function neutralBridgeFor(intentObj) {
   const intent = intentObj?.intent || "other";
   if (contentSpeakSet().has(intent)) return "我按资料帮你看这笔账。";
   if (intent === "alternate_path") return "我换一条路径说。";
-  return "嗯，我想一下。";
+  return require("../../knowledge/schemaStore.cjs").speakLine("thinkingFiller") || "嗯，我想一下。";
 }
 
 function contentLeadForIntent() {

@@ -1,14 +1,21 @@
 # 腾讯会议 × AI 专家：纯软件虚拟音频网桥
 
-> **原则**：不用外部连接线；电脑内部用 **虚拟音频输出 + 虚拟麦克风**（VB-Cable / 微软 SysVAD 类）对接腾讯会议与本 EXE。
+> **原则**：不用外部连接线；电脑内部用 **虚拟音频输出 + 虚拟麦克风**（VB-Cable / 微软 SysVAD 类）对接腾讯会议与本 EXE。  
+> **双通道（阶段一）**：Others=会场环路；Me=本机麦。策略只吃 Others；Me 仅口令/标定。
 
 ## 架构
 
 ```
-主持人账号（真麦真箱）     AI 专家账号（仅虚拟设备）        ECE-Brain EXE
-真麦克风 / 真音箱     扬声器 → 虚拟音频输出 ──────────→ 采集 → ASR → 策略引擎
-                      麦克风 ← 虚拟麦克风   ←────────── 播放 ← Host TTS
-                           ↑  OS 内部数字环路  ↑
+远端/主持人发言
+  → AI 扬声器 = CABLE Input
+  → EXE Others 采集 (CABLE Output 或系统内录实验)
+  → ASR[Others] → 策略 / 副驾驶建议卡
+
+本机操作员真麦
+  → EXE Me 采集
+  → ASR[Me] → 转写标定；打断/唤醒口令可巡检
+
+EXE Host TTS → CABLE Input → AI 麦 = CABLE Output → 会场可听
 ```
 
 ## 运行
@@ -18,24 +25,21 @@ cd e:\project\-ECE-Brain-Meeting
 npm run desktop
 ```
 
-1. 安装 VB-Cable（建议两对）或 SysVAD 类驱动。  
-2. 勾选「腾讯会议双账号核对」。  
-3. EXE 两侧只选带 `[虚拟]` 的设备。  
-4. 「测虚拟麦」→ 会里听到哔声 →「启动听会 + 策略控场」。
+1. 安装 VB-Cable（建议两对）或 SysVAD。  
+2. Others 选 CABLE Output；勾选「启用双通道 Me」并选本机物理麦。  
+3. 可选：打开「悬浮胶囊」扫视 Option A/B/C；`Ctrl+Shift+H` 一键隐藏主窗+胶囊。  
+4. 「测虚拟麦」→「启动听会」。
 
-## 与硬件 TX 的对应
+## 环境变量
 
-| 硬件 TX + 网线 | 本方案 |
-|----------------|--------|
-| 会议声送给 AI | 虚拟音频输出环路 |
-| AI 声送回会议 | 虚拟麦克风环路 |
+| 变量 | 说明 |
+|------|------|
+| `DUAL_TRACK_ME_ASR=0` | 关闭 Me 第二路 ASR（仍可只采 Others） |
+| `COPILOT_ENABLED=0` | 关闭建议卡 |
 
-参考：[微软 Sample Audio Drivers / SysVAD](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/sample-audio-drivers)
+## 听不到 / 转写空
 
-## 听不到声音 / 转写为空时
-
-1. **先停听会**，勾选「本机同时听」，点「一键自检环路」：本机应听到哔声，环回电平跳动 → EXE↔CABLE 正常。  
-2. **再启动听会**：用「测试」账号说话，看「会场声」灯与输入电平。不跳 = 腾讯会议 **AI 扬声器未设为 CABLE Input**。  
-3. 会议里听 AI：AI 账号**取消静音**，麦克风 = CABLE Output；用测试账号耳机听。试播时看日志是否出现 `TTS 首包语音已到`。  
-4. 听会中不要点测麦/自检。单 Cable 建议升级为 A/B 两对。  
-5. 控制台乱码以界面日志 / `desktop/logs` UTF-8 文件为准。
+1. 先停听会，勾「本机同时听」，一键自检环路。  
+2. Others 电平不跳 → AI 扬声器未进 CABLE Input，或系统内录未勾「分享系统音频」。  
+3. Me 电平不跳 → 本机麦权限/设备选错。  
+4. 两路 ASR 可能触达并发配额；可关 Me 或增购并发包。

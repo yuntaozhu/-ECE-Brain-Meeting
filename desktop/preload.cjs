@@ -9,7 +9,8 @@ contextBridge.exposeInMainWorld("bridge", {
   envStatus: () => ipcRenderer.invoke("env:status"),
   listenStart: () => ipcRenderer.invoke("listen:start"),
   listenStop: () => ipcRenderer.invoke("listen:stop"),
-  listenAudio: (b64) => ipcRenderer.send("listen:audio", b64),
+  listenAudio: (payload) => ipcRenderer.send("listen:audio", payload),
+  setDualTrackMe: (enable) => ipcRenderer.invoke("listen:setDualTrackMe", enable),
   strategyEvaluate: (payload) => ipcRenderer.invoke("strategy:evaluate", payload),
   hostSpeak: (text) => ipcRenderer.invoke("host:speak", text),
   sessionAppend: (payload) => ipcRenderer.invoke("session:append", payload),
@@ -35,5 +36,20 @@ contextBridge.exposeInMainWorld("bridge", {
     const wrapped = (_e, entry) => handler(entry);
     ipcRenderer.on("bridge:log", wrapped);
     return () => ipcRenderer.removeListener("bridge:log", wrapped);
-  }
+  },
+  setAlwaysOnTop: (on) => ipcRenderer.invoke("window:setAlwaysOnTop", on),
+  setOpacity: (opacity) => ipcRenderer.invoke("window:setOpacity", opacity),
+  toggleWindowVisible: () => ipcRenderer.invoke("window:toggleVisible"),
+  setCapsuleVisible: (show) => ipcRenderer.invoke("capsule:setVisible", show),
+  toggleCapsule: () => ipcRenderer.invoke("capsule:toggle"),
+  copilotGetMode: () => ipcRenderer.invoke("copilot:getMode"),
+  copilotSetMode: (mode) => ipcRenderer.invoke("copilot:setMode", mode),
+  copilotPushAsk: (payload) => ipcRenderer.invoke("copilot:pushAsk", payload || {}),
+  copilotCatchMeUp: (payload) => ipcRenderer.invoke("copilot:catchMeUp", payload || {}),
+  copilotJot: (payload) => ipcRenderer.invoke("copilot:jot", payload || {}),
+  copilotListJots: (payload) => ipcRenderer.invoke("copilot:listJots", payload || {}),
+  copilotExpandJots: (payload) => ipcRenderer.invoke("copilot:expandJots", payload || {}),
+  copilotCaptureScreen: (payload) =>
+    ipcRenderer.invoke("copilot:captureScreen", payload || {}),
+  copilotLatestScreen: () => ipcRenderer.invoke("copilot:latestScreen")
 });

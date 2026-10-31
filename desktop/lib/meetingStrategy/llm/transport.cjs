@@ -1,9 +1,10 @@
-/** Ark HTTP：模型选择、流式与非流式补全。 */
+/** LLM HTTP：BYOK 解析后走 OpenAI 兼容 chat/completions（当前仅豆包方舟）。 */
 // 直连 platform，避开 deps↔advisors↔agent↔llm 循环依赖导致 debugLog 为 undefined
 const { debugLog } = require("../../platform/debugLog.cjs");
+const { resolveLlmConfig } = require("./providers/resolve.cjs");
 
 function arkBaseUrl() {
-  return (process.env.ARK_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3").replace(/\/$/, "");
+  return resolveLlmConfig().baseUrl || "https://ark.cn-beijing.volces.com/api/v3";
 }
 
 function isBillingOverdue(status, body) {
@@ -12,27 +13,17 @@ function isBillingOverdue(status, body) {
 }
 
 function resolveChatModel(opts = {}) {
-  // 全部走方舟 Endpoint ID；不要默认写模型名
-  if (opts.fast) {
-    return (
-      process.env.DOUBAO_CHAT_FAST_MODEL ||
-      process.env.DOUBAO_CHAT_MODEL ||
-      process.env.DOUBAO_MODEL_ENDPOINT ||
-      ""
-    );
-  }
-  return (
-    process.env.DOUBAO_CHAT_MODEL ||
-    process.env.DOUBAO_MODEL_ENDPOINT ||
-    process.env.DOUBAO_CHAT_FAST_MODEL ||
-    ""
-  );
+  const cfg = resolveLlmConfig(opts);
+  return cfg.model || "";
 }
 
-
 async function arkChatStream(system, user, opts = {}) {
-  const apiKey = (process.env.DOUBAO_API_KEY || process.env.ARK_API_KEY || "").trim();
-  const model = opts.model || resolveChatModel(opts);
+  const cfg = resolveLlmConfig(opts);
+  const apiKey = cfg.apiKey;
+  const model = opts.model || cfg.model;
+  if (!cfg.ok && cfg.error && cfg.error !== "no_api_key" && cfg.error !== "no_model_endpoint") {
+    return { ok: false, content: null, error: cfg.error, billingOverdue: false };
+  }
   if (!apiKey) return { ok: false, content: null, error: "no_api_key", billingOverdue: false };
   if (!model) return { ok: false, content: null, error: "no_model_endpoint", billingOverdue: false };
   if (opts.signal?.aborted) return { ok: false, content: null, error: "aborted", billingOverdue: false };
@@ -41,8 +32,10 @@ async function arkChatStream(system, user, opts = {}) {
   const onParentAbort = () => ac.abort();
   if (opts.signal) opts.signal.addEventListener("abort", onParentAbort, { once: true });
   const timer = timeoutMs ? setTimeout(() => ac.abort(), timeoutMs) : null;
-  debugLog.info("Strategy", "arkChat stream request", {
+  debugLog.info("Strategy", "llmChat stream request", {
+    provider: cfg.provider,
     model,
+    baseUrl: cfg.baseUrl,
     systemLen: system.length,
     userLen: user.length,
     timeoutMs: timeoutMs || null
@@ -59,9 +52,12 @@ async function arkChatStream(system, user, opts = {}) {
     } catch (_) {}
   };
   try {
-    response = await fetch(`${arkBaseUrl()}/chat/completions`, {
+    response = await fetch(`${cfg.baseUrl}/chat/completions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      headers: cfg.headers || {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
       body: JSON.stringify({
         model,
         messages: [
@@ -157,8 +153,12 @@ async function arkChatStream(system, user, opts = {}) {
 }
 
 async function arkChat(system, user, opts = {}) {
-  const apiKey = (process.env.DOUBAO_API_KEY || process.env.ARK_API_KEY || "").trim();
-  const model = resolveChatModel(opts);
+  const cfg = resolveLlmConfig(opts);
+  const apiKey = cfg.apiKey;
+  const model = opts.model || cfg.model;
+  if (!cfg.ok && cfg.error && cfg.error !== "no_api_key" && cfg.error !== "no_model_endpoint") {
+    return { ok: false, content: null, error: cfg.error, billingOverdue: false };
+  }
   if (!apiKey) return { ok: false, content: null, error: "no_api_key", billingOverdue: false };
   if (!model) return { ok: false, content: null, error: "no_model_endpoint", billingOverdue: false };
   if (opts.signal?.aborted) return { ok: false, content: null, error: "aborted", billingOverdue: false };
@@ -168,8 +168,10 @@ async function arkChat(system, user, opts = {}) {
   const onParentAbort = () => ac.abort();
   if (opts.signal) opts.signal.addEventListener("abort", onParentAbort, { once: true });
   const timer = timeoutMs ? setTimeout(() => ac.abort(), timeoutMs) : null;
-  debugLog.info("Strategy", "arkChat request", {
+  debugLog.info("Strategy", "llmChat request", {
+    provider: cfg.provider,
     model,
+    baseUrl: cfg.baseUrl,
     systemLen: system.length,
     userLen: user.length,
     userPreview: user.slice(0, 160),
@@ -186,9 +188,12 @@ async function arkChat(system, user, opts = {}) {
       temperature: opts.temperature != null ? opts.temperature : 0.3
     };
     if (Number(opts.maxTokens) > 0) body.max_tokens = Number(opts.maxTokens);
-    response = await fetch(`${arkBaseUrl()}/chat/completions`, {
+    response = await fetch(`${cfg.baseUrl}/chat/completions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      headers: cfg.headers || {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
       body: JSON.stringify(body),
       signal: ac.signal
     });
@@ -207,15 +212,27 @@ async function arkChat(system, user, opts = {}) {
     return {
       ok: false,
       content: null,
-      error: `Ark HTTP ${response.status}`,
+      error: `LLM HTTP ${response.status}`,
       status: response.status,
       billingOverdue: isBillingOverdue(response.status, body)
     };
   }
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content || null;
-  debugLog.info("Strategy", "arkChat ok", { preview: String(content || "").slice(0, 160) });
-  return { ok: true, content, error: null, billingOverdue: false };
+  debugLog.info("Strategy", "llmChat ok", {
+    provider: cfg.provider,
+    preview: String(content || "").slice(0, 160)
+  });
+  return { ok: true, content, error: null, billingOverdue: false, provider: cfg.provider };
 }
 
-module.exports = { isBillingOverdue, resolveChatModel, arkChatStream, arkChat };
+module.exports = {
+  isBillingOverdue,
+  resolveChatModel,
+  arkChatStream,
+  arkChat,
+  /** 别名：BYOK 语义 */
+  llmChat: arkChat,
+  llmChatStream: arkChatStream,
+  arkBaseUrl
+};

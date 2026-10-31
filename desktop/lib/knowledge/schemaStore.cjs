@@ -30,7 +30,15 @@ function load() {
       verify: readJson("intent-verify.json"),
       plans: readJson("advisor-plans.json"),
       faq: readJson("faq-match.json"),
-      distillChains: readJson("distill-chains.json")
+      distillChains: readJson("distill-chains.json"),
+      // 副驾驶门控（旁路 UI 建议卡）；缺文件时不影响主口播链路
+      copilot: (() => {
+        try {
+          return readJson("copilot-gate.json");
+        } catch (_) {
+          return { enabledDefault: false, patterns: {}, templates: {}, limits: {} };
+        }
+      })()
     };
   }
   return bag;

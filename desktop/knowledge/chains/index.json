@@ -1,7 +1,7 @@
 {
   "version": 1,
   "kind": "followup-chain-index",
-  "writtenAt": "2026-10-20T03:02:26.196Z",
+  "writtenAt": "2026-10-20T03:43:23.775Z",
   "count": 5,
   "readyCount": 5,
   "sourceMode": "rule",
@@ -33,7 +33,7 @@
     {
       "cardId": "faq_020",
       "seed": "从签约到落地要做哪些准备？",
-      "steps": 3,
+      "steps": 6,
       "ready": true,
       "source": "rule",
       "slug": "faq_020-从签约到落地要做哪些准备？"
