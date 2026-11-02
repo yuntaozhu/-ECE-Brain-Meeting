@@ -82,9 +82,11 @@ function reconcileClaim(claim, opts = {}) {
       .map((block, i) => {
         const oldId = (block.match(/\[CLAIM-(\d+)\]/) || [])[1] || String(i + 1);
         const first = block.split("\n")[0].replace(/^- \*\*\[CLAIM-\d+\]\*\*\s*/, "");
+        const oldFrom =
+          ((block.match(/valid_from`?:\s*([^\s|]+)/i) || [])[1] || "").trim() || "unknown";
         return [
           `- ~~**[SUPERSEDED-${oldId}]** ${first}~~`,
-          `  - \`valid_from\`: unknown | \`invalid_at\`: ${now}`,
+          `  - \`valid_from\`: ${oldFrom} | \`invalid_at\`: ${now}`,
           `  - \`superseded_by\`: \`[${claimId}]\``,
           `  - \`reason_for_rejection\`: ${
             claim.reason_for_change || claim.replaces_or_contradicts_topic || "被新断言取代"
@@ -131,12 +133,16 @@ function reconcileClaim(claim, opts = {}) {
   };
 
   if (!opts.dry) {
-    fs.writeFileSync(abs, nextMd, "utf8");
+    const tmp = `${abs}.tmp`;
+    fs.writeFileSync(tmp, nextMd, "utf8");
+    fs.renameSync(tmp, abs);
     const logFile = path.join(
       changelogDir(),
       `recon_${Date.now().toString(36)}.json`
     );
-    fs.writeFileSync(logFile, JSON.stringify(log, null, 2), "utf8");
+    const logTmp = `${logFile}.tmp`;
+    fs.writeFileSync(logTmp, JSON.stringify(log, null, 2), "utf8");
+    fs.renameSync(logTmp, logFile);
     try {
       buildWiki2Index();
     } catch (_) {}

@@ -72,17 +72,23 @@ function createVadGate(opts = {}) {
   const silenceMs = opts.silenceMs ?? envInt("VAD_SILENCE_MS", 480);
   const minSpeechMs = opts.minSpeechMs ?? envInt("VAD_MIN_SPEECH_MS", 320);
   const maxUtterMs = opts.maxUtterMs ?? envInt("VAD_MAX_UTTER_MS", 12000);
+  const preRollMs = opts.preRollMs ?? envInt("VAD_PREROLL_MS", 240);
 
   let chunks = [];
   let speechMs = 0;
   let silenceMsAcc = 0;
   let inSpeech = false;
+  /** 开口前弱音/静音环形缓冲，防吞首字 */
+  let preRollChunks = [];
+  let preRollMsAcc = 0;
 
   function reset() {
     chunks = [];
     speechMs = 0;
     silenceMsAcc = 0;
     inSpeech = false;
+    preRollChunks = [];
+    preRollMsAcc = 0;
   }
 
   function snapshot() {
@@ -91,8 +97,18 @@ function createVadGate(opts = {}) {
       inSpeech,
       speechMs,
       silenceMs: silenceMsAcc,
-      chunkFrames: chunks.length
+      chunkFrames: chunks.length,
+      preRollMs: preRollMsAcc,
+      preRollFrames: preRollChunks.length
     };
+  }
+
+  function trimPreRoll() {
+    while (preRollMsAcc > preRollMs && preRollChunks.length) {
+      const old = preRollChunks.shift();
+      preRollMsAcc -= (old.length / SAMPLE_RATE) * 1000;
+    }
+    if (preRollMsAcc < 0) preRollMsAcc = 0;
   }
 
   /**
@@ -109,6 +125,13 @@ function createVadGate(opts = {}) {
     const isSpeech = rms >= rmsSpeech;
 
     if (isSpeech) {
+      if (!inSpeech) {
+        // 上升沿：并入预卷帧，再收当前帧
+        for (const c of preRollChunks) chunks.push(c);
+        speechMs += preRollMsAcc;
+        preRollChunks = [];
+        preRollMsAcc = 0;
+      }
       inSpeech = true;
       silenceMsAcc = 0;
       speechMs += frameMs;
@@ -122,6 +145,10 @@ function createVadGate(opts = {}) {
         reset();
         return { hold: false, flush: "silence", pcm, why: "silence" };
       }
+    } else {
+      preRollChunks.push(samples);
+      preRollMsAcc += frameMs;
+      trimPreRoll();
     }
 
     if (inSpeech && speechMs >= maxUtterMs) {

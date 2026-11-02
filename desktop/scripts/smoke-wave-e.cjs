@@ -29,6 +29,10 @@ assert.ok(/双通道|Others|Me|VAD|静音/i.test(r.preview || ""), "preview");
 const facts = wiki2EvidenceFacts("Whisper 不要 native addon");
 assert.ok(facts.facts.length >= 1, "evidence facts");
 
+const miss = retrieveWiki2("完全无关的火星基地种菜指南XYZ9988", { topK: 3 });
+assert.strictEqual(miss.mode, "wiki2-empty", "no 0-score兜底");
+assert.ok(!(miss.evidence || []).length, "empty evidence on miss");
+
 const pkt = buildCopilotPacket("双通道 ASR 和 VAD 门控方案怎么看？能不能再混成单轨？", {
   agenda: "Wave E",
   force: true

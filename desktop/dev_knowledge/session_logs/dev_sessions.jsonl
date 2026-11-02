@@ -4,3 +4,8 @@
 {"ts":"2026-10-31","wave":"D","note":"Mermaid scan render + optional Win OCR + Deep Dive + .cursor/mcp.json"}
 {"ts":"2026-10-31","wave":"E","note":"Wiki2 knowledge_wiki + Fast Read JSON index + ingest/reconcile + copilot evidence"}
 {"ts":"2026-10-31","wave":"F","note":"Doubao compile ingest + co-occurrence themes + session promote pipeline"}
+{"at":"2026-11-01T00:30:00+08:00","wave":"G","summary":"lint schema migrate; retrieve empty-on-miss; n-gram; wiki2-sync-domain 19 biz; precompiled ingest; reconcile atomic","smokes":["test:lint:hardcode","smoke-wave-c","smoke-wave-e","smoke-wave-f","smoke-wave-g"]}
+{"at":"2026-11-01T00:50:00+08:00","wave":"J+K","summary":"cockpit topbar+drawer+3col+tabs; chat bubbles; semantic cards+pills+123; structured catch-me-up; meetingId","smokes":["smoke-wave-jk","smoke-wave-c","test:lint:hardcode"]}
+{"at":"2026-11-01T01:00:00+08:00","wave":"L","summary":"capsule dual-state HUD; setContentProtection; ask/recap/mode/collapse; stealth checkbox wired","smokes":["smoke-wave-l","smoke-wave-jk","test:lint:hardcode"]}
+{"at":"2026-11-01T01:15:00+08:00","wave":"H","summary":"onOthersPartialAsr+listenSession; vad preRoll 240ms; appPaths wiki2/glossary/sessionLogs; extraResources","smokes":["smoke-wave-a","smoke-wave-b","smoke-wave-h","smoke-wave-e","test:lint:hardcode"]}
+{"at":"2026-11-01T01:30:00+08:00","wave":"I","summary":"smartClip; refineCopilotPacketAsync; strategyEvaluate instant+refined abort; refining badge; COPILOT_LLM_REFINE","smokes":["smoke-wave-i","smoke-wave-b","smoke-copilot-gate","test:lint:hardcode"]}

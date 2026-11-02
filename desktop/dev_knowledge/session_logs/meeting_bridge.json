@@ -1,9 +1,18 @@
 {
-  "updatedAt": 1793423162710,
+  "updatedAt": 1793607179778,
   "lastJot": {
-    "ts": 1793423162709,
+    "ts": 1793465217163,
     "text": "网关超时 -> 改异步队列",
     "meetingId": "smoke_wave_c",
     "source": "ui"
+  },
+  "lastRecap": {
+    "ts": 1793607179777,
+    "topic": "您问过：珠海天气怎么样？；没有没有，我在问我看看他回不回答。大智，珠海天"
+  },
+  "lastScreen": {
+    "ts": 1793607179747,
+    "path": "C:\\Users\\Immanuel\\AppData\\Local\\Temp\\ece-screen-ctx\\cap_1793607179747.png",
+    "note": "meeting-aid"
   }
 }

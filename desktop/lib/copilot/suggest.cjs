@@ -1,6 +1,7 @@
 /**
  * 分级建议卡（旁路）：Option A/B/C，不改口播流水线。
  * 文案模板来自 schema；事实句可来自 FAQ 召回 / Speculative prefetch。
+ * 可选第二阶段 LLM 精炼见 refine.cjs。
  */
 const { matchFaqInstant } = require("../knowledge");
 const { classifyCopilotIntent, lastTranscriptSegment, copilotCfg } = require("./gate.cjs");
@@ -9,18 +10,10 @@ const { resolveTriggerMode } = require("./mode.cjs");
 const { formatScreenForPrompt } = require("./screenContext.cjs");
 const { detectMermaidHint } = require("./mermaidHint.cjs");
 const { buildDeepDive } = require("./deepDive.cjs");
+const { smartClip, clip } = require("./suggestClip.cjs");
+const { pickCounterPattern, fillTpl } = require("./counterPattern.cjs");
+const { sanitizeSpeakText } = require("./sanitizeSpeakText.cjs");
 
-function clip(s, n) {
-  const t = String(s || "").replace(/\s+/g, " ").trim();
-  if (t.length <= n) return t;
-  return t.slice(0, Math.max(0, n - 1)) + "…";
-}
-
-function fillTpl(tpl, vars) {
-  return String(tpl || "").replace(/\{(\w+)\}/g, (_, k) =>
-    vars && vars[k] != null ? String(vars[k]) : ""
-  );
-}
 
 function isCopilotEnabled(cfg) {
   if (process.env.COPILOT_ENABLED === "0") return false;
@@ -144,21 +137,21 @@ function buildCopilotPacket(transcript, opts = {}) {
   const pushForward = fact
     ? fillTpl(templates.push_forward_with_fact || templates.push_forward_generic, { fact })
     : templates.push_forward_generic || "";
-  const pushBack = supersededHint
-    ? clip(`关于${topic}，${supersededHint}，建议先对齐现状再拍板。`, maxChars)
-    : fillTpl(templates.push_back_with_topic || templates.push_back_generic, {
-        topic
-      });
-  const counter = fillTpl(
-    templates.counter_inquiry_with_topic || templates.counter_inquiry_generic,
-    { topic }
-  );
+  // 否决只进 key_facts / Deep Dive internal，不拼进可试播 Option B
+  const pushBack = fillTpl(templates.push_back_with_topic || templates.push_back_generic, {
+    topic
+  });
+  const counterPick = pickCounterPattern(segment, topic);
+  const counter = counterPick.text;
 
   packet.suggestions = {
-    push_forward: clip(pushForward, maxChars),
-    push_back: clip(pushBack, maxChars),
-    counter_inquiry: clip(counter, maxChars)
+    push_forward: smartClip(sanitizeSpeakText(pushForward), maxChars),
+    push_back: smartClip(sanitizeSpeakText(pushBack), maxChars),
+    counter_inquiry: smartClip(sanitizeSpeakText(counter), maxChars)
   };
+  packet.counter_pattern = counterPick.id;
+  packet.stage = "instant";
+  packet.refined = false;
 
   try {
     const screenLine = formatScreenForPrompt();
@@ -235,5 +228,7 @@ function windowTranscript(linesOrText, windowMs = 60000) {
 module.exports = {
   buildCopilotPacket,
   buildCopilotPacketThrottled,
-  windowTranscript
+  windowTranscript,
+  smartClip,
+  clip
 };

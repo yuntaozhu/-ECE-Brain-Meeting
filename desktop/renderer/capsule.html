@@ -5,115 +5,154 @@
     <title>大智 · 副驾驶胶囊</title>
     <style>
       :root {
-        --bg: rgba(10, 14, 24, 0.88);
-        --line: rgba(103, 232, 249, 0.35);
+        --bg: rgba(8, 14, 26, 0.92);
+        --line: rgba(34, 211, 238, 0.32);
         --text: #f8fafc;
         --muted: #94a3b8;
         --accent: #67e8f9;
+        --forward: #34d399;
+        --back: #fbbf24;
+        --danger: #fb7185;
+        --counter: #38bdf8;
       }
       html, body {
         margin: 0;
         background: transparent;
         overflow: hidden;
-        font-family: "Segoe UI", "PingFang SC", sans-serif;
+        font-family: "Segoe UI Variable Text", "Segoe UI", "PingFang SC", sans-serif;
         color: var(--text);
         user-select: none;
       }
       #shell {
-        margin: 8px;
-        padding: 12px 14px;
-        border-radius: 16px;
+        margin: 6px;
+        padding: 0;
+        border-radius: 14px;
         background: var(--bg);
         border: 1px solid var(--line);
-        backdrop-filter: blur(12px);
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+        backdrop-filter: blur(14px);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
         -webkit-app-region: drag;
-        min-height: 120px;
+        overflow: hidden;
       }
-      .top {
+      .hud-topbar {
         display: flex;
-        justify-content: space-between;
         align-items: center;
         gap: 8px;
-        margin-bottom: 8px;
+        padding: 8px 10px;
+        min-height: 40px;
       }
+      .dot {
+        width: 8px; height: 8px; border-radius: 50%;
+        background: #475569; flex: 0 0 auto;
+      }
+      .dot.live { background: var(--forward); box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.25); }
+      .dot.speak { background: var(--back); box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.25); }
       .brand {
-        font-size: 12px;
-        letter-spacing: 0.08em;
-        color: var(--accent);
-        font-weight: 700;
+        font-size: 11px; letter-spacing: 0.08em; color: var(--accent); font-weight: 700;
+        white-space: nowrap;
       }
       .meta {
-        font-size: 11px;
-        color: var(--muted);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 220px;
+        flex: 1; min-width: 0;
+        font-size: 11px; color: var(--muted);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       }
       .actions {
-        display: flex;
-        gap: 6px;
+        display: flex; gap: 4px; flex: 0 0 auto;
         -webkit-app-region: no-drag;
       }
       button {
-        border: 0;
-        border-radius: 8px;
-        padding: 5px 8px;
-        font-size: 11px;
-        cursor: pointer;
-        background: #1e293b;
-        color: #e2e8f0;
+        border: 0; border-radius: 8px; padding: 5px 8px;
+        font-size: 11px; cursor: pointer; background: #1e293b; color: #e2e8f0; font-weight: 650;
       }
       button:hover { background: #334155; }
-      .cards { display: grid; gap: 8px; -webkit-app-region: no-drag; }
+      button.accent { background: #0e7490; color: #ecfeff; }
+      button.accent:hover { background: #155e75; }
+      #body {
+        padding: 0 10px 10px;
+        -webkit-app-region: no-drag;
+        max-height: 360px;
+        overflow: auto;
+      }
+      body.collapsed #body { display: none; }
+      body.collapsed #shell { min-height: 0; }
+      .live-line {
+        font-size: 11px; color: var(--muted);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        padding: 0 10px 8px;
+      }
+      body:not(.collapsed) .live-line { display: none; }
+      body.collapsed .live-line { display: block; }
+      .cards { display: grid; gap: 8px; }
       .card {
         border: 1px solid rgba(49, 65, 95, 0.9);
-        border-radius: 12px;
-        padding: 8px 10px;
-        background: rgba(7, 11, 22, 0.75);
+        border-radius: 12px; padding: 9px 11px;
+        background: rgba(7, 11, 22, 0.78);
+        cursor: pointer;
       }
+      .card:hover { filter: brightness(1.05); }
+      .card.forward { border-left: 3px solid var(--forward); }
+      .card.back { border-left: 3px solid var(--back); }
+      .card.danger { border-left: 3px solid var(--danger); }
+      .card.counter { border-left: 3px solid var(--counter); }
+      .card.flash { box-shadow: 0 0 0 2px var(--accent); }
       .card header {
-        font-size: 10px;
-        color: var(--accent);
-        margin-bottom: 4px;
-        font-weight: 600;
+        font-size: 10px; margin-bottom: 4px; font-weight: 650;
+        display: flex; justify-content: space-between; gap: 6px;
       }
-      .card p {
-        margin: 0;
-        font-size: 15px;
-        line-height: 1.4;
-        font-weight: 650;
-      }
+      .card.forward header { color: #6ee7b7; }
+      .card.back header { color: #fcd34d; }
+      .card.danger header { color: #fda4af; }
+      .card.counter header { color: #7dd3fc; }
+      .card p { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 650; }
       .card .row { margin-top: 6px; display: flex; gap: 6px; }
-      .empty {
-        font-size: 13px;
-        color: var(--muted);
-        line-height: 1.45;
+      .facts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+      .pill {
+        font-size: 10px; border-radius: 999px; padding: 3px 7px;
+        border: 1px solid #334155; color: #cbd5e1; background: #0f172a; max-width: 100%;
       }
-      .live {
-        margin-top: 8px;
-        font-size: 11px;
-        color: var(--muted);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+      .pill.danger { border-color: var(--danger); color: #fecdd3; background: #4c0519; }
+      .empty { font-size: 12px; color: var(--muted); line-height: 1.45; margin: 0; }
+      details.cap-dive {
+        margin-top: 8px; border: 1px solid #31415f; border-radius: 10px;
+        padding: 6px 8px; background: rgba(7, 11, 22, 0.65);
       }
+      details.cap-dive summary {
+        cursor: pointer; font-size: 11px; color: #c4b5fd; font-weight: 650;
+      }
+      details.cap-dive .dive-body { margin-top: 6px; font-size: 12px; line-height: 1.45; color: #e2e8f0; }
+      #recapDrawer {
+        display: none; margin-top: 8px; padding: 8px;
+        border-radius: 10px; border: 1px solid #334155; background: #0b1220;
+        font-size: 11px; line-height: 1.45; color: #cbd5e1; white-space: pre-wrap;
+        max-height: 120px; overflow: auto;
+      }
+      #recapDrawer.show { display: block; }
     </style>
   </head>
   <body>
     <div id="shell">
-      <div class="top">
-        <div class="brand">DAZHI COPILOT</div>
+      <div class="hud-topbar">
+        <span class="dot" id="liveDot"></span>
+        <div class="brand">DAZHI</div>
         <div class="meta" id="meta">待命</div>
         <div class="actions">
-          <button type="button" id="btnHide" title="Ctrl+Shift+H">隐藏</button>
+          <button type="button" id="capModeBtn" title="Alt+Shift+Z">Auto</button>
+          <button type="button" id="capAskBtn" class="accent" title="Alt+Z">⚡问AI</button>
+          <button type="button" id="capRecapBtn" title="近5分钟速览">📋</button>
+          <button type="button" id="capCollapseBtn" title="折叠/展开">▴</button>
+          <button type="button" id="btnHide" title="Ctrl+Shift+H">✕</button>
         </div>
       </div>
-      <div id="cards" class="cards">
-        <p class="empty">听会巡检后，这里显示可脱口而出的 Option A/B/C</p>
+      <div class="live-line" id="liveMini">等待会场…</div>
+      <div id="body">
+        <div id="cards" class="cards">
+          <p class="empty">听会后显示 Option A/B/C · 点卡片复制</p>
+        </div>
+        <div class="facts" id="facts"></div>
+        <div id="diveHost"></div>
+        <div id="recapDrawer"></div>
+        <div class="live-line" id="live" style="display:block;padding:8px 0 0;opacity:0.85"></div>
       </div>
-      <div class="live" id="live"></div>
     </div>
     <script type="module" src="capsule.js"></script>
   </body>

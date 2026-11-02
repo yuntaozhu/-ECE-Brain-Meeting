@@ -1,14 +1,17 @@
 /**
  * 工程讨论线索 → 可选 Mermaid 草稿（旁路展示，不进口播）。
+ * 模式来自 knowledge/schema/copilot-gate.json。
  */
-const ARCH_RE =
-  /(架构|微服务|调用链|状态机|流水线|双通道|ASR|TTS|Whisper|VAD|decideSpeak|IPC|主进程|渲染)/i;
-const FLOW_RE = /(流转|流程|状态转移|从.+到|先.+再)/;
+const { schemaStore } = require("../knowledge");
+
+function rx(name) {
+  return schemaStore.rx("copilot", name);
+}
 
 function detectMermaidHint(text) {
   const t = String(text || "");
-  if (!ARCH_RE.test(t)) return null;
-  if (/双通道|Me|Others|内录|CABLE/i.test(t)) {
+  if (!rx("mermaidArch").test(t)) return null;
+  if (rx("mermaidDualTrack").test(t)) {
     return [
       "flowchart LR",
       "  Me[Me 本机麦] --> LabelMe[role=me]",
@@ -19,7 +22,7 @@ function detectMermaidHint(text) {
       "  Decide --> TTS[Host TTS]"
     ].join("\n");
   }
-  if (/Whisper|VAD|静音/i.test(t)) {
+  if (rx("mermaidVadWhisper").test(t)) {
     return [
       "flowchart LR",
       "  PCM[PCM 16k] --> VAD{vadGate}",
@@ -29,7 +32,7 @@ function detectMermaidHint(text) {
       "  Gloss --> UI[转写/策略]"
     ].join("\n");
   }
-  if (FLOW_RE.test(t) || ARCH_RE.test(t)) {
+  if (rx("mermaidFlow").test(t) || rx("mermaidArch").test(t)) {
     return [
       "flowchart TD",
       "  A[转写] --> B[meetingSession]",

@@ -13,6 +13,9 @@ const screenContext = require("./screenContext.cjs");
 const mermaidHint = require("./mermaidHint.cjs");
 const deepDive = require("./deepDive.cjs");
 const ocrWin = require("./ocrWin.cjs");
+const refine = require("./refine.cjs");
+const sanitize = require("./sanitizeSpeakText.cjs");
+const counterPattern = require("./counterPattern.cjs");
 
 module.exports = {
   ...gate,
@@ -24,5 +27,8 @@ module.exports = {
   ...screenContext,
   ...mermaidHint,
   ...deepDive,
-  ...ocrWin
+  ...ocrWin,
+  ...refine,
+  ...sanitize,
+  ...counterPattern
 };

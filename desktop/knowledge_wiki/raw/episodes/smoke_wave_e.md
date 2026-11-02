@@ -1,8 +1,9 @@
 ---
 episode_id: smoke_wave_e
-timestamp: 2026-10-31T14:51:40.356Z
+timestamp: 2026-10-31T16:56:04.387Z
 agenda: "smoke-e"
 participants: []
+compile_mode: rule
 ---
 
 # Episode smoke_wave_e
@@ -16,6 +17,7 @@ participants: []
 - speaker: 会场
 - context_prefix: [议题:smoke-e | 片段#2 | 陈述句]
 - text: 继续禁止混轨，副驾驶旁路不要进 decideSpeak
+- linked: [[dec_copilot_bypass]]
 
 
 ## Extracted Claim Candidates

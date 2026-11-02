@@ -1,20 +1,11 @@
 "use strict";
 
 const fs = require("fs");
-const path = require("path");
-
-const DEFAULT_GLOSSARY = path.join(
-  __dirname,
-  "..",
-  "..",
-  "dev_knowledge",
-  "glossary",
-  "project_terms.json"
-);
+const { glossaryPath } = require("../platform/appPaths.cjs");
 
 let _cache = { mtimeMs: -1, rules: [] };
 
-function loadRules(filePath = process.env.ASR_GLOSSARY_PATH || DEFAULT_GLOSSARY) {
+function loadRules(filePath = glossaryPath()) {
   try {
     const st = fs.statSync(filePath);
     if (_cache.mtimeMs === st.mtimeMs && _cache.rules.length) return _cache.rules;
@@ -61,5 +52,8 @@ module.exports = {
   glossaryCorrect,
   loadRules,
   resetGlossaryCache,
-  DEFAULT_GLOSSARY
+  glossaryPath,
+  get DEFAULT_GLOSSARY() {
+    return glossaryPath();
+  }
 };

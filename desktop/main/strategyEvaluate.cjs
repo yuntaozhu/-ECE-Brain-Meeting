@@ -23,7 +23,9 @@ const {
 const { appendSession, clearMeetingCache } = require("../lib/runtime");
 const {
   buildCopilotPacketThrottled,
-  getTriggerMode
+  getTriggerMode,
+  shouldRefineCopilot,
+  refineCopilotPacketAsync
 } = require("../lib/copilot/index.cjs");
 
 function createStrategyEvaluate(rt) {
@@ -31,7 +33,11 @@ function createStrategyEvaluate(rt) {
     const transcript = payload?.transcript || "";
     const agenda = payload?.agenda || DEFAULT_AGENDA;
     const phase = rt.listen?.phase || PHASE.IDLE;
-    const forceCopilot = Boolean(payload?.forceCopilot || payload?.reason === "push-ask");
+    const forceCopilot = Boolean(
+      payload?.forceCopilot ||
+        payload?.reason === "push-ask" ||
+        payload?.reason === "capsule-ask"
+    );
     const emitUi = (msg) => {
       if (typeof rt.broadcast === "function") {
         rt.broadcast(msg);
@@ -39,6 +45,13 @@ function createStrategyEvaluate(rt) {
       }
       if (rt.win && !rt.win.isDestroyed()) rt.win.webContents.send("bridge:event", msg);
     };
+    // 新一轮巡检：取消上一轮未完成的建议卡精炼
+    if (rt.copilotRefineAbort) {
+      try {
+        rt.copilotRefineAbort.abort();
+      } catch (_) {}
+      rt.copilotRefineAbort = null;
+    }
     // 副驾驶旁路：意图门控 + Option 建议卡（不改 decideSpeak / 口播）
     try {
       const copilot = buildCopilotPacketThrottled(transcript, {
@@ -46,7 +59,14 @@ function createStrategyEvaluate(rt) {
         force: forceCopilot
       });
       if (copilot?.enabled && !copilot.throttled) {
-        emitUi({ type: "smart-replies", ...copilot });
+        const willRefine =
+          Boolean(copilot.should_trigger) && shouldRefineCopilot({ force: forceCopilot });
+        emitUi({
+          type: "smart-replies",
+          ...copilot,
+          stage: copilot.stage || "instant",
+          refining: willRefine || undefined
+        });
         if (copilot.should_trigger) {
           debugLog.info("Copilot", "建议卡已推送", {
             category: copilot.category,
@@ -55,8 +75,58 @@ function createStrategyEvaluate(rt) {
             faq: copilot.faq_title || null,
             mode: getTriggerMode().mode,
             force: forceCopilot || undefined,
-            prefetchUsed: copilot.prefetch?.used || false
+            prefetchUsed: copilot.prefetch?.used || false,
+            stage: "instant",
+            refining: willRefine || false
           });
+          // 第二阶段：可选 LLM 精炼
+          if (willRefine) {
+            rt.copilotRefineAbort = new AbortController();
+            const refineSignal = rt.copilotRefineAbort.signal;
+            void refineCopilotPacketAsync(copilot, {
+              transcript,
+              agenda,
+              signal: refineSignal,
+              timeoutMs: Number(process.env.COPILOT_LLM_REFINE_TIMEOUT_MS) || 10000
+            })
+              .then((res) => {
+                if (refineSignal.aborted || !res?.ok || !res.packet) {
+                  if (res?.error && res.error !== "aborted" && res.error !== "no_api_key") {
+                    debugLog.warn("Copilot", "建议卡精炼跳过", { error: res.error });
+                  }
+                  // 无 Key / 失败：清掉 refining 徽标，保留 instant
+                  if (!refineSignal.aborted) {
+                    emitUi({
+                      type: "smart-replies",
+                      ...copilot,
+                      stage: "instant",
+                      refining: false,
+                      refine_error: res?.error || "failed"
+                    });
+                  }
+                  return;
+                }
+                emitUi({ type: "smart-replies", ...res.packet, refining: false });
+                debugLog.info("Copilot", "建议卡已精炼", {
+                  category: res.packet.category,
+                  refine_ms: res.packet.refine_ms,
+                  provider: res.packet.refine_provider
+                });
+              })
+              .catch((err) => {
+                if (refineSignal.aborted) return;
+                debugLog.warn("Copilot", "建议卡精炼失败（保留 instant）", {
+                  error: String(err?.message || err)
+                });
+                emitUi({
+                  type: "smart-replies",
+                  ...copilot,
+                  stage: "instant",
+                  refining: false,
+                  refine_error: String(err?.message || err)
+                });
+              });
+          }
         }
       }
     } catch (err) {

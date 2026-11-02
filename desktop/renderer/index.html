@@ -4,49 +4,214 @@
     <meta charset="UTF-8" />
     <title>ECE-Brain AI 专家 · 虚拟音频网桥</title>
     <style>
-      :root { color-scheme: dark; }
-      body { margin: 0; font-family: "Segoe UI", sans-serif; background: #0b1020; color: #e8eefc; }
-      header { padding: 14px 18px; border-bottom: 1px solid #24304a; }
-      h1 { margin: 0; font-size: 17px; }
-      p.sub { margin: 4px 0 0; color: #93a4c7; font-size: 12px; line-height: 1.45; }
-      main { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 16px 20px; }
-      section {
-        background: #121a2e; border: 1px solid #24304a; border-radius: 12px; padding: 12px;
+      :root {
+        color-scheme: dark;
+        --bg-app: #050912;
+        --bg-panel: rgba(12, 20, 36, 0.88);
+        --bg-card: #0a1220;
+        --bg-elevated: #111b2e;
+        --border-subtle: rgba(71, 85, 105, 0.45);
+        --border-focus: rgba(34, 211, 238, 0.55);
+        --accent-cyan: #22d3ee;
+        --accent-emerald: #34d399;
+        --accent-amber: #fbbf24;
+        --accent-rose: #fb7185;
+        --accent-sky: #38bdf8;
+        --text: #e8eefc;
+        --muted: #8ba0c0;
+        --radius: 14px;
+        --shadow-panel: 0 8px 28px rgba(0, 0, 0, 0.28);
+        --font: "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", sans-serif;
       }
-      h2 { margin: 0 0 8px; font-size: 13px; color: #8ecbff; letter-spacing: 0.04em; }
-      label { display: block; font-size: 11px; color: #93a4c7; margin: 8px 0 4px; }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0; height: 100%; overflow: hidden;
+        font-family: var(--font);
+        background:
+          radial-gradient(1200px 500px at 10% -10%, rgba(34, 211, 238, 0.08), transparent 55%),
+          radial-gradient(900px 420px at 90% 0%, rgba(52, 211, 153, 0.06), transparent 50%),
+          var(--bg-app);
+        color: var(--text);
+      }
+      .app-shell { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+      /* —— Topbar —— */
+      .cockpit-topbar {
+        flex: 0 0 auto;
+        display: grid;
+        grid-template-columns: minmax(240px, 1.1fr) minmax(200px, 1fr) auto;
+        gap: 12px 16px;
+        align-items: center;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--border-subtle);
+        background: linear-gradient(180deg, rgba(14, 22, 40, 0.96), rgba(8, 14, 26, 0.92));
+        backdrop-filter: blur(10px);
+      }
+      .brand-block { display: flex; align-items: center; gap: 10px; min-width: 0; }
+      .live-dot {
+        width: 9px; height: 9px; border-radius: 50%;
+        background: #475569; box-shadow: 0 0 0 3px rgba(71, 85, 105, 0.25);
+        flex: 0 0 auto;
+      }
+      body.is-listening .live-dot {
+        background: var(--accent-emerald);
+        box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.22);
+        animation: pulseDot 1.6s ease-in-out infinite;
+      }
+      @keyframes pulseDot {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.15); opacity: 0.75; }
+      }
+      .topbar-brand {
+        font-size: 15px; font-weight: 700; color: #ecfeff;
+        letter-spacing: 0.02em; white-space: nowrap;
+      }
+      .topbar-brand span { color: var(--accent-cyan); font-weight: 600; }
+      .chip-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+      .chips-more summary {
+        list-style: none; cursor: pointer; font-size: 10px; color: var(--muted);
+        border: 1px solid var(--border-subtle); border-radius: 999px; padding: 3px 8px;
+        user-select: none;
+      }
+      .chips-more summary::-webkit-details-marker { display: none; }
+      .chips-more[open] summary { color: var(--accent-cyan); border-color: var(--border-focus); }
+      .chips-more .chips { margin-top: 6px; }
+
+      .topbar-mid { display: flex; align-items: center; gap: 8px; min-width: 0; }
+      .agenda-shell {
+        flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;
+        background: rgba(7, 11, 22, 0.85); border: 1px solid var(--border-subtle);
+        border-radius: 999px; padding: 4px 6px 4px 12px;
+      }
+      .agenda-shell:focus-within { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.12); }
+      .agenda-lab { margin: 0; font-size: 11px; color: var(--muted); white-space: nowrap; }
+      .agenda-shell #agenda {
+        border: 0; background: transparent; padding: 6px 8px; border-radius: 999px; outline: none;
+      }
+
+      .topbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+      .btn-cluster { display: flex; gap: 6px; align-items: center; }
+      .tool-cluster {
+        display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+        padding: 4px 8px; border-radius: 999px;
+        background: rgba(15, 23, 42, 0.55); border: 1px solid var(--border-subtle);
+      }
+      .mini-meters { display: flex; gap: 10px; align-items: center; }
+      .mini-meter-wrap {
+        display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--muted);
+        font-weight: 600; letter-spacing: 0.02em;
+      }
+      .mini-meter-wrap .meter { width: 56px; margin: 0; height: 5px; }
+
+      .shortcut-strip {
+        flex: 0 0 auto;
+        display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+        padding: 5px 16px;
+        border-bottom: 1px solid rgba(51, 65, 85, 0.35);
+        background: rgba(8, 14, 26, 0.75);
+        font-size: 11px; color: var(--muted);
+      }
+      .shortcut-strip kbd {
+        font-family: var(--font); font-size: 10px; font-weight: 600;
+        border: 1px solid #334155; border-bottom-width: 2px; border-radius: 5px;
+        padding: 1px 5px; color: #cbd5e1; background: #0f172a; margin-right: 3px;
+      }
+      .shortcut-item { white-space: nowrap; }
+
+      /* —— Drawer —— */
+      #preflightDrawer {
+        flex: 0 0 auto;
+        border-bottom: 1px solid var(--border-subtle);
+        background: rgba(8, 13, 24, 0.92);
+        max-height: 40vh; overflow: auto;
+        transition: max-height 0.28s ease, opacity 0.2s ease;
+      }
+      #preflightDrawer.collapsed { max-height: 0; opacity: 0; overflow: hidden; border-bottom-width: 0; }
+      .preflight-grid {
+        display: grid; grid-template-columns: 1.15fr 1fr 0.9fr; gap: 12px;
+        padding: 12px 16px 14px;
+      }
+      @media (max-width: 1180px) {
+        .cockpit-topbar { grid-template-columns: 1fr; }
+        .preflight-grid { grid-template-columns: 1fr; }
+        .cockpit-main { grid-template-columns: 1fr !important; }
+      }
+      .preflight-card {
+        background: var(--bg-panel); border: 1px solid var(--border-subtle);
+        border-radius: var(--radius); padding: 12px 14px; box-shadow: var(--shadow-panel);
+      }
+      .preflight-card h2 {
+        margin: 0 0 10px; font-size: 12px; color: var(--accent-cyan);
+        letter-spacing: 0.04em; text-transform: uppercase;
+      }
+
+      /* —— Main —— */
+      .cockpit-main {
+        flex: 1; min-height: 0;
+        display: grid; grid-template-columns: 31fr 41fr 28fr;
+        gap: 12px; padding: 12px 16px 14px;
+      }
+      .panel {
+        min-height: 0; display: flex; flex-direction: column;
+        background: var(--bg-panel); border: 1px solid var(--border-subtle);
+        border-radius: var(--radius); padding: 12px 14px; overflow: hidden;
+        box-shadow: var(--shadow-panel);
+      }
+      .panel-copilot {
+        border-color: rgba(34, 211, 238, 0.22);
+        background: linear-gradient(180deg, rgba(14, 28, 42, 0.92), rgba(12, 20, 36, 0.88));
+      }
+      .panel-head {
+        flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 6px 10px;
+        align-items: center; margin-bottom: 10px;
+      }
+      .panel-head h2 {
+        margin: 0; font-size: 13px; color: #ecfeff; letter-spacing: 0.02em;
+        display: flex; align-items: center; gap: 8px;
+      }
+      .panel-head h2::before {
+        content: ""; width: 7px; height: 7px; border-radius: 2px; background: var(--accent-cyan);
+        box-shadow: 0 0 10px rgba(34, 211, 238, 0.55);
+      }
+      .panel-body { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+      .panel-foot { flex: 0 0 auto; margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(51, 65, 85, 0.4); }
+
+      label { display: block; font-size: 11px; color: var(--muted); margin: 8px 0 4px; }
       select, input[type="text"] {
-        width: 100%; box-sizing: border-box; background: #0b1020; color: #fff;
-        border: 1px solid #31415f; border-radius: 8px; padding: 8px; font-size: 12px;
+        width: 100%; background: #070b16; color: #fff;
+        border: 1px solid #31415f; border-radius: 10px; padding: 8px 10px; font-size: 12px;
+        font-family: var(--font);
+      }
+      select:focus, input[type="text"]:focus {
+        outline: none; border-color: var(--border-focus);
+        box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.12);
       }
       .row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
       button {
-        border: 0; border-radius: 8px; padding: 9px 12px; font-weight: 700; cursor: pointer; font-size: 12px;
+        border: 0; border-radius: 10px; padding: 8px 12px; font-weight: 650; cursor: pointer;
+        font-size: 12px; font-family: var(--font); transition: transform 0.12s ease, filter 0.12s ease, background 0.12s;
       }
-      button.primary { background: #22c55e; color: #05210f; }
-      button.accent { background: #06b6d4; color: #042f2e; }
-      button.danger { background: #ef4444; color: #fff; }
-      button.ghost { background: #1e293b; color: #e2e8f0; border: 1px solid #334155; }
-      button:disabled { opacity: 0.45; cursor: not-allowed; }
-      .meter { height: 8px; background: #0b1020; border-radius: 99px; overflow: hidden; margin-top: 6px; }
+      button:hover:not(:disabled) { filter: brightness(1.06); }
+      button:active:not(:disabled) { transform: translateY(1px); }
+      button.primary { background: linear-gradient(180deg, #4ade80, var(--accent-emerald)); color: #05210f; }
+      button.accent { background: linear-gradient(180deg, #67e8f9, var(--accent-cyan)); color: #042f2e; }
+      button.danger { background: linear-gradient(180deg, #fb7185, #e11d48); color: #fff; }
+      button.ghost { background: #162033; color: #e2e8f0; border: 1px solid #334155; }
+      button:disabled { opacity: 0.42; cursor: not-allowed; filter: none; }
+      .meter { height: 8px; background: #070b16; border-radius: 99px; overflow: hidden; margin-top: 6px; }
       .meter > div { height: 100%; width: 0%; background: linear-gradient(90deg, #22c55e, #facc15, #ef4444); }
       .status { font-size: 12px; margin-bottom: 6px; }
       .ok { color: #4ade80; } .warn { color: #fbbf24; } .bad { color: #f87171; }
-      #log, #a2a, #transcript {
-        height: 150px; overflow: auto; background: #070b16; border-radius: 8px;
-        padding: 8px; font-size: 11px; line-height: 1.45; white-space: pre-wrap;
-      }
-      #todos { font-size: 12px; color: #c5d2ea; margin: 0; padding-left: 18px; }
-      .chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+      .chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 0; }
       .chip {
-        font-size: 10px; border: 1px solid #31415f; border-radius: 999px; padding: 3px 8px; color: #93a4c7;
+        font-size: 10px; border: 1px solid #31415f; border-radius: 999px; padding: 3px 8px; color: var(--muted);
+        background: rgba(15, 23, 42, 0.55);
       }
-      .chip.on { border-color: #22d3ee; color: #67e8f9; background: #083344; }
+      .chip.on { border-color: var(--accent-cyan); color: #67e8f9; background: #083344; }
       .chip.good { border-color: #4ade80; color: #86efac; }
       .chip.bad { border-color: #f87171; color: #fca5a5; }
-      ol.help { margin: 6px 0 0; padding-left: 18px; color: #c5d2ea; font-size: 12px; }
+      ol.help { margin: 6px 0 0; padding-left: 18px; color: #c5d2ea; font-size: 11px; }
       li { margin: 3px 0; }
-      .full { grid-column: 1 / -1; }
       .arch {
         font-family: ui-monospace, Consolas, monospace; font-size: 11px; line-height: 1.5;
         background: #070b16; border-radius: 8px; padding: 10px; color: #a5b4d4; white-space: pre;
@@ -54,195 +219,421 @@
       }
       .check { font-size: 12px; color: #c5d2ea; margin: 4px 0; }
       .check input { margin-right: 6px; }
-      .badge-virtual {
-        display: inline-block; font-size: 10px; color: #86efac; border: 1px solid #166534;
-        background: #052e16; border-radius: 4px; padding: 1px 6px; margin-left: 6px;
+      .badge-virtual, .badge-phys {
+        display: inline-block; font-size: 10px; border-radius: 4px; padding: 1px 6px; margin-left: 6px;
       }
-      .badge-phys {
-        display: inline-block; font-size: 10px; color: #fca5a5; border: 1px solid #7f1d1d;
-        background: #450a0a; border-radius: 4px; padding: 1px 6px; margin-left: 6px;
-      }
-      #routeHint { font-size: 11px; color: #93a4c7; margin-top: 8px; line-height: 1.4; }
-      .sr-meta { font-size: 11px; color: #93a4c7; margin: 0 0 8px; min-height: 1.2em; }
-      .sr-empty { margin: 0; color: #64748b; font-size: 12px; }
-      .sr-cards { display: grid; gap: 8px; }
-      .sr-card {
-        background: #070b16; border: 1px solid #31415f; border-radius: 10px; padding: 10px 12px;
-      }
-      .sr-card header {
-        font-size: 11px; color: #67e8f9; letter-spacing: 0.03em; margin-bottom: 6px; font-weight: 600;
-      }
-      .sr-card p {
-        margin: 0; font-size: 16px; line-height: 1.45; color: #f1f5f9; font-weight: 600;
-      }
-      .sr-actions { display: flex; gap: 6px; margin-top: 8px; }
-      .sr-actions button { padding: 6px 10px; font-size: 11px; }
-      .sr-facts { margin: 10px 0 0; padding-left: 18px; color: #94a3b8; font-size: 11px; }
-      .win-controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 8px; }
+      .badge-virtual { color: #86efac; border: 1px solid #166534; background: #052e16; }
+      .badge-phys { color: #fca5a5; border: 1px solid #7f1d1d; background: #450a0a; }
+      #routeHint { font-size: 11px; color: var(--muted); margin-top: 8px; line-height: 1.4; }
+      .win-controls { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
       .win-controls label { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; color: #c5d2ea; }
-      .win-controls input[type="range"] { width: 120px; }
+      .win-controls input[type="range"] { width: 88px; }
+      #preflightSummaryBadge {
+        font-size: 10px; color: var(--accent-amber); margin-left: 4px; font-weight: 600;
+      }
+      #togglePreflightBtn .chev { display: inline-block; transition: transform 0.2s; margin-left: 4px; }
+      #preflightDrawer:not(.collapsed) ~ * #togglePreflightBtn .chev,
+      body:not(.drawer-collapsed) #togglePreflightBtn .chev { transform: rotate(180deg); }
+      body.drawer-collapsed #togglePreflightBtn .chev { transform: rotate(0deg); }
+
+      #alertBanner {
+        flex: 0 0 auto; margin: 0; padding: 8px 16px;
+        border-bottom: 1px solid #f59e0b; background: #422006; color: #fde68a;
+        font-size: 12px; font-weight: 500;
+      }
+
+      /* Transcript */
+      #transcript {
+        flex: 1; min-height: 0; overflow-y: auto;
+        background: linear-gradient(180deg, #070b16, #080f1c);
+        border-radius: 12px; padding: 10px; font-size: 13px; line-height: 1.45;
+        border: 1px solid rgba(51, 65, 85, 0.35);
+      }
+      .transcript-wrap { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; }
+      #scrollBottomBtn {
+        display: none; position: absolute; right: 12px; bottom: 12px; z-index: 2;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+      }
+      .role-filter { display: flex; gap: 4px; margin-left: auto; }
+      .role-filter button { padding: 5px 9px; font-size: 11px; }
+      .role-filter button.active {
+        border-color: var(--border-focus); color: var(--accent-cyan); background: #083344;
+      }
+
+      .chat-row { margin: 0 0 12px; max-width: 96%; animation: fadeUp 0.18s ease; }
+      @keyframes fadeUp {
+        from { opacity: 0; transform: translateY(4px); }
+        to { opacity: 1; transform: none; }
+      }
+      .chat-row header {
+        font-size: 10px; color: var(--muted); margin-bottom: 4px;
+        display: flex; gap: 8px; align-items: center; justify-content: space-between;
+      }
+      .chat-bubble {
+        position: relative; border-radius: 12px; padding: 9px 12px; font-size: 13px; line-height: 1.5;
+      }
+      .chat-others { margin-right: auto; }
+      .chat-others .chat-bubble {
+        background: #0f172a; border: 1px solid rgba(34, 211, 238, 0.18); border-left: 3px solid var(--accent-cyan);
+      }
+      .chat-me { margin-left: auto; }
+      .chat-me header { flex-direction: row-reverse; }
+      .chat-me .chat-bubble {
+        background: #064e3b; border: 1px solid rgba(52, 211, 153, 0.25);
+        border-right: 3px solid var(--accent-emerald); display: inline-block; text-align: left;
+      }
+      .chat-host .chat-bubble {
+        background: linear-gradient(180deg, #24180a, #1a1208);
+        border: 1px solid rgba(251, 191, 36, 0.4);
+      }
+      .chat-partial .chat-bubble {
+        border: 1px dashed #475569; color: #94a3b8; background: transparent;
+      }
+      .chat-partial .cursor-blink::after {
+        content: "▋"; animation: blink 1s step-end infinite; color: var(--accent-cyan);
+      }
+      @keyframes blink { 50% { opacity: 0; } }
+      .chat-actions {
+        display: none; position: absolute; top: 6px; right: 6px; gap: 4px;
+      }
+      .chat-others:hover .chat-actions { display: flex; }
+      .chat-actions button { padding: 3px 7px; font-size: 10px; font-weight: 600; }
+
+      /* Smart replies */
+      .sr-meta {
+        font-size: 11px; color: var(--muted); margin: 0 0 8px; min-height: 1.2em;
+        display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+      }
+      .sr-empty-state {
+        display: flex; flex-direction: column; align-items: flex-start; gap: 12px;
+        padding: 18px 16px; border-radius: 12px;
+        border: 1px dashed #334155; background: rgba(7, 11, 22, 0.55);
+      }
+      .sr-empty-state h3 { margin: 0; font-size: 14px; color: #e2e8f0; }
+      .sr-empty-state p { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
+      .sr-empty { margin: 0; color: #64748b; font-size: 12px; }
+      .sr-cards { display: grid; gap: 10px; }
+      .sr-card {
+        background: var(--bg-card); border: 1px solid #31415f; border-radius: 12px;
+        padding: 12px 14px; cursor: pointer;
+        transition: transform 0.12s ease, box-shadow 0.2s, border-color 0.2s;
+      }
+      .sr-card:hover { transform: translateY(-1px); border-color: #475569; }
+      .sr-card.flash { box-shadow: 0 0 0 2px var(--accent-cyan); }
+      .sr-card-forward { border-left: 4px solid var(--accent-emerald); background: linear-gradient(90deg, rgba(16,185,129,0.08), transparent 42%); }
+      .sr-card-back { border-left: 4px solid var(--accent-amber); background: linear-gradient(90deg, rgba(251,191,36,0.07), transparent 42%); }
+      .sr-card-danger {
+        border-left: 4px solid var(--accent-rose);
+        background: linear-gradient(90deg, rgba(251,113,133,0.1), transparent 42%);
+        animation: dangerPulse 2s ease-in-out infinite;
+      }
+      @keyframes dangerPulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0); }
+        50% { box-shadow: 0 0 0 2px rgba(244, 63, 94, 0.28); }
+      }
+      .sr-card-counter { border-left: 4px solid var(--accent-sky); background: linear-gradient(90deg, rgba(56,189,248,0.08), transparent 42%); }
+      .sr-card header {
+        font-size: 11px; letter-spacing: 0.03em; margin-bottom: 6px; font-weight: 650;
+        display: flex; justify-content: space-between; align-items: center; gap: 8px;
+      }
+      .sr-kbd {
+        font-size: 10px; border: 1px solid #334155; border-radius: 5px; padding: 1px 5px;
+        color: #94a3b8; background: #0f172a; font-weight: 600;
+      }
+      .sr-card-forward header { color: #6ee7b7; }
+      .sr-card-back header { color: #fcd34d; }
+      .sr-card-danger header { color: #fda4af; }
+      .sr-card-counter header { color: #7dd3fc; }
+      .sr-card p { margin: 0; font-size: 15px; line-height: 1.45; color: #f8fafc; font-weight: 600; }
+      .sr-actions { display: flex; gap: 6px; margin-top: 10px; }
+      .sr-actions button { padding: 6px 10px; font-size: 11px; }
+      .sr-facts { margin: 12px 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
+      .sr-fact-pill {
+        font-size: 11px; border-radius: 999px; padding: 5px 10px; max-width: 100%;
+        border: 1px solid #334155; color: #cbd5e1; background: #0f172a; line-height: 1.35;
+      }
+      .sr-fact-pill.danger { border-color: var(--accent-rose); color: #fecdd3; background: #4c0519; }
+      .sr-fact-pill.ok { border-color: var(--accent-emerald); color: #a7f3d0; background: #052e16; }
+      .sr-fact-pill.screen { border-color: #a78bfa; color: #ddd6fe; background: #2e1065; }
+      .sr-badge {
+        font-size: 10px; border-radius: 999px; padding: 2px 8px; border: 1px solid #334155; color: var(--muted);
+        background: rgba(15, 23, 42, 0.7);
+      }
+      .sr-badge.hot { border-color: var(--accent-emerald); color: #6ee7b7; }
+      .sr-badge.warn { border-color: var(--accent-amber); color: #fcd34d; }
+      .sr-badge.ok { border-color: var(--accent-cyan); color: #67e8f9; }
+      .sr-deep { margin-top: 8px; border-left: 4px solid #a78bfa; cursor: default; }
+      .sr-speakable { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.25); }
+      .sr-internal { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: rgba(127,29,29,0.25); border: 1px solid rgba(248,113,113,0.35); }
+      .sr-internal-label { font-size: 11px; color: #fda4af; margin-bottom: 4px; font-weight: 600; }
+      .sr-internal ul { margin: 0; padding-left: 16px; color: #fecaca; font-size: 12px; }
+
+      #smartReplies { flex: 1; min-height: 0; overflow-y: auto; }
+      #a2a, #log {
+        flex: 1; min-height: 0; overflow: auto; background: #070b16; border-radius: 10px;
+        padding: 8px; font-size: 11px; line-height: 1.45; white-space: pre-wrap;
+        border: 1px solid rgba(51, 65, 85, 0.35);
+      }
+      #todos { font-size: 12px; color: #c5d2ea; margin: 0; padding-left: 18px; overflow: auto; }
+      #mermaidBox {
+        flex: 1; min-height: 80px; overflow: auto; background: #070b16; border-radius: 10px;
+        padding: 8px; font-size: 11px; white-space: pre-wrap; display: none;
+        border: 1px solid rgba(51, 65, 85, 0.35);
+      }
+      #catchMeUpBox { flex: 1; min-height: 0; overflow: auto; margin: 0 0 8px; font-size: 12px; line-height: 1.4; }
+      .recap-board { display: grid; gap: 8px; }
+      .recap-card {
+        background: var(--bg-card); border-radius: 12px; padding: 10px 12px;
+        border: 1px solid #31415f;
+      }
+      .recap-card.topic { border-left: 4px solid var(--accent-cyan); }
+      .recap-card.disagree { border-left: 4px solid var(--accent-rose); }
+      .recap-card.decide { border-left: 4px solid var(--accent-amber); }
+      .recap-card.wiki { border-left: 4px solid var(--accent-emerald); }
+      .recap-card.speakers { border-left: 4px solid #94a3b8; }
+      .recap-card h3 { margin: 0 0 4px; font-size: 11px; color: var(--muted); font-weight: 650; }
+      .recap-card .recap-body { font-size: 13px; color: #f1f5f9; font-weight: 650; }
+      .recap-card ul { margin: 4px 0 0; padding-left: 16px; color: #cbd5e1; font-weight: 400; font-size: 12px; }
+      .recap-empty { color: #6ee7b7; font-size: 12px; font-weight: 500; }
+      #jotList {
+        margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px;
+        max-height: 130px; overflow: auto;
+      }
+      #jotList li {
+        margin: 0; padding: 7px 10px; border-radius: 10px; background: #0f172a;
+        border: 1px solid #243247; color: #cbd5e1; font-size: 12px;
+      }
+      #jotList li span { opacity: 0.55; font-size: 10px; margin-left: 6px; }
+
+      .aid-tabs {
+        display: flex; gap: 4px; margin-bottom: 10px; flex-wrap: wrap;
+        padding: 3px; background: rgba(7, 11, 22, 0.65); border-radius: 12px;
+        border: 1px solid rgba(51, 65, 85, 0.4);
+      }
+      .aid-tabs button {
+        padding: 7px 11px; font-size: 11px; background: transparent; color: var(--muted);
+        border: 0; border-radius: 9px; flex: 1; min-width: 88px;
+      }
+      .aid-tabs button.active {
+        color: #ecfeff; background: #0e7490; box-shadow: 0 2px 8px rgba(8, 145, 178, 0.35);
+      }
+      .tab-pane { display: none; flex: 1; min-height: 0; flex-direction: column; overflow: hidden; }
+      .tab-pane.active { display: flex; }
+      .aid-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+      .jot-row { display: flex; gap: 6px; margin: 0 0 8px; }
+      .hint-muted { font-size: 11px; color: #64748b; }
     </style>
   </head>
   <body>
-    <header>
-      <h1>ECE-Brain AI 专家 · 虚拟音频网桥</h1>
-      <p class="sub">
-        <strong>无外接线</strong>：电脑内部用「虚拟音频输出 + 虚拟麦克风」对接腾讯会议。
-        主持人用真麦真箱；AI 账号只用虚拟设备；本 EXE 做 Ark + 策略控场（不闲聊复读）。
-      </p>
-    </header>
-    <main>
-      <section class="full">
-        <h2>内部虚拟环路（替代硬件 TX）</h2>
-        <div class="arch" id="archBox">加载中…</div>
-      </section>
-
-      <section>
-        <h2>虚拟设备绑定</h2>
-        <div id="keyStatus" class="status warn">检查密钥…</div>
-        <div class="chips">
-          <span id="chipArk" class="chip">Ark 控场</span>
-          <span id="chipSpeech" class="chip">语音 ASR/TTS</span>
-          <span id="chipVirtual" class="chip">虚拟设备</span>
-          <span id="chipListen" class="chip">听会</span>
-          <span id="chipMeetingAudio" class="chip">会场声</span>
-          <span id="chipPatrol" class="chip">自动巡检</span>
-          <span id="chipAgentMode" class="chip">人—人旁听</span>
-          <span id="chipMeetingLife" class="chip">未开会</span>
-          <span id="chipThinking" class="chip">思考中</span>
-          <span id="chipReconnect" class="chip">Duplex</span>
+    <div class="app-shell">
+      <header class="cockpit-topbar">
+        <div class="brand-block">
+          <span class="live-dot" title="听会状态"></span>
+          <div>
+            <div class="topbar-brand">大智 <span>· 会议顾问</span></div>
+            <div class="chip-row" style="margin-top:6px">
+              <span id="chipListen" class="chip">听会</span>
+              <span id="chipMeetingLife" class="chip">未开会</span>
+              <span id="chipAgentMode" class="chip">人—人旁听</span>
+              <span id="chipThinking" class="chip">思考中</span>
+              <span id="chipMeetingAudio" class="chip">会场声</span>
+              <details class="chips-more">
+                <summary>更多状态</summary>
+                <div class="chips">
+                  <span id="chipArk" class="chip">Ark 控场</span>
+                  <span id="chipSpeech" class="chip">语音 ASR/TTS</span>
+                  <span id="chipVirtual" class="chip">虚拟设备</span>
+                  <span id="chipPatrol" class="chip">自动巡检</span>
+                  <span id="chipReconnect" class="chip">Duplex</span>
+                </div>
+              </details>
+            </div>
+          </div>
+          <div class="mini-meters">
+            <div class="mini-meter-wrap">OT<div class="meter"><div id="level"></div></div></div>
+            <div class="mini-meter-wrap">ME<div class="meter"><div id="meLevel"></div></div></div>
+          </div>
         </div>
-        <div id="alertBanner" class="status warn" style="display:none;margin:8px 0;padding:8px;border:1px solid #f59e0b;border-radius:8px;background:#422006;color:#fde68a"></div>
-        <label class="check"><input id="virtualOnly" type="checkbox" checked /> 列表只显示虚拟设备（推荐）</label>
-        <label class="check"><input id="allowPhysical" type="checkbox" /> 允许绑定物理设备（调试用，正式开会请勿勾选）</label>
 
-        <label>① Others 会场环路采集
-          <span class="badge-virtual">CABLE Output / 系统内录</span>
-        </label>
-        <select id="othersSource">
-          <option value="cable" selected>VB-Cable / 虚拟环路（推荐）</option>
-          <option value="display">系统内录 displayMedia（实验）</option>
-        </select>
-        <select id="inputDevice"></select>
-
-        <label class="check"><input id="dualTrackMe" type="checkbox" checked /> 启用双通道 Me（本机麦，与会场分离）</label>
-        <label>①b Me 本机麦
-          <span class="badge-phys">可用物理麦</span>
-        </label>
-        <select id="meDevice"></select>
-        <label>Me 电平</label>
-        <div class="meter"><div id="meLevel"></div></div>
-
-        <label>② EXE 播放 → 虚拟麦克风另一端（AI 声进会）
-          <span class="badge-virtual">应对 CABLE-B Input / SysVAD Render</span>
-        </label>
-        <select id="outputDevice"></select>
-
-        <div id="routeHint"></div>
-        <label class="check"><input id="localMonitor" type="checkbox" checked /> 本机同时听测试音/Host（调试用；正式开会可关）</label>
-        <label class="check"><input id="showCapsule" type="checkbox" checked /> 显示悬浮胶囊（建议卡扫视）</label>
-        <label>Others 输入电平</label>
-        <div class="meter"><div id="level"></div></div>
-        <div class="row">
-          <button id="refresh" class="ghost" type="button">刷新设备</button>
-          <button id="beep" class="ghost" type="button">测虚拟麦（测试音）</button>
-          <button id="selfTest" class="accent" type="button">一键自检环路</button>
-          <button id="loop" class="ghost" type="button">测环路</button>
-          <button id="loopStop" class="danger" type="button" disabled>停环路</button>
+        <div class="topbar-mid">
+          <div class="agenda-shell">
+            <label class="agenda-lab" for="agenda">议程</label>
+            <input id="agenda" type="text" value="全园美语系统教研会：四端联动、校园经营与家园共育" />
+          </div>
         </div>
-      </section>
 
-      <section>
-        <h2>腾讯会议双账号核对</h2>
-        <p class="check">主持人账号：物理麦克风 + 物理音箱（真人开会）</p>
-        <label class="check"><input id="chkHost" type="checkbox" /> 主持人已用真麦真箱</label>
-        <label class="check"><input id="chkAiSpk" type="checkbox" /> AI 账号扬声器 = 虚拟音频输出（如 CABLE-A Input）</label>
-        <label class="check"><input id="chkAiMic" type="checkbox" /> AI 账号麦克风 = 虚拟麦克风（如 CABLE-B Output）</label>
-        <p id="meetingGate" class="status warn" style="margin-top:10px">勾选以上三项并绑定虚拟设备后，才能启动控场。</p>
+        <div class="topbar-right">
+          <div class="btn-cluster">
+            <button id="start" class="primary" type="button">▶ 启动听会</button>
+            <button id="stop" class="danger" type="button" disabled>■ 停止</button>
+            <button id="patrol" class="accent" type="button" disabled>⚡ 巡检</button>
+          </div>
+          <div class="tool-cluster">
+            <label class="check" style="margin:0"><input id="showCapsule" type="checkbox" checked /> 胶囊</label>
+            <label><input id="winAlwaysOnTop" type="checkbox" /> 置顶</label>
+            <label title="Wave L 接入原生防录屏"><input id="winStealthProtect" type="checkbox" checked /> 防录屏</label>
+            <label>透明度 <input id="winOpacity" type="range" min="55" max="100" value="100" /></label>
+          </div>
+          <button type="button" id="togglePreflightBtn" class="ghost">
+            设备与核对 <span id="preflightSummaryBadge">待核对</span><span class="chev">▴</span>
+          </button>
+        </div>
+      </header>
 
-        <h2>控场运行 · 大智</h2>
-        <div id="status" class="status warn">待命</div>
-        <label>当前议程 / 会议主题</label>
-        <input id="agenda" type="text" value="全园美语系统教研会：四端联动、校园经营与家园共育" />
-        <p id="kbStatus" class="status warn" style="margin:6px 0;font-size:11px">知识库加载中…</p>
-        <label class="check"><input id="autoPatrol" type="checkbox" checked /> 自动运行（人—人旁听纠偏 / 呼叫大智咨询或探讨）</label>
-        <div class="row">
-          <button id="start" class="primary" type="button">启动听会 + 大智顾问</button>
-          <button id="stop" class="danger" type="button" disabled>停止</button>
-        </div>
-        <div class="row">
-          <button id="patrol" class="accent" type="button" disabled>立即巡检</button>
-          <button id="forceSpeak" class="ghost" type="button" disabled>试播 Host 话术</button>
-          <button id="btnSessions" class="ghost" type="button">打开本场记录</button>
-        </div>
-        <label>手动 Host 话术（可选）</label>
-        <input id="manualText" type="text" placeholder="例如：请停止采购话题，回到硬件立项" />
-      </section>
+      <div class="shortcut-strip" aria-hidden="true">
+        <span class="shortcut-item"><kbd>Alt</kbd>+<kbd>Z</kbd> 出建议卡</span>
+        <span class="shortcut-item"><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> Auto/Manual</span>
+        <span class="shortcut-item"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 复制口径</span>
+        <span class="shortcut-item"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>H</kbd> 显隐窗口</span>
+        <span class="shortcut-item hint-muted">点击建议卡正文也可复制</span>
+      </div>
 
-      <section>
-        <h2>会场转写 <span style="font-weight:400;font-size:11px;color:#64748b">会场=Others · 大智=Host</span></h2>
-        <p id="asrStats" class="status warn" style="margin:0 0 6px;font-size:11px">启动听会后，此处显示实时转写（含中间结果）</p>
-        <p id="duplexStats" class="status warn" style="margin:0 0 6px;font-size:11px">听写：IDLE</p>
-        <div id="transcript"></div>
-      </section>
+      <div id="alertBanner" class="status warn" style="display:none"></div>
 
-      <section>
-        <h2>副驾驶建议卡 <span style="font-weight:400;font-size:11px;color:#64748b">扫视 · 不自动口播</span></h2>
-        <div class="win-controls">
-          <label><input id="winAlwaysOnTop" type="checkbox" /> 窗口置顶</label>
-          <label>透明度 <input id="winOpacity" type="range" min="55" max="100" value="100" /></label>
-          <span style="font-size:11px;color:#64748b">Ctrl+Shift+H 一键隐藏/显示</span>
-        </div>
-        <div class="win-controls" style="margin-bottom:6px">
-          <button type="button" id="copilotModeBtn" class="ghost">模式: auto</button>
-          <button type="button" id="copilotPushAskBtn" class="ghost">Push-to-Ask (Alt+Z)</button>
-          <span style="font-size:11px;color:#64748b">Alt+Shift+Z 切换 Auto/Manual</span>
-        </div>
-        <p id="smartRepliesMeta" class="sr-meta"></p>
-        <div id="smartReplies"><p class="sr-empty">巡检触发后，此处显示 Option A/B/C 建议口径</p></div>
-      </section>
+      <div id="preflightDrawer">
+        <div class="preflight-grid">
+          <section class="preflight-card">
+            <h2>虚拟设备绑定</h2>
+            <div id="keyStatus" class="status warn">检查密钥…</div>
+            <p id="kbStatus" class="status warn" style="margin:6px 0;font-size:11px">知识库加载中…</p>
+            <div id="status" class="status warn">待命</div>
+            <label class="check"><input id="virtualOnly" type="checkbox" checked /> 列表只显示虚拟设备（推荐）</label>
+            <label class="check"><input id="allowPhysical" type="checkbox" /> 允许绑定物理设备（调试用）</label>
+            <label>① Others 会场环路采集 <span class="badge-virtual">CABLE Output / 系统内录</span></label>
+            <select id="othersSource">
+              <option value="cable" selected>VB-Cable / 虚拟环路（推荐）</option>
+              <option value="display">系统内录 displayMedia（实验）</option>
+            </select>
+            <select id="inputDevice"></select>
+            <label class="check"><input id="dualTrackMe" type="checkbox" checked /> 启用双通道 Me（本机麦）</label>
+            <label>①b Me 本机麦 <span class="badge-phys">可用物理麦</span></label>
+            <select id="meDevice"></select>
+            <label>② EXE 播放 → 虚拟麦克风 <span class="badge-virtual">CABLE-B Input</span></label>
+            <select id="outputDevice"></select>
+            <div id="routeHint"></div>
+            <label class="check"><input id="localMonitor" type="checkbox" checked /> 本机同时听测试音/Host</label>
+            <div class="row">
+              <button id="refresh" class="ghost" type="button">刷新设备</button>
+              <button id="beep" class="ghost" type="button">测虚拟麦</button>
+              <button id="selfTest" class="accent" type="button">一键自检</button>
+              <button id="loop" class="ghost" type="button">测环路</button>
+              <button id="loopStop" class="danger" type="button" disabled>停环路</button>
+            </div>
+          </section>
 
-      <section>
-        <h2>会中参谋 <span style="font-weight:400;font-size:11px;color:#64748b">Catch Me Up · Quick Jot · 截屏</span></h2>
-        <div class="win-controls" style="margin-bottom:6px;flex-wrap:wrap;gap:6px">
-          <button type="button" id="catchMeUpBtn" class="ghost">Catch Me Up（近5分钟）</button>
-          <button type="button" id="screenCtxBtn" class="ghost">截取屏幕上下文</button>
-          <button type="button" id="expandJotsBtn" class="ghost">扩写速记草稿</button>
-        </div>
-        <div class="row" style="gap:6px;margin-bottom:6px">
-          <input id="quickJotInput" type="text" placeholder="Quick Jot：网关超时 -> 改异步队列" style="flex:1;min-width:160px" />
-          <button type="button" id="quickJotBtn" class="ghost">记下</button>
-        </div>
-        <pre id="catchMeUpBox" class="sr-meta" style="white-space:pre-wrap;max-height:160px;overflow:auto;margin:0 0 6px"></pre>
-        <pre id="mermaidBox" class="sr-meta" style="white-space:pre-wrap;max-height:120px;overflow:auto;margin:0;display:none"></pre>
-        <ul id="jotList" class="sr-facts" style="margin:6px 0 0"></ul>
-      </section>
+          <section class="preflight-card">
+            <h2>腾讯会议双账号核对</h2>
+            <p class="check">主持人：物理麦克风 + 物理音箱</p>
+            <label class="check"><input id="chkHost" type="checkbox" /> 主持人已用真麦真箱</label>
+            <label class="check"><input id="chkAiSpk" type="checkbox" /> AI 扬声器 = 虚拟音频输出</label>
+            <label class="check"><input id="chkAiMic" type="checkbox" /> AI 麦克风 = 虚拟麦克风</label>
+            <p id="meetingGate" class="status warn" style="margin-top:10px">勾选以上三项并绑定虚拟设备后，才能启动控场。</p>
+            <label class="check"><input id="autoPatrol" type="checkbox" checked /> 自动运行（旁听纠偏 / 呼叫大智）</label>
+            <div class="row">
+              <button id="btnSessions" class="ghost" type="button">打开本场记录</button>
+            </div>
+          </section>
 
-      <section>
-        <h2>Agent 工作台 <span style="font-weight:400;font-size:12px;color:#64748b">（检索 / 作答步骤 · 原 A2A）</span></h2>
-        <div id="a2a"></div>
-        <ol id="todos"></ol>
-      </section>
-
-      <section class="full">
-        <h2>说明 · 调试日志</h2>
-        <ol class="help">
-          <li>角色：大智。默认人—人旁听并轻量纠偏；呼叫「大智」进入咨询或探讨；「谢谢大智」停止口播；「大智总结一下」出纪要并抛下一题。</li>
-          <li>口令：大智你好 / 大智咨询 / 大智探讨 / 停止大智 / 要总结 / 暂停记录。</li>
-          <li>等待感：Chat 慢时会先短播「嗯，我想一下」，流式首句可提前开口；忙时下一问会排队。</li>
-          <li>知识库：desktop/knowledge/quan-yuan-meiyu.txt + faq-meeting.txt；本场记录在 knowledge/sessions/。</li>
-          <li>安装 VB-Cable。听会：AI 扬声器=CABLE Input；出声：AI 麦开麦=CABLE Output。正式开会建议关「本机同时听」以减回灌。</li>
-          <li>听会中勿点测麦/自检。日志看界面或 desktop/logs。</li>
-        </ol>
-        <div class="row" style="margin-top:8px">
-          <button id="btnCopyLog" class="ghost" type="button">复制日志</button>
-          <button id="btnClearLog" class="ghost" type="button">清空界面日志</button>
-          <button id="btnOpenLogDir" class="ghost" type="button">打开日志目录</button>
+          <section class="preflight-card">
+            <h2>环路拓扑 · 说明</h2>
+            <details>
+              <summary style="cursor:pointer;font-size:12px;color:var(--muted)">虚拟环路示意</summary>
+              <div class="arch" id="archBox">加载中…</div>
+            </details>
+            <ol class="help">
+              <li>副驾驶旁路不改 decideSpeak；会中优先看中间建议卡与右侧速览。</li>
+              <li>建议卡按 1/2/3 或点击正文复制；Catch Me Up 出结构化速览。</li>
+              <li>知识库：faq-meeting + knowledge_wiki；正式开会建议关「本机同时听」。</li>
+            </ol>
+          </section>
         </div>
-        <div id="logPath" style="font-size:11px;color:#64748b;margin-top:6px"></div>
-        <div id="log" style="margin-top:8px;height:220px;overflow:auto;background:#070b16;border-radius:8px;padding:8px;font-size:11px;line-height:1.4;font-family:ui-monospace,Consolas,monospace"></div>
-      </section>
-    </main>
+      </div>
+
+      <main class="cockpit-main">
+        <section class="panel panel-transcript">
+          <div class="panel-head">
+            <h2>会场转写</h2>
+            <p id="asrStats" class="status warn" style="margin:0;font-size:11px">启动听会后显示实时转写</p>
+            <p id="duplexStats" class="status warn" style="margin:0;font-size:11px">听写：IDLE</p>
+            <div class="role-filter">
+              <button type="button" class="ghost active" data-role-filter="all">全部</button>
+              <button type="button" class="ghost" data-role-filter="others">会场</button>
+              <button type="button" class="ghost" data-role-filter="host">大智</button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="transcript-wrap">
+              <div id="transcript"></div>
+              <button type="button" id="scrollBottomBtn" class="accent">↓ 最新发言</button>
+            </div>
+          </div>
+          <div class="panel-foot">
+            <div class="row" style="margin:0">
+              <input id="manualText" type="text" placeholder="手动 Host 话术，回车可试播…" style="flex:1;min-width:100px" />
+              <button id="forceSpeak" class="ghost" type="button" disabled>试播 Host</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel panel-copilot">
+          <div class="panel-head">
+            <h2>副驾驶建议</h2>
+            <button type="button" id="copilotModeBtn" class="ghost">模式: auto</button>
+            <button type="button" id="copilotPushAskBtn" class="accent">⚡ Push-to-Ask</button>
+            <span class="hint-muted">点卡片或按 1/2/3 复制</span>
+          </div>
+          <p id="smartRepliesMeta" class="sr-meta"></p>
+          <div class="panel-body">
+            <div id="smartReplies">
+              <div class="sr-empty-state">
+                <h3>等待会场触发建议</h3>
+                <p>听会后巡检会自动出卡；也可随时按 Alt+Z / 点上方按钮强制生成 Option A/B/C。</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel panel-aid-tabs">
+          <div class="aid-tabs" role="tablist">
+            <button type="button" class="active" data-aid-tab="aid">参谋 &amp; 速记</button>
+            <button type="button" data-aid-tab="arch">架构 &amp; 待办</button>
+            <button type="button" data-aid-tab="log">调试日志</button>
+          </div>
+
+          <div class="tab-pane active" data-aid-pane="aid">
+            <div class="aid-actions">
+              <button type="button" id="catchMeUpBtn" class="accent">📋 近5分钟速览</button>
+              <button type="button" id="screenCtxBtn" class="ghost">📸 截屏</button>
+              <button type="button" id="expandJotsBtn" class="ghost">✨ 扩写纪要</button>
+            </div>
+            <div class="jot-row">
+              <input id="quickJotInput" type="text" placeholder="速记回车即可…" style="flex:1;min-width:80px" />
+              <button type="button" id="quickJotBtn" class="ghost">记下</button>
+            </div>
+            <div id="catchMeUpBox" class="sr-meta"></div>
+            <ul id="jotList"></ul>
+          </div>
+
+          <div class="tab-pane" data-aid-pane="arch">
+            <div id="mermaidBox"></div>
+            <h2 style="font-size:12px;margin:8px 0 4px;color:var(--muted)">Agent 步骤</h2>
+            <div id="a2a" style="max-height:140px"></div>
+            <h2 style="font-size:12px;margin:8px 0 4px;color:var(--muted)">待办</h2>
+            <ol id="todos"></ol>
+          </div>
+
+          <div class="tab-pane" data-aid-pane="log">
+            <div class="row" style="margin:0 0 6px">
+              <button id="btnCopyLog" class="ghost" type="button">复制日志</button>
+              <button id="btnClearLog" class="ghost" type="button">清空</button>
+              <button id="btnOpenLogDir" class="ghost" type="button">打开目录</button>
+            </div>
+            <div id="logPath" style="font-size:11px;color:#64748b;margin-bottom:4px"></div>
+            <div id="log"></div>
+          </div>
+        </section>
+      </main>
+    </div>
     <script type="module" src="app.js"></script>
   </body>
 </html>

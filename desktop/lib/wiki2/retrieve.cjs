@@ -45,13 +45,25 @@ function retrieveWiki2(query, opts = {}) {
       if (blob.includes(t)) score += 1.5;
     }
     if (String(p.snapshot || "").includes(q.slice(0, 8))) score += 0.8;
+    // draft 主题页降权，优先 active 决策/实体
+    if (String(p.status || "").toLowerCase() === "draft") score *= 0.7;
     return { page: p, score };
   });
 
   scored.sort((a, b) => b.score - a.score);
   const topK = Number(opts.topK) || 3;
   let top = scored.filter((s) => s.score > 0).slice(0, topK);
-  if (!top.length) top = scored.slice(0, Math.min(1, scored.length)).filter((s) => s.page);
+  // 无正分命中：严禁兜底返回第一篇无关研发页
+  if (!top.length) {
+    return {
+      hits: [],
+      evidence: [],
+      preview: "",
+      ms: Date.now() - t0,
+      mode: "wiki2-empty",
+      page_count: pages.length
+    };
+  }
 
   // 1-hop 扩展：从命中页的 links / backlinks 拉 Snapshot
   const expand = opts.expandHops !== 0;

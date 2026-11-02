@@ -70,6 +70,39 @@ try {
 let win = null;
 /** 扫视悬浮胶囊（阶段二） */
 let capsuleWin = null;
+let capsuleCollapsed = false;
+let stealthProtectOn = process.env.STEALTH_PROTECT !== "0";
+
+function applyContentProtection(targetWin, on = stealthProtectOn) {
+  if (!targetWin || targetWin.isDestroyed()) return;
+  try {
+    targetWin.setContentProtection(Boolean(on));
+  } catch (err) {
+    debugLog.warn("Window", "setContentProtection 失败", { error: String(err?.message || err) });
+  }
+}
+
+function setCapsuleCollapsed(collapsed) {
+  capsuleCollapsed = Boolean(collapsed);
+  if (!capsuleWin || capsuleWin.isDestroyed()) {
+    return { ok: false, error: "no_capsule", collapsed: capsuleCollapsed };
+  }
+  try {
+    if (capsuleCollapsed) {
+      capsuleWin.setContentSize(420, 56);
+    } else {
+      capsuleWin.setContentSize(440, 420);
+    }
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err), collapsed: capsuleCollapsed };
+  }
+  broadcastBridgeEvent({
+    type: "capsule-collapsed",
+    collapsed: capsuleCollapsed,
+    ts: Date.now()
+  });
+  return { ok: true, collapsed: capsuleCollapsed };
+}
 let listen = null;
 let lastHostSpeakAt = 0;
 let lastHostSpeakText = "";
@@ -151,14 +184,18 @@ function createWindow() {
     }
   });
   win.loadFile(path.join(__dirname, "renderer", "index.html"));
-  debugLog.info("App", "窗口已创建", { logFile: debugLog.getFilePath() });
+  applyContentProtection(win, stealthProtectOn);
+  debugLog.info("App", "窗口已创建", {
+    logFile: debugLog.getFilePath(),
+    stealthProtect: stealthProtectOn
+  });
 }
 
 function createCapsuleWindow() {
   if (capsuleWin && !capsuleWin.isDestroyed()) return capsuleWin;
   capsuleWin = new BrowserWindow({
     width: 420,
-    height: 360,
+    height: capsuleCollapsed ? 56 : 420,
     x: 48,
     y: 72,
     frame: false,
@@ -178,12 +215,13 @@ function createCapsuleWindow() {
   });
   capsuleWin.setAlwaysOnTop(true, "screen-saver");
   capsuleWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  applyContentProtection(capsuleWin, stealthProtectOn);
   capsuleWin.loadFile(path.join(__dirname, "renderer", "capsule.html"));
   capsuleWin.on("closed", () => {
     capsuleWin = null;
     if (listen) listen.extraWins = [];
   });
-  debugLog.info("App", "悬浮胶囊已创建");
+  debugLog.info("App", "悬浮胶囊已创建", { stealthProtect: stealthProtectOn });
   return capsuleWin;
 }
 
@@ -239,6 +277,21 @@ function registerWindowChromeIpc() {
     const visible = capsuleWin && !capsuleWin.isDestroyed() && capsuleWin.isVisible();
     return setCapsuleVisible(!visible);
   });
+  ipcMain.handle("capsule:setCollapsed", async (_e, collapsed) => setCapsuleCollapsed(collapsed));
+  ipcMain.handle("capsule:getCollapsed", async () => ({
+    ok: true,
+    collapsed: capsuleCollapsed
+  }));
+  ipcMain.handle("window:setStealthProtect", async (_e, on) => {
+    stealthProtectOn = Boolean(on);
+    applyContentProtection(win, stealthProtectOn);
+    applyContentProtection(capsuleWin, stealthProtectOn);
+    return { ok: true, on: stealthProtectOn };
+  });
+  ipcMain.handle("window:getStealthProtect", async () => ({
+    ok: true,
+    on: stealthProtectOn
+  }));
 }
 
 function registerGlobalShortcuts() {
@@ -632,7 +685,19 @@ app.whenReady().then(() => {
   ipcMain.handle("strategy:evaluate", createStrategyEvaluate(rt));
 
   ipcMain.handle("host:speak", async (_e, text) => {
-    debugLog.info("HostSpeak", "手动试播", { text: String(text || "").slice(0, 120) });
+    let clean = String(text || "");
+    try {
+      const { sanitizeSpeakText } = require("./lib/copilot/sanitizeSpeakText.cjs");
+      clean = sanitizeSpeakText(clean);
+    } catch (_) {}
+    debugLog.info("HostSpeak", "手动试播", {
+      text: clean.slice(0, 120),
+      rawLen: String(text || "").length,
+      cleanLen: clean.length
+    });
+    if (!clean) {
+      return { ok: false, error: "可播文本为空（内部备注已剥离）" };
+    }
     if (!listen) {
       debugLog.warn("HostSpeak", "未启动听会通道 — 测虚拟麦不走此路径；试播 Host 需要先启动听会");
       return { ok: false, error: "未启动听会通道（测虚拟麦用本地蜂鸣；Host 话术需先启动听会）" };
@@ -643,10 +708,10 @@ app.whenReady().then(() => {
       });
       return { ok: false, error: "听会通道已断线，正在自动重连，请稍后再试" };
     }
-    const speakRes = listen.speakText(String(text || ""), { force: true });
+    const speakRes = listen.speakText(clean, { force: true });
     if (speakRes?.ok) {
       lastHostSpeakAt = Date.now();
-      lastHostSpeakText = String(text || "");
+      lastHostSpeakText = clean;
     }
     return { ok: true, ...speakRes };
   });

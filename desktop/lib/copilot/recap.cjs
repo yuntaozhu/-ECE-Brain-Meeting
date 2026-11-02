@@ -1,16 +1,15 @@
 /**
  * Catch Me Up：近 N 分钟转写启发式速览（旁路，不改 decideSpeak）。
+ * 模式来自 knowledge/schema/copilot-gate.json，禁止在本文件硬编码业务正则。
  */
+const { schemaStore } = require("../knowledge");
 const { lastTranscriptSegment } = require("./gate.cjs");
 const { detectMermaidHint } = require("./mermaidHint.cjs");
 const { buildWiki2Evidence } = require("../wiki2/index.cjs");
 
-const DISAGREE_RE =
-  /(不同意|反对|有分歧|争议|不行|不对|质疑|风险|担心|但是|不过|我反对|有问题)/;
-const DECISION_RE =
-  /(拍板|决定|定下来|要不要|是否采用|确认一下|下一步|待定|谁负责|截止日期|DDL)/;
-const TOPIC_RE =
-  /(方案|架构|接口|收费|价格|排期|上线|ASR|TTS|Whisper|双通道|副驾驶|FAQ|知识库)/;
+function rx(name) {
+  return schemaStore.rx("copilot", name);
+}
 
 function parseLines(transcript) {
   return String(transcript || "")
@@ -51,8 +50,9 @@ function buildCatchMeUp(transcriptOrLines, opts = {}) {
   const joined = texts.join("\n");
 
   const topicHits = [];
+  const topicRe = rx("recapTopic");
   for (const t of texts) {
-    const m = t.match(TOPIC_RE);
+    const m = t.match(topicRe);
     if (m) topicHits.push(m[0]);
   }
   const topicFreq = {};
@@ -64,12 +64,14 @@ function buildCatchMeUp(transcriptOrLines, opts = {}) {
     opts.agenda ||
     "（近窗无明显议题词）";
 
+  const disagreeRe = rx("recapDisagree");
+  const decisionRe = rx("recapDecision");
   const disagreements = texts
-    .filter((t) => DISAGREE_RE.test(t))
+    .filter((t) => disagreeRe.test(t))
     .slice(-5)
     .map((t) => t.slice(0, 80));
   const decisions = texts
-    .filter((t) => DECISION_RE.test(t))
+    .filter((t) => decisionRe.test(t))
     .slice(-5)
     .map((t) => t.slice(0, 80));
 

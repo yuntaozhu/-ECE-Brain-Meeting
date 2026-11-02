@@ -19,6 +19,12 @@
 | `adr/006-wave-d-mermaid-ocr-deepdive.md` | Wave D：Mermaid 扫视 / OCR / Deep Dive |
 | `adr/007-wiki2-fast-read.md` | Wave E：Wiki2 Fast Read / Ingest |
 | `adr/008-wiki2-llm-themes.md` | Wave F：豆包编译 + 共现主题 |
+| `adr/009-wave-g-lint-retrieve-sync.md` | Wave G：lint / 空命中 / sync-domain |
+| `adr/010-ui-cockpit-jk.md` | Wave J/K：驾驶舱壳 + 气泡/三色卡/结构化速览 |
+| `adr/011-wave-l-capsule-stealth.md` | Wave L：胶囊双态 HUD + setContentProtection |
+| `adr/012-wave-h-prefetch-vad-paths.md` | Wave H：partial 预热 / VAD 预卷 / 打包路径 |
+| `adr/013-wave-i-llm-refine.md` | Wave I：smartClip + 两阶段 LLM 精炼 |
+| `adr/014-wave-m-speakable-counter.md` | Wave M：口播清洗 + Option C 模式族 + 盈利槽位 |
 | `../knowledge_wiki/` | 会中 Evidence Wiki 2.0（与论文 wiki 分离） |
 | `session_logs/dev_sessions.jsonl` | 开发会话归档（追加写入） |
 | `session_logs/meeting_bridge.json` | 会中桥接态（MCP 可读） |

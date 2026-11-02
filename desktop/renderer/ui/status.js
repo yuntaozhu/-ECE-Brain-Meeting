@@ -78,9 +78,15 @@ export function renderDuplexStats() {
   }
 }
 
+let alertTimer = null;
+
 export function showAlert(text, kind) {
   const el = $("alertBanner");
   if (!el) return;
+  if (alertTimer) {
+    clearTimeout(alertTimer);
+    alertTimer = null;
+  }
   if (!text) {
     el.style.display = "none";
     el.textContent = "";
@@ -102,6 +108,12 @@ export function showAlert(text, kind) {
     el.style.background = "#422006";
     el.style.color = "#fde68a";
   }
+  // ok / warn 自动收起，bad 多留一会
+  const ms = kind === "bad" ? 6000 : kind === "ok" ? 2200 : 3800;
+  alertTimer = setTimeout(() => {
+    el.style.display = "none";
+    alertTimer = null;
+  }, ms);
 }
 
 export function setStatus(text, kind) {

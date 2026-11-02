@@ -3,9 +3,10 @@
  */
 const fs = require("fs");
 const path = require("path");
+const { sessionLogsWriteDir } = require("../platform/appPaths.cjs");
 
 function jotDir() {
-  return path.join(__dirname, "..", "..", "dev_knowledge", "session_logs");
+  return sessionLogsWriteDir();
 }
 
 function jotPath(meetingId) {

@@ -119,15 +119,21 @@ async function ingestEpisodeLlm(input, opts = {}) {
   merged.chunk_count = merged.contextual_chunks.length;
   merged.claim_count = merged.extracted_claims.length;
 
-  // 落盘：复用规则版写文件结构
+  // 落盘：把 LLM 编译结果经 precompiled 写入 episode，禁止再跑规则覆盖
   const written = ingestEpisode(
     {
       ...input,
       episodeId: rule.episode_id,
-      // 把 LLM chunks 压回伪转写，保证文件存在；claims 单独覆盖
       transcript: input.transcript
     },
-    { dry: opts.dry }
+    {
+      dry: opts.dry,
+      mode: "llm",
+      precompiled: {
+        contextual_chunks: merged.contextual_chunks,
+        extracted_claims: merged.extracted_claims
+      }
+    }
   );
 
   return {

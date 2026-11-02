@@ -6,8 +6,9 @@
     "boundaryAsk": "回本|会不会亏|亏损|亏本",
     "boundaryTopic": "回本",
     "boundaryMark": "不保证|参考测算|不是承诺",
-    "ledgerTopic": "盈利|赚钱|扭亏|回本",
-    "ledgerAnswer": "三笔账|测算|一点八|延时"
+    "ledgerTopic": "盈利|赚钱|扭亏|回本|回报|营收",
+    "ledgerAnswer": "三笔账|测算|一点八|延时|五点四|招生",
+    "amountAsk": "多少|多大|带来多少|能赚多少|盈利多少|多少盈利"
   },
   "rules": [
     {
@@ -23,10 +24,16 @@
       "blockedByPattern": ["howAsk"]
     },
     {
+      "id": "PROFIT_AMOUNT",
+      "askAll": ["amountAsk", "ledgerTopic"],
+      "answer": "ledgerAnswer",
+      "blockedBy": ["DURATION_QUANT", "BOUNDARY_COND"]
+    },
+    {
       "id": "CALC_STRUCT",
       "askAll": ["howAsk", "ledgerTopic"],
       "answer": "ledgerAnswer",
-      "blockedBy": ["DURATION_QUANT", "BOUNDARY_COND"]
+      "blockedBy": ["DURATION_QUANT", "BOUNDARY_COND", "PROFIT_AMOUNT"]
     }
   ]
 }

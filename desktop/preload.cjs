@@ -40,8 +40,13 @@ contextBridge.exposeInMainWorld("bridge", {
   setAlwaysOnTop: (on) => ipcRenderer.invoke("window:setAlwaysOnTop", on),
   setOpacity: (opacity) => ipcRenderer.invoke("window:setOpacity", opacity),
   toggleWindowVisible: () => ipcRenderer.invoke("window:toggleVisible"),
+  setStealthProtect: (on) => ipcRenderer.invoke("window:setStealthProtect", on),
+  getStealthProtect: () => ipcRenderer.invoke("window:getStealthProtect"),
   setCapsuleVisible: (show) => ipcRenderer.invoke("capsule:setVisible", show),
   toggleCapsule: () => ipcRenderer.invoke("capsule:toggle"),
+  setCapsuleCollapsed: (collapsed) =>
+    ipcRenderer.invoke("capsule:setCollapsed", collapsed),
+  getCapsuleCollapsed: () => ipcRenderer.invoke("capsule:getCollapsed"),
   copilotGetMode: () => ipcRenderer.invoke("copilot:getMode"),
   copilotSetMode: (mode) => ipcRenderer.invoke("copilot:setMode", mode),
   copilotPushAsk: (payload) => ipcRenderer.invoke("copilot:pushAsk", payload || {}),

@@ -9,6 +9,7 @@ const {
   classifyCopilotIntent,
   buildCopilotPacket,
   noteOthersForPrefetch,
+  onOthersPartialAsr,
   takePrefetch,
   clearPrefetch,
   setTriggerMode,
@@ -23,9 +24,17 @@ const q = "全园美语是什么？怎么收费？";
 const gate = classifyCopilotIntent(q);
 assert.strictEqual(gate.should_trigger, true, "gate should trigger on question");
 
-// 模拟连续发言：缩短阈值靠多次 note
+// 流式 partial 真预热：同一次进程内 speakingMs 不再恒为 0
 process.env.COPILOT_TRIGGER_MODE = "auto";
 resetTriggerMode();
+clearPrefetch();
+const partial = onOthersPartialAsr("全园美语是什么怎么收费值不值得上");
+assert.ok(!partial.skipped || partial.reason === "throttled", "partial prefetch attempted");
+// 立即再调应节流
+const throttled = onOthersPartialAsr("全园美语是什么怎么收费值不值得上继续说");
+assert.strictEqual(throttled.reason, "throttled", "600ms throttle");
+
+clearPrefetch();
 for (let i = 0; i < 3; i++) {
   noteOthersForPrefetch(`园长问：${q}`);
 }

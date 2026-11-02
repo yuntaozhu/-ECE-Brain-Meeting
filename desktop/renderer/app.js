@@ -36,6 +36,7 @@ import { setHoldChangeHandler } from "./policy.js";
 import { handleBridgeEvent } from "./bridge/events.js";
 import { bindCopilotControls } from "./ui/smartReplies.js";
 import { bindMeetingAidControls } from "./ui/meetingAid.js";
+import { bindCockpitShell, setPreflightOpen, setListeningUi } from "./ui/cockpit.js";
 
 setHoldChangeHandler(({ why, prev, until }) => {
   if (until - prev > 800) {
@@ -265,11 +266,14 @@ $("start").onclick = async () => {
     $("patrol").disabled = false;
     $("forceSpeak").disabled = false;
     $("loop").disabled = true;
+    setPreflightOpen(false);
+    setListeningUi(true);
     schedulePatrol();
     if (!res.ark) slog("WARN", "Strategy", "未检测到 Ark Key，巡检将走启发式");
   } catch (e) {
     setStatus("启动失败", "bad");
     setAudioTestEnabled(true);
+    setListeningUi(false);
     slog("ERROR", "Listen", e.message || String(e), { stack: e.stack });
   }
 };
@@ -299,6 +303,8 @@ $("stop").onclick = async () => {
   setChip("chipReconnect", false);
   setChip("chipMeetingAudio", false);
   setStatus("已停止", "ok");
+  setListeningUi(false);
+  setPreflightOpen(true);
   updateMeetingGate();
 };
 
@@ -441,6 +447,7 @@ async function bootApp() {
       return;
     }
     renderArch();
+    bindCockpitShell();
     bindCopilotControls();
     bindMeetingAidControls();
     S.unsubMainLog = window.bridge.onLog((entry) => {

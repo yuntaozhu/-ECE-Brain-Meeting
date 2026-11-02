@@ -18,7 +18,14 @@
     "opinionSeeking": "(怎么看|你觉得|你们觉得|有没有更好|方案|选型|评审|分歧|反对|赞同|要不要|值不值得|能不能落地|怎么推进)",
     "informationSharing": "(汇报一下|给大家同步|接下来讲|这一页|翻到|PPT|先说一下背景|目前进度是)",
     "chitchat": "(哈哈|呵呵|嗯嗯|好累|累了|没事了|测一下麦|听得到吗|可以听到吗|虚拟声卡|设备调试)",
-    "prefetchCue": "(怎么|如何|为什么|方案|架构|接口|延迟|配额|ASR|TTS|Whisper|选型|评审|风险|排期|值得|贵不贵|\\?|？)"
+    "prefetchCue": "(怎么|如何|为什么|方案|架构|接口|延迟|配额|ASR|TTS|Whisper|选型|评审|风险|排期|值得|贵不贵|\\?|？)",
+    "recapDisagree": "(不同意|反对|有分歧|争议|不行|不对|质疑|风险|担心|但是|不过|我反对|存疑|有顾虑)",
+    "recapDecision": "(拍板|决定|定下来|要不要|是否采用|确认一下|下一步|待定|谁负责|截止日期|DDL)",
+    "recapTopic": "(方案|架构|接口|价格|预算|排期|上线|ASR|TTS|Whisper|双通道|副驾驶|FAQ|知识库)",
+    "mermaidArch": "(架构|微服务|调用链|状态机|流水线|双通道|ASR|TTS|Whisper|VAD|decideSpeak|IPC|主进程|渲染)",
+    "mermaidFlow": "(流转|流程|状态转移|从.+到|先.+再)",
+    "mermaidDualTrack": "(双通道|Me|Others|内录|CABLE)",
+    "mermaidVadWhisper": "(Whisper|VAD|静音)"
   },
   "urgencyByCategory": {
     "DIRECT_QUESTION": "High",
@@ -30,10 +37,56 @@
   "templates": {
     "push_forward_generic": "这个方向我认同，建议先把关键决策点定下来，再排执行节奏。",
     "push_back_generic": "我建议先核对成本与交付风险，再决定是否按当前方案推进。",
-    "counter_inquiry_generic": "关于这一点，目前最卡的是资源、时间，还是验收标准？",
+    "counter_inquiry_generic": "关于这一点，您最卡的是资源、时间，还是验收标准？",
     "push_forward_with_fact": "可以，按现有口径先推进：{fact}",
     "push_back_with_topic": "关于{topic}，我建议先确认边界与代价，再拍板。",
-    "counter_inquiry_with_topic": "围绕{topic}，对方最关心的成功标准是什么？"
+    "counter_inquiry_with_topic": "围绕{topic}，您最关心的是价格、回报，还是落地节奏？"
+  },
+  "counterPatterns": [
+    {
+      "id": "price_tradeoff",
+      "test": "打折|优惠|便宜|降价|贵不贵|太贵|议价|便宜点|少点钱",
+      "template": "您更关心的是总价能不能谈，还是先看收益保障和学期核算？"
+    },
+    {
+      "id": "metric_clarify",
+      "test": "多少盈利|盈利多少|带来多少|能赚多少|一年.{0,10}盈|一年.{0,10}赚|营收.*多少|回报.*多少",
+      "template": "您说的盈利，是按新增招生测算，还是按学期美语相关收入？"
+    },
+    {
+      "id": "scope_split",
+      "test": "还是|或者是|到底是|你是说|是想问",
+      "template": "您是在问其中哪一块？我按您指的那条往下说。"
+    },
+    {
+      "id": "success_criteria",
+      "test": "喜欢|值不值|好不好|成功|满不满意|效果怎么样",
+      "template": "您判断时最看重开口数据、续费，还是家长口碑？"
+    },
+    {
+      "id": "next_action",
+      "test": "怎么办|下一步|先做什么|如何推进|怎么开展",
+      "template": "您希望我先给测算口径，还是先讲落地步骤？"
+    },
+    {
+      "id": "generic",
+      "test": ".",
+      "template": "围绕{topic}，您最关心的是价格、回报，还是落地节奏？"
+    }
+  ],
+  "speakSanitize": {
+    "replacePairs": [["对方", "您"]],
+    "stripPatterns": [
+      "历史已否决[：:][^。；;\\n]*[。；;]?",
+      "可参考\\s*FAQ[「\"“][^」\"”]*[」\"”][。；;]?",
+      "可参考\\s*FAQ[^。；;\\n]*[。；;]?",
+      "可反问[：:][^。；;\\n]*[。；;]?",
+      "避坑[：:][^。；;\\n]*[。；;]?",
+      "引导[：:][^。；;\\n]*[。；;]?",
+      "权衡[：:][^。；;\\n]*[。；;]?",
+      "【内部[^】]*】"
+    ],
+    "forbiddenMarkers": ["历史已否决", "可参考 FAQ", "可反问", "对方", "SUPERSEDED"]
   },
   "labels": {
     "push_forward": "Option A · 快速赞同/推进",
@@ -44,6 +97,9 @@
     "speakerHost": "大智"
   },
   "deepDive": {
-    "systemHint": "技术与战略架构师，负责深度支撑发言说服力。输出：核心论点一句话、2~3点论据、约100字可口述话术。"
+    "systemHint": "技术与战略架构师，负责深度支撑发言说服力。输出：核心论点一句话、2~3点论据、约100字可口述话术（禁止「对方/历史已否决/可参考FAQ」进口述）。"
+  },
+  "refine": {
+    "counterSystem": "你只精炼 Option C 一句澄清反问。必须使用「您」，禁止「对方/会场/控场/历史已否决/可参考FAQ/可反问」。必须贴合给定 pattern_id 的意图，不要答「能/不能」，用一问收束决策维度。只输出 JSON：{\"counter_inquiry\":\"...\",\"pattern_id\":\"...\"}"
   }
 }

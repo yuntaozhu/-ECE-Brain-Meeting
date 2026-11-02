@@ -49,6 +49,14 @@
     "wiki2:themes": "node scripts/wiki2-themes.cjs --dry",
     "wiki2:themes:write": "node scripts/wiki2-themes.cjs",
     "wiki2:from-session": "node scripts/wiki2-from-session.cjs",
+    "wiki2:sync-domain": "node scripts/wiki2-sync-domain.cjs",
+    "wiki2:sync-domain:dry": "node scripts/wiki2-sync-domain.cjs --dry",
+    "smoke:wave-g": "node scripts/smoke-wave-g.cjs",
+    "smoke:wave-jk": "node scripts/smoke-wave-jk.cjs",
+    "smoke:wave-l": "node scripts/smoke-wave-l.cjs",
+    "smoke:wave-h": "node scripts/smoke-wave-h.cjs",
+    "smoke:wave-i": "node scripts/smoke-wave-i.cjs",
+    "smoke:wave-m": "node scripts/smoke-wave-m.cjs",
     "mcp:meeting": "node scripts/meeting-context-mcp.cjs",
     "test:bench": "node test/benchmarkRunner.cjs",
     "test:lint:hardcode": "node test/no-hardcode-lint.cjs",
@@ -93,6 +101,22 @@
       {
         "from": "knowledge/.rag-index.json",
         "to": "knowledge/rag-index.json"
+      },
+      {
+        "from": "knowledge_wiki",
+        "to": "knowledge_wiki",
+        "filter": [
+          "**/*",
+          "**/.*",
+          "**/.graph_index/**"
+        ]
+      },
+      {
+        "from": "dev_knowledge/glossary",
+        "to": "dev_knowledge/glossary",
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "../.env",

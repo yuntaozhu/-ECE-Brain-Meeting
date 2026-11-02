@@ -14,6 +14,8 @@ const state = {
   cache: null // { q, at, faq, hits, keyFacts }
 };
 
+let lastPartialPrefetchAt = 0;
+
 function prefetchCfg() {
   return copilotCfg().prefetch || {};
 }
@@ -33,6 +35,17 @@ function shouldPrefetch(segment, gate) {
   if (gate?.should_trigger) return true;
   if (gate?.category === "CHITCHAT") return false;
   return prefetchCueRe().test(t) || t.length >= 28;
+}
+
+function touchSpeakingClock(now = Date.now()) {
+  const cfg = prefetchCfg();
+  const resetGap = Number(cfg.resetGapMs) || 8000;
+  // 开口步进：避免同一次 note 里 speakingMs 恒为 0
+  if (!state.startedAt || now - state.lastAt > resetGap) {
+    state.startedAt = now - 500;
+  }
+  state.lastAt = now;
+  return now - state.startedAt;
 }
 
 function buildEvidence(query) {
@@ -87,7 +100,44 @@ function runPrefetch(segment) {
 }
 
 /**
- * 巡检/转写增量时调用：满足「连续发言 + 线索」则预热。
+ * ASR 流式 partial（Others）：节流预热，对方还在说时后台灌 cache。
+ */
+function onOthersPartialAsr(partialText) {
+  const cfg = prefetchCfg();
+  if (cfg.enabled === false) return { skipped: true, reason: "disabled" };
+  const t = String(partialText || "").trim();
+  if (t.length < 8) return { skipped: true, reason: "short" };
+
+  const now = Date.now();
+  const throttleMs = Number(cfg.partialThrottleMs) || 600;
+  if (now - lastPartialPrefetchAt < throttleMs) {
+    return { skipped: true, reason: "throttled" };
+  }
+
+  const speakingMs = touchSpeakingClock(now);
+  state.lastSegment = t;
+  const gate = classifyCopilotIntent(t);
+  const minMs = Number(cfg.minSpeakingMs) || 3000;
+  const cue = shouldPrefetch(t, gate);
+
+  if (!cue && speakingMs < minMs && !gate.should_trigger) {
+    return { skipped: true, reason: "too_early", speakingMs, category: gate.category };
+  }
+
+  lastPartialPrefetchAt = now;
+  const ev = runPrefetch(t);
+  return {
+    skipped: false,
+    partial: true,
+    speakingMs,
+    category: gate.category,
+    cached: Boolean(ev),
+    faq: ev?.faq?.title || null
+  };
+}
+
+/**
+ * 巡检/转写定稿时调用：满足「连续发言 + 线索」则预热。
  */
 function noteOthersForPrefetch(transcript) {
   const cfg = prefetchCfg();
@@ -95,14 +145,9 @@ function noteOthersForPrefetch(transcript) {
   const segment = lastTranscriptSegment(transcript);
   const gate = classifyCopilotIntent(segment);
   const now = Date.now();
-  const resetGap = Number(cfg.resetGapMs) || 8000;
-  if (!state.startedAt || now - state.lastAt > resetGap) {
-    state.startedAt = now;
-  }
-  state.lastAt = now;
+  const speakingMs = touchSpeakingClock(now);
   state.lastSegment = segment;
 
-  const speakingMs = now - (state.startedAt || now);
   const minMs = Number(cfg.minSpeakingMs) || 3000;
   const cue = shouldPrefetch(segment, gate);
   if (!cue) return { skipped: true, reason: "no_cue", speakingMs, category: gate.category };
@@ -135,7 +180,6 @@ function takePrefetch(query) {
   if (a && b && (a.includes(b.slice(0, 10)) || b.includes(a.slice(0, 10)) || a === b)) {
     return state.cache;
   }
-  // 弱相关也允许复用最近一次预热（句尾停顿后完整问句常比预热更长）
   if (b && a.startsWith(b.slice(0, Math.min(8, b.length)))) return state.cache;
   return state.cache;
 }
@@ -145,6 +189,7 @@ function clearPrefetch() {
   state.startedAt = 0;
   state.lastAt = 0;
   state.lastSegment = "";
+  lastPartialPrefetchAt = 0;
 }
 
 function prefetchStatus() {
@@ -152,12 +197,14 @@ function prefetchStatus() {
     hasCache: Boolean(state.cache),
     q: state.cache?.q?.slice(0, 60) || "",
     ageMs: state.cache ? Date.now() - state.cache.at : null,
-    faq: state.cache?.faq?.title || null
+    faq: state.cache?.faq?.title || null,
+    speakingMs: state.startedAt ? Date.now() - state.startedAt : 0
   };
 }
 
 module.exports = {
   noteOthersForPrefetch,
+  onOthersPartialAsr,
   runPrefetch,
   takePrefetch,
   clearPrefetch,

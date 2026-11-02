@@ -7,8 +7,9 @@ const { normalizeSlug } = require("./parsePage.cjs");
 
 /**
  * 规则版 Contextual Ingest（不强制 LLM）：生成 episode 文件 + 候选 claims。
+ * 支持 opts.precompiled 覆盖 chunks/claims（供豆包编译落盘，避免再跑规则覆盖）。
  * @param {{ transcript: string, episodeId?: string, agenda?: string, participants?: string[] }} input
- * @param {{ dry?: boolean }} [opts]
+ * @param {{ dry?: boolean, precompiled?: { contextual_chunks?: object[], extracted_claims?: object[] }, mode?: string }} [opts]
  */
 function ingestEpisode(input, opts = {}) {
   ensureWiki2Dirs();
@@ -26,7 +27,7 @@ function ingestEpisode(input, opts = {}) {
     .map((l) => l.trim())
     .filter(Boolean);
 
-  const contextual_chunks = lines.slice(0, 40).map((line, i) => {
+  let contextual_chunks = lines.slice(0, 40).map((line, i) => {
     const m = line.match(/^([^:]{1,20})[:：]\s*(.+)$/);
     const speaker = m ? m[1] : "会场";
     const raw_text = m ? m[2] : line;
@@ -46,14 +47,31 @@ function ingestEpisode(input, opts = {}) {
     };
   });
 
-  const extracted_claims = extractClaimCandidates(lines, episodeId);
+  let extracted_claims = extractClaimCandidates(lines, episodeId);
+  const pre = opts.precompiled && typeof opts.precompiled === "object" ? opts.precompiled : null;
+  if (pre) {
+    if (Array.isArray(pre.contextual_chunks) && pre.contextual_chunks.length) {
+      contextual_chunks = pre.contextual_chunks.map((c, i) => ({
+        turn_range: c.turn_range || `turn-${i + 1}`,
+        speaker: c.speaker || "会场",
+        context_prefix: c.context_prefix || "",
+        raw_text: c.raw_text || c.text || "",
+        linked_entities: Array.isArray(c.linked_entities) ? c.linked_entities : []
+      }));
+    }
+    if (Array.isArray(pre.extracted_claims) && pre.extracted_claims.length) {
+      extracted_claims = pre.extracted_claims;
+    }
+  }
 
+  const modeTag = opts.mode || (pre ? "precompiled" : "rule");
   const md = [
     `---`,
     `episode_id: ${episodeId}`,
     `timestamp: ${new Date().toISOString()}`,
     `agenda: ${JSON.stringify(agenda)}`,
     `participants: ${JSON.stringify(participants)}`,
+    `compile_mode: ${modeTag}`,
     `---`,
     ``,
     `# Episode ${episodeId}`,
@@ -63,13 +81,16 @@ function ingestEpisode(input, opts = {}) {
         `## ${c.turn_range}\n` +
         `- speaker: ${c.speaker}\n` +
         `- context_prefix: ${c.context_prefix}\n` +
-        `- text: ${c.raw_text}\n`
+        `- text: ${c.raw_text}\n` +
+        (c.linked_entities?.length
+          ? `- linked: ${c.linked_entities.join(" ")}\n`
+          : "")
     ),
     ``,
     `## Extracted Claim Candidates`,
     ...extracted_claims.map(
       (c) =>
-        `- (${c.claim_type}) → ${c.target_wiki_page}: ${c.statement}`
+        `- (${c.claim_type || "NOTE"}) → ${c.target_wiki_page || "?"}: ${c.statement || ""}`
     )
   ].join("\n");
 
@@ -86,7 +107,8 @@ function ingestEpisode(input, opts = {}) {
     contextual_chunks,
     extracted_claims,
     chunk_count: contextual_chunks.length,
-    claim_count: extracted_claims.length
+    claim_count: extracted_claims.length,
+    mode: modeTag
   };
 }
 

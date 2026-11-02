@@ -28,6 +28,7 @@ const { hostAsrMode, asrResourceId } = require("../lib/asr/hostAsr.cjs");
 const { createAsrSession } = require("../lib/asr/createAsrSession.cjs");
 const { whisperStatus } = require("../lib/asr/whisperLocal.cjs");
 const { glossaryCorrect } = require("../lib/asr/glossaryCorrect.cjs");
+const { onOthersPartialAsr } = require("../lib/copilot/prefetch.cjs");
 
 const DUPLEX_URL_DEFAULT = "wss://openspeech.bytedance.com/api/v3/duplex/realtime/dialogue";
 /** 文档规定的公共 App-Key（不是个人 API Key） */
@@ -1111,9 +1112,18 @@ class ListenSession {
     this.send({ type: "input_audio_buffer.append", audio: b64 });
   }
 
+  /** Others 流式 partial → Speculative 预热（旁路，不阻塞） */
+  maybePrefetchOthersPartial(text) {
+    try {
+      if (!text || this.isInBargeWindow()) return;
+      onOthersPartialAsr(String(text));
+    } catch (_) {}
+  }
+
   /** dialog 路径 ASR → renderer（含打断/唤醒短路） */
   emitDialogAsr(text, final) {
     if (!text) return;
+    if (!final) this.maybePrefetchOthersPartial(text);
     if (final) {
       const speaking = this.expectingSpeak || this.phase === PHASE.SPEAKING;
       const t = String(text);
@@ -1307,6 +1317,7 @@ class ListenSession {
           return;
         }
         if (inBarge && !final) this.maybeSilenceBreakOnEchoPartial(text);
+        if (!final && !inBarge) this.maybePrefetchOthersPartial(text);
         if (final) {
           this.asrFinalCount += 1;
           this.asrStartedAt = 0;

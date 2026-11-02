@@ -55,6 +55,28 @@ function main() {
   assert.ok(flushed && flushed.pcm && flushed.pcm.length > 0, "expected silence flush");
   assert.ok(["silence", "forced_silence"].includes(flushed.why || flushed.flush));
 
+  // pre-roll：弱音帧入库，开口后应并入 PCM
+  const vad2 = createVadGate({
+    rmsSpeech: 0.05,
+    silenceMs: 280,
+    minSpeechMs: 160,
+    maxUtterMs: 5000,
+    preRollMs: 240
+  });
+  for (let i = 0; i < 6; i++) vad2.push(tone(180, 40, 0.01)); // 低于阈值 → 预卷
+  for (let i = 0; i < 8; i++) vad2.push(tone(220, 40, 0.35));
+  let flush2 = null;
+  for (let i = 0; i < 10; i++) {
+    const hit = vad2.push(silence(40));
+    if (hit.flush) flush2 = hit;
+  }
+  assert.ok(flush2?.pcm?.length, "preroll flush");
+  const speechOnlySamples = Math.floor((16000 * 8 * 40) / 1000);
+  assert.ok(
+    flush2.pcm.length > speechOnlySamples,
+    `preroll should lengthen pcm (${flush2.pcm.length} > ${speechOnlySamples})`
+  );
+
   console.log(
     JSON.stringify(
       {
@@ -63,6 +85,7 @@ function main() {
         vadBackend: vad.backend,
         flushWhy: flushed.why || flushed.flush,
         pcmSamples: flushed.pcm.length,
+        prerollPcm: flush2.pcm.length,
         glossaryPath: path.join("dev_knowledge", "glossary", "project_terms.json")
       },
       null,
