@@ -49,6 +49,7 @@
   "posteriorMin": 0.42,
   "commitPosteriorMin": 0.55,
   "commitAlignMin": 0.3,
+  "commitAlignFloor": 0.45,
   "releaseHighExtra": 0.5,
   "agentReleaseOnWeakCommit": true,
   "topicShiftAlignMax": 0.22,

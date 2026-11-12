@@ -1,5 +1,5 @@
 /**
- * Wave R Phase 0–6：FAQ 定卡闸、粘滞/闭题、智能层、副驾驶 Draft、Seed-Evolving、观测字段。
+ * Wave R Phase 0–7：定卡闸、智能层、Seed-Evolving、观测、受众帧与纠偏闭环。
  *   npm run smoke:wave-r
  */
 const fs = require("fs");
@@ -15,8 +15,14 @@ const {
   evaluateCommitRelease,
   commitDraft,
   draftFpOf,
-  observeTurn
+  observeTurn,
+  evaluateFrameMatch,
+  banCard,
+  inCorrectingWindow
 } = require("../lib/intelligence/index.cjs");
+const { detectUserTone, isRecallLastAsk } = require("../lib/meetingSession/intents/index.cjs");
+const { shouldImmediatePatrolForUi } = require("../lib/meetingSession/patrolPolicy.cjs");
+const { AGENT_MODE } = require("../lib/meetingSession/constants.cjs");
 const { matchFaqInstant } = require("../lib/knowledge");
 const { buildCopilotPacket } = require("../lib/copilot/index.cjs");
 const { createMeetingSession } = require("../lib/meetingSession");
@@ -511,12 +517,83 @@ function phase6Smoke() {
   check("observe:releasedToAgent", agentObs.releasedToAgent === true);
 }
 
+function phase7Smoke() {
+  const childQ = "学习这个课程对孩子有什么帮助？";
+  const childFaq = matchFaqInstant(childQ);
+  check(
+    "faq:child-benefit:hit",
+    Boolean(childFaq && /孩子/.test(childFaq.title || "")),
+    childFaq && childFaq.title
+  );
+  check(
+    "faq:child-benefit:answer",
+    Boolean(childFaq && /开口|ABCmouse|进步|孩子/i.test(childFaq.answer || "")),
+    childFaq && String(childFaq.answer || "").slice(0, 48)
+  );
+  check(
+    "faq:child-benefit:not-rollout",
+    Boolean(childFaq && !/摸清教师意愿|教师意愿/.test(childFaq.answer || "")),
+    childFaq && String(childFaq.answer || "").slice(0, 40)
+  );
+
+  const bareBenefit = matchFaqInstant("有什么好处？");
+  check(
+    "faq:bare-benefit:not-forced-enroll",
+    !bareBenefit || !/招生引擎/.test(bareBenefit.answer || "") || /招生|园所/.test(bareBenefit.title || ""),
+    bareBenefit && bareBenefit.title
+  );
+
+  const badFrame = evaluateFrameMatch(
+    childQ,
+    "从签约到落地要做哪些准备？",
+    "先摸清教师意愿、账号使用、硬件网络"
+  );
+  check("frame:child≠rollout", badFrame.ok === false, badFrame.why);
+  const goodFrame = evaluateFrameMatch(childQ, childFaq && childFaq.title, childFaq && childFaq.answer);
+  check("frame:child=child", goodFrame.ok === true, goodFrame.why || goodFrame.ask.audience);
+
+  check(
+    "gate:frame_mismatch releases",
+    evaluateCommitRelease(
+      {
+        action: "answer",
+        reason: "posterior",
+        posterior: 0.96,
+        align: 0.8,
+        extra: 0,
+        title: "从签约到落地要做哪些准备？",
+        speak: "先摸清教师意愿"
+      },
+      { hasKey: true, askText: childQ }
+    ).why.includes("audience_mismatch")
+  );
+
+  check("tone:不正确", detectUserTone("但是你回答的不正确。") === "retry");
+  check(
+    "patrol:不正确 immediate",
+    shouldImmediatePatrolForUi("但是你回答的不正确。", { mode: AGENT_MODE.HA_ASK }) === true
+  );
+  check("recall:上一问 still", isRecallLastAsk("我刚刚问了什么问题？") === true);
+
+  const st = {};
+  banCard(st, "从签约到落地要做哪些准备？");
+  check("correct:window", inCorrectingWindow(st) === true);
+  check(
+    "gate:low_align_commit releases",
+    evaluateCommitRelease(
+      { action: "answer", reason: "posterior", posterior: 0.96, align: 0.37, extra: 0 },
+      { hasKey: true, forceRule: false }
+    ).why === "low_align_commit"
+  );
+}
+
 hostDraftSmoke()
   .then(() => phase3Smoke())
   .then(() => phase4Smoke())
   .then(() => phase5Smoke())
   .then(() => {
     phase6Smoke();
+    phase7Smoke();
     console.log(`\nwave-r smoke: ${pass} pass, ${fail} fail`);
     process.exit(fail ? 1 : 0);
   })

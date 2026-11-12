@@ -34,5 +34,6 @@ alwaysApply: true
 | Wave F 豆包编译/主题 | `adr/008-wiki2-llm-themes.md` |
 | 会中 FAQ | `desktop/knowledge/faq-meeting.txt` |
 | Wave R / 智能层 | `adr/017-shared-intelligence-layer.md` · `lib/intelligence/contract.cjs` |
+| 受众帧 / 纠偏 | `adr/018-audience-frame-correction.md` · `lib/intelligence/frameGate.cjs` |
 
 红线摘要：`[Me]`/`[Others]` 禁混轨；本地 Whisper 不绑 Electron native addon；静音须 VAD；BYOK 当前仅 `doubao`。

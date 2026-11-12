@@ -5,6 +5,7 @@ const topicShift = require("./topicShift.cjs");
 const evaluate = require("./evaluate.cjs");
 const alignFromDraft = require("./alignFromDraft.cjs");
 const observe = require("./observe.cjs");
+const frameGate = require("./frameGate.cjs");
 
 module.exports = {
   ...contract,
@@ -13,5 +14,6 @@ module.exports = {
   ...topicShift,
   ...evaluate,
   ...alignFromDraft,
-  ...observe
+  ...observe,
+  ...frameGate
 };

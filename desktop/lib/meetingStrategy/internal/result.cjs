@@ -41,23 +41,44 @@ function rememberRealAsk(state, question) {
 function answerCorrectionForPrev(prevAsk, tone, state, a2aTrace, kbStatus, qFp) {
   const q = String(prevAsk || "").trim();
   const { speakLine, rx } = require("../../knowledge/schemaStore.cjs");
+  const { evaluateFrameMatch, isBannedCard, banCard } = require("../../intelligence/frameGate.cjs");
+  const { commitDraft } = require("../../intelligence/draft.cjs");
   const prefix = tone === "insult" || tone === "retry" ? speakLine("correctPrefix") : "";
+  // 纠偏时禁掉上一张错卡，避免 match 再吸回去
+  const prevHypo = String((state && state.lastDesign && state.lastDesign.hypothesisId) || "").trim();
+  if (prevHypo) banCard(state, prevHypo);
   const faq =
     matchFaqInstant(q) ||
     (rx("speak", "correctRollout").test(q) ? matchFaqInstant(speakLine("faqRollout")) : null) ||
     (rx("speak", "correctPricing").test(q) ? matchFaqInstant(speakLine("faqWorth")) : null) ||
     (isEnrollmentBenefitAsk(q) ? matchFaqInstant(speakLine("faqEnrollment")) : null);
-  if (faq?.answer) {
-    return playAnswer(
-      `${prefix}${faq.answer}`,
-      "WAKE_ANSWER",
-      state,
-      a2aTrace,
-      kbStatus,
-      qFp,
-      "faq-correct",
-      { cacheQuestion: q }
-    );
+  if (faq?.answer && !isBannedCard(state, faq.title)) {
+    const frame = evaluateFrameMatch(q, faq.title, faq.answer);
+    if (frame.ok) {
+      if (state) {
+        state.lastDesign = {
+          type: "answer",
+          hypothesisId: String(faq.title || q).slice(0, 120),
+          segments: [],
+          depth: "final"
+        };
+        state.lastOpenAsk = "";
+        state.pendingAsk = "";
+      }
+      const line = `${prefix}${faq.answer}`;
+      commitDraft(state, {
+        text: stripIntroBoilerplate(clipUtterance(faq.answer, 160)),
+        arkMode: "faq-correct",
+        title: faq.title || "",
+        card: { title: faq.title, speak: faq.answer }
+      });
+      return playAnswer(line, "WAKE_ANSWER", state, a2aTrace, kbStatus, qFp, "faq-correct", {
+        cacheQuestion: q,
+        speakReason: "correct",
+        speakTitle: faq.title || "",
+        oralize: true
+      });
+    }
   }
   if (isBusinessIntent(q) || isOperateQuestion(q) || rx("speak", "correctBiz").test(q)) {
     const fast = buildFastLead(q);

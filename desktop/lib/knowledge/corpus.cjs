@@ -165,7 +165,8 @@ function matchFaqInstant(query) {
   const priceAsk = faqPat("priceAsk").test(qn);
   const condAsk = faqPat("condAsk").test(qn);
   const enrollAsk = faqPat("enrollAsk").test(qn);
-  const launchAsk = faqPat("launchAsk").test(qn) && !priceAsk;
+  const childAsk = faqPat("childAsk").test(qn);
+  const launchAsk = faqPat("launchAsk").test(qn) && !priceAsk && !childAsk;
   let best = null;
   for (const hit of faqHits) {
     if ((hit.score || 0) < cfg.minScore) continue;
@@ -174,6 +175,7 @@ function matchFaqInstant(query) {
     const titleDiff = faqPat("titleDiff").test(tn);
     const titleCond = faqPat("titleCond").test(tn);
     const titleEnroll = faqPat("titleEnroll").test(tn);
+    const titleChild = faqPat("titleChild").test(tn);
     const titleLaunch = faqPat("titleLaunch").test(tn);
     if (priceAsk && faqPat("presence").test(tn)) continue;
     if (diffAsk && titlePrice && !titleDiff) continue;
@@ -181,6 +183,9 @@ function matchFaqInstant(query) {
     if (condAsk && titlePrice && !titleCond) continue;
     if (enrollAsk && titlePrice && !titleEnroll) continue;
     if (launchAsk && titlePrice && !titleLaunch) continue;
+    // 孩子受众问：挡掉园所招生/落地卡（除非标题也是孩子侧）
+    if (childAsk && (titleLaunch || titleEnroll) && !titleChild) continue;
+    if (childAsk && titlePrice && !titleChild) continue;
     let score = hit.score || 0;
     if (faqPat("definitionCue").test(qn)) {
       const focus = entities.find((e) => qn.includes(e));
@@ -194,6 +199,7 @@ function matchFaqInstant(query) {
     if (condAsk && titleCond) score += cfg.pairBoost;
     if (enrollAsk && titleEnroll) score += cfg.pairBoost;
     if (launchAsk && titleLaunch) score += cfg.pairBoost;
+    if (childAsk && titleChild) score += cfg.intentBoost;
     for (const e of entities) {
       if (qn.includes(e) && tn.includes(e.replace(/联动$/, ""))) {
         if (genericDef && specificAsk) continue;

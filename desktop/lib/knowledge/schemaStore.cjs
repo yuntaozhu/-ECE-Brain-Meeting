@@ -30,6 +30,7 @@ function load() {
       verify: readJson("intent-verify.json"),
       plans: readJson("advisor-plans.json"),
       faq: readJson("faq-match.json"),
+      frame: readJson("query-frame.json"),
       distillChains: readJson("distill-chains.json"),
       // 副驾驶门控（旁路 UI 建议卡）；缺文件时不影响主口播链路
       copilot: (() => {

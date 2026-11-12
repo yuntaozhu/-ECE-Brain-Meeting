@@ -2,6 +2,7 @@
  * 咨询门控：粘滞超时、纠错、去重、参观/信任/投入/回忆/闲聊抵触
  */
 const S = require("./kit.cjs");
+const { banCard, inCorrectingWindow } = require("../../../intelligence/frameGate.cjs");
 
 /** 粘滞到期只截断之后的闲聊；当前这句完整问仍要改写并检索。 */
 function currentAskSurvivesTimeout(text) {
@@ -10,6 +11,29 @@ function currentAskSurvivesTimeout(text) {
   const { isTruncatedAsk } = require("../../agent/relevance.cjs");
   if (isTruncatedAsk(q)) return false;
   return q.replace(/[^\u4e00-\u9fffA-Za-z0-9]/g, "").length >= 4;
+}
+
+function markCorrecting(state) {
+  if (!state) return;
+  const wrongTitle = String(
+    (state.lastDesign && state.lastDesign.hypothesisId) ||
+      (state.lastSpeakDraft && state.lastSpeakDraft.title) ||
+      (state.lastIntelligence && state.lastIntelligence.card && state.lastIntelligence.card.title) ||
+      ""
+  ).trim();
+  if (wrongTitle) banCard(state, wrongTitle);
+  else {
+    const { frameCfg } = require("../../../intelligence/frameGate.cjs");
+    state.correctingUntil = Date.now() + frameCfg().correctWindowMs;
+  }
+  state.lastOpenAsk = "";
+  state.pendingAsk = "";
+  if (state.lastIntelligence) {
+    state.lastIntelligence = {
+      ...state.lastIntelligence,
+      sticky: { ...(state.lastIntelligence.sticky || {}), clearCarry: true }
+    };
+  }
 }
 
 /**
@@ -41,12 +65,14 @@ function handleGate(ctx) {
   if (tone) {
     S.setMode(state, S.INTERACTION_MODE.HA_ASK);
     state.haLockedUntil = Date.now() + 90000;
+    markCorrecting(state);
     const prev = String(state.lastRealAsk || "").trim();
     const prevFresh = prev && Date.now() - (state.lastRealAskAt || 0) < 180000;
     S.debugLog.info("Strategy", "投诉纠错", {
       tone,
       hasPrev: Boolean(prevFresh),
-      prev: prev.slice(0, 40)
+      prev: prev.slice(0, 40),
+      ban: String(state.banCardTitle || "").slice(0, 40)
     });
     if (prevFresh) {
       return S.answerCorrectionForPrev(prev, tone, state, a2aTrace, kbStatus, qFp);
@@ -66,7 +92,8 @@ function handleGate(ctx) {
     qFp &&
     opts.lastQuestionFp === qFp &&
     opts.lastQuestionAt &&
-    Date.now() - opts.lastQuestionAt < 45000
+    Date.now() - opts.lastQuestionAt < 45000 &&
+    !inCorrectingWindow(state)
   ) {
     return S.baseResult({
       reason: "DEDUP_SKIP",
@@ -130,6 +157,11 @@ function handleGate(ctx) {
       pick(state.lastRealAsk, state.lastRealAskAt) ||
       pick(state.prevRealAsk, state.prevRealAskAt) ||
       pick(state.lastOpenAsk, state.lastOpenAskAt);
+    // 纠偏窗口内再问「上一问」：默认按实质问重答，避免只会复述问句
+    if (prev && inCorrectingWindow(state)) {
+      S.debugLog.info("Strategy", "纠偏窗口内 recall→重答", { prev: prev.slice(0, 40) });
+      return S.answerCorrectionForPrev(prev, "retry", state, a2aTrace, kbStatus, qFp);
+    }
     if (prev) {
       return S.playAnswer(
         S.speakFill("recallPrevNow", { prev: S.clipUtterance(prev, 80) }),

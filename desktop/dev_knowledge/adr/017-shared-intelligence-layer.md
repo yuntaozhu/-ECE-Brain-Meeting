@@ -28,6 +28,7 @@
 | 4 | 智能层抽取 + 副驾驶接 Draft |
 | 5 | 副驾驶 Seed-Evolving 专用通道 |
 | 6 | 日志降噪（R4） |
+| 7 | 受众帧 + 纠偏闭环（见 ADR-018） |
 
 ## 落地进度
 
@@ -37,6 +38,7 @@
 - Phase 4：`evaluateConsult` 编排；`alignFromDraft`；副驾驶 `stage=aligned` 同源覆盖（已完成）
 - Phase 5：`COPILOT_LLM_MODEL` 通道（Seed-Evolving）；`COPILOT_LLM_THINKING=disabled`；refine 锁 Draft（已完成）
 - Phase 6：独立听会 Duplex skip→DEBUG；`observeTurn` 统一 gate/draftFp/source；TTS 403/额度告警合并（已完成）
+- Phase 7：受众帧 / 孩子帮助 FAQ / 纠偏重答 → ADR-018（已完成）
 
 ## 验收
 

@@ -16,6 +16,7 @@ const { evaluateCommitRelease } = require("../../../intelligence/commitGate.cjs"
 const { commitDraft, releaseDraft } = require("../../../intelligence/draft.cjs");
 const { observeTurn } = require("../../../intelligence/observe.cjs");
 const { isTopicShift } = require("../../../intelligence/topicShift.cjs");
+const { evaluateFrameMatch, isBannedCard } = require("../../../intelligence/frameGate.cjs");
 
 function hasDoubaoKey() {
   return Boolean((process.env.DOUBAO_API_KEY || process.env.ARK_API_KEY || "").trim());
@@ -411,7 +412,9 @@ function tryLocalAnswer(ctx) {
     if (answer) {
       const release = evaluateCommitRelease(bayes, {
         forceRule: Boolean(ctx.opts?.forceRule),
-        hasKey: hasDoubaoKey()
+        hasKey: hasDoubaoKey(),
+        askText,
+        state
       });
       if (release.release) {
         releaseDraft(state, {
@@ -497,6 +500,10 @@ function tryLocalAnswer(ctx) {
     const ask = String(askText || "");
     if (S.rx("speak", "shadowRecoverSkip").test(ask)) return null;
     const preferredTitle = String(sh.shadowWinner || "").trim();
+    if (isBannedCard(state, preferredTitle)) {
+      S.debugLog.info("Strategy", "shadow 禁卡跳过", { title: preferredTitle.slice(0, 40) });
+      return null;
+    }
     const hypo = String((state && state.lastDesign && state.lastDesign.hypothesisId) || preferredTitle || "");
     const viaChain = playChainHit(matchChainStep(askText, hypo, { preferredTitle }), preferredTitle);
     if (viaChain) return viaChain;
@@ -508,6 +515,19 @@ function tryLocalAnswer(ctx) {
     }
     if (!speak) return null;
     if (isHowDoAsk(askText) && S.isDefinitionSpeak(speak)) return null;
+    // formal clarify + 影子受众不一致 / 异题无帧：禁止 kb-fallback 念错卡
+    const frame = evaluateFrameMatch(ask, preferredTitle, speak);
+    const divergedUnsafe =
+      Boolean(sh.isDiverged) && Boolean(frame.ask && frame.ask.audience) && !frame.card.audience;
+    if (!frame.ok || divergedUnsafe) {
+      S.debugLog.info("Strategy", "shadow 帧不一致跳过 fallback", {
+        text: ask.slice(0, 40),
+        title: preferredTitle.slice(0, 40),
+        diverged: Boolean(sh.isDiverged),
+        why: frame.why || "diverged_unframed"
+      });
+      return null;
+    }
     const softBayes = {
       action: "answer",
       reason: "shadow-kb",
@@ -515,11 +535,14 @@ function tryLocalAnswer(ctx) {
       align: bayes.align != null ? bayes.align : bayes.shadow && bayes.shadow.align,
       extra: bayes.extra != null ? bayes.extra : bayes.shadow && bayes.shadow.extra,
       title: preferredTitle,
+      speak,
       shadow: bayes.shadow
     };
     const shadowRelease = evaluateCommitRelease(softBayes, {
       forceRule: Boolean(ctx.opts?.forceRule),
-      hasKey: hasDoubaoKey()
+      hasKey: hasDoubaoKey(),
+      askText: ask,
+      state
     });
     if (shadowRelease.release) {
       releaseDraft(state, {
