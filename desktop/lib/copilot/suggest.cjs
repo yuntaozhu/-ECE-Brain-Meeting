@@ -18,6 +18,10 @@ const {
   alignCopilotFromDraft,
   draftUsableForSegment
 } = require("../intelligence/alignFromDraft.cjs");
+const {
+  classifyAskLane,
+  shortAskTopic
+} = require("../intelligence/askLane.cjs");
 
 function isCopilotEnabled(cfg) {
   if (process.env.COPILOT_ENABLED === "0") return false;
@@ -96,7 +100,11 @@ function buildCopilotPacket(transcript, opts = {}) {
 
   if (!packet.should_trigger) return packet;
 
-  const topic = gate.target_topic || "";
+  const laneInfo = classifyAskLane(segment);
+  packet.ask_lane = laneInfo.lane;
+  packet.ask_lane_why = laneInfo.why;
+  const topic = shortAskTopic(gate.target_topic || segment, "这一点");
+  packet.target_topic = topic;
   let fact = "";
   let fromDraft = false;
   const draft = opts.speakDraft || null;

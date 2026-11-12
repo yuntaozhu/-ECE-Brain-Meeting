@@ -70,10 +70,9 @@ function createStrategyEvaluate(rt) {
       });
       copilotInstant = copilot;
       if (copilot?.enabled && !copilot.throttled) {
+        // Wave R8c：aligned 只锁事实，三角顾问建议仍走 refine（不再因 aligned 跳过）
         const willRefine =
-          Boolean(copilot.should_trigger) &&
-          !copilot.aligned &&
-          shouldRefineCopilot({ force: forceCopilot });
+          Boolean(copilot.should_trigger) && shouldRefineCopilot({ force: forceCopilot });
         emitUi({
           type: "smart-replies",
           ...copilot,
@@ -86,6 +85,7 @@ function createStrategyEvaluate(rt) {
             urgency: copilot.urgency,
             topic: copilot.target_topic,
             faq: copilot.faq_title || null,
+            askLane: copilot.ask_lane || null,
             mode: getTriggerMode().mode,
             force: forceCopilot || undefined,
             prefetchUsed: copilot.prefetch?.used || false,
@@ -99,7 +99,7 @@ function createStrategyEvaluate(rt) {
               cardId: copilot.faq_title || ""
             })
           });
-          // 第二阶段：可选 LLM 精炼（已 aligned 同源草稿则跳过，省一次调用）
+          // 第二阶段：顾问 LLM 精炼（Draft 作证据，不跳过 aligned）
           if (willRefine) {
             rt.copilotRefineAbort = new AbortController();
             const refineSignal = rt.copilotRefineAbort.signal;

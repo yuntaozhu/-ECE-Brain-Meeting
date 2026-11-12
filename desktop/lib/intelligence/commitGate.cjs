@@ -1,10 +1,12 @@
 /**
- * Wave R1 / R7：本地定卡第二道闸（数值 + 受众帧，无业务词）。
+ * Wave R1 / R7 / R8b：本地定卡第二道闸（数值 + 受众帧 + askLane，无业务词）。
  * 弱后验、「低对齐 + 高 extra」、或问答受众帧不一致 → 不定卡，交 MeetingAgent。
- * forceRule / 无 Key / 结构性 carry·progress·card-switch 不放行。
+ * soft/strategy 车道：有 Key 时优先放行 Agent（含 progress 等 KEEP），FAQ 仅作证据。
+ * forceRule / 无 Key 不放行。
  */
 const { load } = require("../knowledge/schemaStore.cjs");
 const { evaluateFrameMatch, isBannedCard } = require("./frameGate.cjs");
+const { isOpenIntelligenceLane, classifyAskLane } = require("./askLane.cjs");
 
 const KEEP_REASONS = new Set(["carry", "progress", "card-switch", "chain-follow"]);
 
@@ -37,6 +39,13 @@ function evaluateCommitRelease(bayes, opts = {}) {
   if (!cfg.enabled) return { release: false, why: "" };
 
   const reason = String(bayes.reason || "");
+  const openLane = Boolean(opts.askText) && isOpenIntelligenceLane(opts.askText);
+
+  // soft/strategy：突破 progress/carry 等粘滞，交给 Agent 用资料重组
+  if (openLane && KEEP_REASONS.has(reason)) {
+    const lane = classifyAskLane(opts.askText).lane;
+    return { release: true, why: `open_lane_${reason}:${lane}` };
+  }
   if (KEEP_REASONS.has(reason)) return { release: false, why: "" };
 
   const title = String(bayes.title || "");
@@ -47,6 +56,12 @@ function evaluateCommitRelease(bayes, opts = {}) {
   if (opts.askText) {
     const fr = evaluateFrameMatch(opts.askText, title, bayes.speak || "");
     if (!fr.ok) return { release: true, why: fr.why || "frame_mismatch" };
+  }
+
+  // soft/strategy 即便后验高，也优先 Agent（防邻卡假 committed）
+  if (openLane) {
+    const lane = classifyAskLane(opts.askText).lane;
+    return { release: true, why: `open_lane_prefer_agent:${lane}` };
   }
 
   const p = Number(bayes.posterior);

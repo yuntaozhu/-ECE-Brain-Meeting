@@ -29,6 +29,7 @@
 | 5 | 副驾驶 Seed-Evolving 专用通道 |
 | 6 | 日志降噪（R4） |
 | 7 | 受众帧 + 纠偏闭环（见 ADR-018） |
+| 8 | 双通道开口 + 副驾驶顾问（见 ADR-019） |
 
 ## 落地进度
 
@@ -39,6 +40,10 @@
 - Phase 5：`COPILOT_LLM_MODEL` 通道（Seed-Evolving）；`COPILOT_LLM_THINKING=disabled`；refine 锁 Draft（已完成）
 - Phase 6：独立听会 Duplex skip→DEBUG；`observeTurn` 统一 gate/draftFp/source；TTS 403/额度告警合并（已完成）
 - Phase 7：受众帧 / 孩子帮助 FAQ / 纠偏重答 → ADR-018（已完成）
+- Phase 8a：`ask-lane` + 副驾驶去空前缀 / 短 topic → ADR-019（已完成）
+- Phase 8b：soft/strategy 定卡放行 Agent + composeSoft/StrategyRule（已完成）
+- Phase 8c：副驾驶顾问 refine 默认开 + thinking + 取消 aligned 跳过（已完成）
+- Phase 8d：冒烟收口 + ADR-019 关键文件表（已完成）
 
 ## 验收
 

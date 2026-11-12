@@ -31,6 +31,13 @@ function load() {
       plans: readJson("advisor-plans.json"),
       faq: readJson("faq-match.json"),
       frame: readJson("query-frame.json"),
+      askLane: (() => {
+        try {
+          return readJson("ask-lane.json");
+        } catch (_) {
+          return { defaultLane: "hard", patterns: {}, limits: {} };
+        }
+      })(),
       distillChains: readJson("distill-chains.json"),
       // 副驾驶门控（旁路 UI 建议卡）；缺文件时不影响主口播链路
       copilot: (() => {

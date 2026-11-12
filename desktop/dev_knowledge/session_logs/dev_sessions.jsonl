@@ -11,3 +11,5 @@
 {"at":"2026-11-01T01:30:00+08:00","wave":"I","summary":"smartClip; refineCopilotPacketAsync; strategyEvaluate instant+refined abort; refining badge; COPILOT_LLM_REFINE","smokes":["smoke-wave-i","smoke-wave-b","smoke-copilot-gate","test:lint:hardcode"]}
 {"at":"2026-11-12T15:40:00+08:00","wave":"R","summary":"Phase0-6 shared intelligence: FAQ cards, commitGate, topicShift, evaluateConsult, alignFromDraft, COPILOT Seed-Evolving, observeTurn + Duplex/TTS log noise reduction","smokes":["smoke-wave-r","smoke-scene-faq","smoke-wave-i","smoke-copilot"]}
 {"at":"2026-11-12T17:40:00+08:00","wave":"R7","summary":"audience frameGate + child benefit FAQ + tone correction loop; ban shadow kb-fallback on frame mismatch","smokes":["smoke-wave-r","smoke-scene-faq","build:kb"]}
+{"at":"2026-11-12T19:30:00+08:00","wave":"R8a","summary":"ask-lane schema + classifyAskLane/shortAskTopic; copilot remove ????? prefix; smoke phase8a","smokes":["smoke-wave-r"]}
+{"at":"2026-11-12T22:30:00+08:00","wave":"R8d","summary":"Wave R8 closeout: askLane+soft release+advisor refine; smokes green","smokes":["build:kb","smoke-wave-r","smoke-wave-i","smoke-scene-faq"]}

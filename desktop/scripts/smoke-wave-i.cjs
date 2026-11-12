@@ -37,6 +37,8 @@ assert.strictEqual(pkt.refined, false);
 assert.ok(pkt.suggestions?.push_forward);
 
 const prev = process.env.COPILOT_LLM_REFINE;
+delete process.env.COPILOT_LLM_REFINE;
+assert.strictEqual(shouldRefineCopilot({ force: false }), true, "R8c default refine on");
 process.env.COPILOT_LLM_REFINE = "0";
 assert.strictEqual(shouldRefineCopilot({ force: false }), false);
 assert.strictEqual(shouldRefineCopilot({ force: true }), true);

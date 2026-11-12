@@ -18,6 +18,7 @@ const { decideSpeak } = require("../decideSpeak.cjs");
 const { validateSlots } = require("../../text/universalOperators.cjs");
 const { commitDraft, writeLastIntelligence } = require("../../intelligence/draft.cjs");
 const { GATES } = require("../../intelligence/contract.cjs");
+const { classifyAskLane, LANES } = require("../../intelligence/askLane.cjs");
 
 function speakDecision(intentObj, askText, retrieval, state, lastHost) {
   return decideSpeak({
@@ -31,7 +32,26 @@ function speakDecision(intentObj, askText, retrieval, state, lastHost) {
   });
 }
 
-function composeSystem(intentObj, agenda, kbBite, dialogBlock, mode) {
+function composeLaneRule(askLane) {
+  const { speakLine } = require("../../knowledge/schemaStore.cjs");
+  if (askLane === LANES.SOFT) {
+    try {
+      return speakLine("composeSoftRule");
+    } catch (_) {
+      return "";
+    }
+  }
+  if (askLane === LANES.STRATEGY) {
+    try {
+      return speakLine("composeStrategyRule");
+    } catch (_) {
+      return "";
+    }
+  }
+  return "";
+}
+
+function composeSystem(intentObj, agenda, kbBite, dialogBlock, mode, askLane) {
   const { load, speakLine } = require("../../knowledge/schemaStore.cjs");
   const intent = intentObj?.intent || "other";
   const must = intentObj?.must_answer || "";
@@ -39,9 +59,11 @@ function composeSystem(intentObj, agenda, kbBite, dialogBlock, mode) {
   const fitMap = load().speak.composeFit || {};
   const fit = fitMap[intent] || fitMap.default || "";
   const base = mode === S.INTERACTION_MODE.HA_TALK ? S.CHAT_TALK_SYSTEM : S.CHAT_ASK_SYSTEM;
+  const laneRule = composeLaneRule(askLane);
   return (
     `${base}\n【意图】${intent}\n【必须回答】${must}\n【禁止】${mustNot}\n【契合】${fit}\n` +
     `${speakLine("composeNumberRule")}\n` +
+    (laneRule ? `${laneRule}\n` : "") +
     `【议程】${agenda}\n${dialogBlock}\n【本次工具结果】\n${kbBite || "（没有够格的资料，不要编造）"}`
   );
 }
@@ -359,6 +381,8 @@ async function runMeetingAgent(ctx) {
   }
 
   // P1：缩短 kbBite，降低 Compose 首包延迟
+  const askLaneInfo = classifyAskLane(askText);
+  const askLane = askLaneInfo.lane;
   const kbBite = String(retrieval.preview || retrieval.instantAnswer || "").slice(0, 900);
   const recentCtx = (floors || [])
     .slice(-4)
@@ -369,9 +393,15 @@ async function runMeetingAgent(ctx) {
   const dialogBlock = [recentCtx && `【近场对话】\n${recentCtx}`, opts.lastHostSpeakText && `【上一答】${String(opts.lastHostSpeakText).slice(0, 120)}`]
     .filter(Boolean)
     .join("\n");
-  const system = composeSystem(intentObj, agenda, kbBite, dialogBlock, state.mode);
+  const system = composeSystem(intentObj, agenda, kbBite, dialogBlock, state.mode, askLane);
   const probe = grounded.design?.hypothesisId === "probe";
   const probeFocus = String(grounded.design?.segments?.[0] || "");
+  const openLaneHint =
+    askLane === LANES.SOFT
+      ? "本问是体验/口碑类：先回应感受问，资料不够就坦诚缺口，勿改答落地清单。"
+      : askLane === LANES.STRATEGY
+        ? "本问是策略/运营类：对齐用户目标后给可执行下一步，资料作证据勿整段念邻卡。"
+        : "";
   const userTask = probe
     ? grounded.design?.depth === "final"
       ? require("../../knowledge/schemaStore.cjs").speakFill("composeProbe", {
@@ -382,9 +412,10 @@ async function runMeetingAgent(ctx) {
       : `只输出一个问句，20个字以内。问对方还没说清的那一块，接上上一句已经说过的做法。不要复述资料。禁止出现：现在是什么情况、我们一起往下看、写成固定步骤、你是说。\n【上一句】${lastHost || "（无）"}\n【这一句】${askText}\n【焦点】${probeFocus || "（无）"}`
     : `针对园长这一句作答，并接上上一句，不要改问别的话题。` +
       `只使用【本次工具结果】里的事实和口播；没有依据的金额不要写。` +
+      (openLaneHint ? `${openLaneHint}` : "") +
       `禁止：${(intentObj.must_not || []).join("、") || "议程套话、保证不亏、包赚"}。` +
       `约60–90字，勿前缀。\n` +
-      `【上一句】${lastHost || "（无）"}\n【这一句】${askText}`;
+      `【车道】${askLane}\n【上一句】${lastHost || "（无）"}\n【这一句】${askText}`;
   const knowledgeLine = knowledgeSpeakLine(intentObj, askText, retrieval, state, lastHost);
   const retrievalTitle = String(retrieval?.hits?.[0]?.title || retrieval?.hits?.[0]?.source || "");
   const composeStartedAt = Date.now();
@@ -393,7 +424,7 @@ async function runMeetingAgent(ctx) {
   const blockSample = ["profit_how", "hq_support", "pricing_follow", "loss_fear", "roi_confirm"].includes(
     intentObj.intent
   );
-  opts.onStatus?.({ phase: "thinking", reason: "MeetingAgent" });
+  opts.onStatus?.({ phase: "thinking", reason: "MeetingAgent", askLane });
   const chat = await S.speakViaChat(
     system,
     userTask,
@@ -401,7 +432,12 @@ async function runMeetingAgent(ctx) {
       ...opts,
       bridgeText: "",
       timeoutMs: Math.min(Number(S.FAST_LLM_MS) || 12000, 10000),
-      temperature: state.mode === S.INTERACTION_MODE.HA_TALK ? 0.55 : 0.35,
+      temperature:
+        state.mode === S.INTERACTION_MODE.HA_TALK
+          ? 0.55
+          : askLane === LANES.SOFT || askLane === LANES.STRATEGY
+            ? 0.45
+            : 0.35,
       maxLen: 110,
       fast: intentObj.depth !== "L3",
       fallback: knowledgeLine,
@@ -589,7 +625,8 @@ async function runMeetingAgent(ctx) {
       card: {
         title: grounded.decisionObj?.title || grounded.design?.hypothesisId || retrievalTitle || "",
         speak: spokenFull
-      }
+      },
+      debug: { askLane, askLaneWhy: askLaneInfo.why, composeGate: fallbackGate || "compose" }
     });
   } else if (state?.lastIntelligence?.debug?.releasedToAgent) {
     writeLastIntelligence(state, {

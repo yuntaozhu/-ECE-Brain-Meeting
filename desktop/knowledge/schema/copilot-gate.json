@@ -49,12 +49,12 @@
   },
   "triggerCategories": ["DIRECT_QUESTION", "OPINION_SEEKING"],
   "templates": {
-    "push_forward_generic": "这个方向我认同，建议先把关键决策点定下来，再排执行节奏。",
-    "push_back_generic": "我建议先核对成本与交付风险，再决定是否按当前方案推进。",
-    "counter_inquiry_generic": "关于这一点，您最卡的是资源、时间，还是验收标准？",
-    "push_forward_with_fact": "可以，按现有口径先推进：{fact}",
-    "push_back_with_topic": "关于{topic}，我建议先确认边界与代价，再拍板。",
-    "counter_inquiry_with_topic": "围绕{topic}，您最关心的是价格、回报，还是落地节奏？"
+    "push_forward_generic": "这个方向可以先定关键节点，再排执行节奏。",
+    "push_back_generic": "建议先核对成本与交付风险，再决定是否推进。",
+    "counter_inquiry_generic": "您最卡的是资源、时间，还是验收标准？",
+    "push_forward_with_fact": "{fact}",
+    "push_back_with_topic": "关于{topic}，建议先确认边界与代价再拍板。",
+    "counter_inquiry_with_topic": "围绕{topic}，您更关心价格、回报，还是落地节奏？"
   },
   "counterPatterns": [
     {
@@ -85,7 +85,7 @@
     {
       "id": "generic",
       "test": ".",
-      "template": "围绕{topic}，您最关心的是价格、回报，还是落地节奏？"
+      "template": "围绕{topic}，您更关心价格、回报，还是落地节奏？"
     }
   ],
   "speakSanitize": {
@@ -114,6 +114,7 @@
     "systemHint": "技术与战略架构师，负责深度支撑发言说服力。输出：核心论点一句话、2~3点论据、约100字可口述话术（禁止「对方/历史已否决/可参考FAQ」进口述）。"
   },
   "refine": {
+    "advisorSystem": "你是会中副驾驶顾问（不是话术润色器）。根据用户原话与【Evidence】产出三条可脱口的不同立场建议。\n人称：自述用「我」，反问用「您」；禁止「对方/会场/控场/按现有口径」。\nEvidence / SpeakDraft 只作证据；禁止新报价、包赚、绕规、伪造好评率/家长原话/NPS。\n三条必须角度不同：\n- push_forward：推进路径（下一步动作 + 为何可行）\n- push_back：边界/代价/风险（勿念「历史已否决」原文）\n- counter_inquiry：澄清缺口；贴合 pattern_id={patternId}；禁止复读用户整句原话\ndeep_dive.speak_script 只含可口述正文（约100字），禁止「历史已否决/可参考FAQ/可反问」。\n若 Evidence 与用户目标明显错配，先点明局限再给过渡建议，禁止硬套邻卡流水账。\n只输出 JSON（不要 markdown 围栏）：\n{\"push_forward\":\"...\",\"push_back\":\"...\",\"counter_inquiry\":\"...\",\"deep_dive\":{\"thesis\":\"...\",\"bullets\":[\"...\"],\"speak_script\":\"...\"}}\n每条建议≤{maxChars}字。",
     "counterSystem": "你只精炼 Option C 一句澄清反问。必须使用「您」，禁止「对方/会场/控场/历史已否决/可参考FAQ/可反问」。必须贴合给定 pattern_id 的意图，不要答「能/不能」，用一问收束决策维度。只输出 JSON：{\"counter_inquiry\":\"...\",\"pattern_id\":\"...\"}"
   }
 }

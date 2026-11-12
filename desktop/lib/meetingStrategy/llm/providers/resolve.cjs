@@ -9,7 +9,7 @@
  *   LLM_MODEL / LLM_MODEL_FAST → DOUBAO_CHAT_* Endpoint
  * 副驾驶专用：
  *   COPILOT_LLM_MODEL（推荐 doubao-seed-evolving 或对应 ep-）
- *   COPILOT_LLM_THINKING=disabled|enabled（会中默认 disabled）
+ *   COPILOT_LLM_THINKING=disabled|enabled（Wave R8c 副驾驶默认 enabled）
  */
 const SUPPORTED = new Set(["doubao", "ark"]);
 const PLANNED = new Set(["openai", "deepseek", "claude", "ollama", "groq"]);
@@ -24,11 +24,12 @@ function thinkingDisabledFor(opts = {}) {
   if (opts.disableThinking === true) return true;
   if (opts.disableThinking === false) return false;
   if (opts.channel !== "copilot") return false;
-  const v = String(process.env.COPILOT_LLM_THINKING || "disabled")
+  const v = String(process.env.COPILOT_LLM_THINKING || "enabled")
     .trim()
     .toLowerCase();
+  if (v === "disabled" || v === "0" || v === "false" || v === "off") return true;
   if (v === "enabled" || v === "1" || v === "true" || v === "on") return false;
-  return true;
+  return false;
 }
 
 function resolveLlmConfig(opts = {}) {

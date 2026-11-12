@@ -1,5 +1,5 @@
 /**
- * Wave R Phase 0–7：定卡闸、智能层、Seed-Evolving、观测、受众帧与纠偏闭环。
+ * Wave R Phase 0–8c：定卡闸、智能层、askLane、软放行、副驾驶顾问精炼。
  *   npm run smoke:wave-r
  */
 const fs = require("fs");
@@ -18,8 +18,12 @@ const {
   observeTurn,
   evaluateFrameMatch,
   banCard,
-  inCorrectingWindow
+  inCorrectingWindow,
+  classifyAskLane,
+  isOpenIntelligenceLane,
+  shortAskTopic
 } = require("../lib/intelligence/index.cjs");
+const { copilotCfg } = require("../lib/copilot/gate.cjs");
 const { detectUserTone, isRecallLastAsk } = require("../lib/meetingSession/intents/index.cjs");
 const { shouldImmediatePatrolForUi } = require("../lib/meetingSession/patrolPolicy.cjs");
 const { AGENT_MODE } = require("../lib/meetingSession/constants.cjs");
@@ -365,7 +369,7 @@ async function phase5Smoke() {
   process.env.DOUBAO_CHAT_FAST_MODEL = "ep-fast-smoke";
   process.env.DOUBAO_CHAT_MODEL = "ep-host-smoke";
   process.env.COPILOT_LLM_MODEL = "doubao-seed-evolving";
-  process.env.COPILOT_LLM_THINKING = "disabled";
+  delete process.env.COPILOT_LLM_THINKING;
 
   const host = resolveLlmConfig({ fast: true });
   const copilot = resolveLlmConfig({ channel: "copilot" });
@@ -379,7 +383,11 @@ async function phase5Smoke() {
     copilot.model === "doubao-seed-evolving" && copilot.channel === "copilot",
     copilot.model
   );
-  check("resolve:copilot 默认关 thinking", copilot.disableThinking === true);
+  check("resolve:copilot 默认开 thinking", copilot.disableThinking === false);
+
+  process.env.COPILOT_LLM_THINKING = "disabled";
+  const copilotOff = resolveLlmConfig({ channel: "copilot" });
+  check("resolve:thinking disabled 可关", copilotOff.disableThinking === true);
 
   process.env.COPILOT_LLM_THINKING = "enabled";
   const copilotOn = resolveLlmConfig({ channel: "copilot" });
@@ -587,6 +595,157 @@ function phase7Smoke() {
   );
 }
 
+function phase8aSmoke() {
+  const soft = classifyAskLane("学生喜欢吗");
+  check("lane:学生喜欢→soft", soft.lane === "soft", soft.why);
+  const soft2 = classifyAskLane("家长如何评价？");
+  check("lane:家长评价→soft", soft2.lane === "soft", soft2.why);
+  const strat = classifyAskLane("我想使用全园英语课来辅助园所运营");
+  check("lane:辅助运营→strategy", strat.lane === "strategy", strat.why);
+  const hard = classifyAskLane("多少钱");
+  check("lane:多少钱→hard", hard.lane === "hard", hard.why);
+  check("lane:soft open", isOpenIntelligenceLane("学生喜欢吗") === true);
+  check("lane:hard not open", isOpenIntelligenceLane("多少钱") === false);
+
+  const longTopic = shortAskTopic("我想使用全园英语课来辅助园所运营做招生引擎", "这一点");
+  check("lane:short topic", longTopic.length <= 18 && !/做招生引擎$/.test(longTopic), longTopic);
+
+  const tpl = copilotCfg().templates || {};
+  check(
+    "copilot:no 按现有口径前缀",
+    !/按现有口径/.test(String(tpl.push_forward_with_fact || "")),
+    tpl.push_forward_with_fact
+  );
+  check(
+    "copilot:with_fact 为 {fact}",
+    String(tpl.push_forward_with_fact || "").trim() === "{fact}",
+    tpl.push_forward_with_fact
+  );
+
+  const pkt = buildCopilotPacket("会场: 学生喜欢吗", {
+    skipPrefetch: true,
+    force: true
+  });
+  check("copilot:ask_lane soft", pkt.ask_lane === "soft", pkt.ask_lane);
+  check(
+    "copilot:A 无按现有口径",
+    !/按现有口径/.test(pkt.suggestions?.push_forward || ""),
+    (pkt.suggestions?.push_forward || "").slice(0, 48)
+  );
+}
+
+function phase8bSmoke() {
+  const softProgress = evaluateCommitRelease(
+    {
+      action: "answer",
+      reason: "progress",
+      posterior: 0.99,
+      align: 0.9,
+      extra: 0,
+      title: "家长看得见",
+      speak: "开口实拍、月度测评"
+    },
+    { hasKey: true, askText: "学生喜欢吗" }
+  );
+  check(
+    "gate:soft progress releases",
+    softProgress.release === true && /open_lane_progress/.test(softProgress.why),
+    softProgress.why
+  );
+
+  const softPrefer = evaluateCommitRelease(
+    {
+      action: "answer",
+      reason: "posterior",
+      posterior: 0.99,
+      align: 0.9,
+      extra: 0,
+      title: "家长看得见",
+      speak: "开口实拍、月度测评"
+    },
+    { hasKey: true, askText: "家长如何评价？" }
+  );
+  check(
+    "gate:soft prefer agent",
+    softPrefer.release === true && /open_lane_prefer_agent/.test(softPrefer.why),
+    softPrefer.why
+  );
+
+  const stratPrefer = evaluateCommitRelease(
+    {
+      action: "answer",
+      reason: "posterior",
+      posterior: 0.95,
+      align: 0.8,
+      title: "从签约到落地要做哪些准备？",
+      speak: "先摸清教师意愿"
+    },
+    { hasKey: true, askText: "我想使用全园英语课来辅助园所运营" }
+  );
+  check(
+    "gate:strategy prefer agent",
+    stratPrefer.release === true && /open_lane_prefer_agent:strategy/.test(stratPrefer.why),
+    stratPrefer.why
+  );
+
+  const hardKeep = evaluateCommitRelease(
+    {
+      action: "answer",
+      reason: "progress",
+      posterior: 0.99,
+      align: 0.9,
+      title: "收费",
+      speak: "三万九每学期"
+    },
+    { hasKey: true, askText: "多少钱" }
+  );
+  check("gate:hard progress still KEEP", hardKeep.release === false, hardKeep.why);
+
+  const softNoKey = evaluateCommitRelease(
+    {
+      action: "answer",
+      reason: "posterior",
+      posterior: 0.99,
+      align: 0.9,
+      title: "家长看得见",
+      speak: "开口实拍"
+    },
+    { hasKey: false, askText: "学生喜欢吗" }
+  );
+  check("gate:soft no key no release", softNoKey.release === false);
+
+  let softRule = "";
+  let stratRule = "";
+  try {
+    softRule = require("../lib/knowledge/schemaStore.cjs").speakLine("composeSoftRule");
+    stratRule = require("../lib/knowledge/schemaStore.cjs").speakLine("composeStrategyRule");
+  } catch (e) {
+    softRule = "";
+    stratRule = "";
+  }
+  check("compose:soft rule", /车道 soft|体验|口碑/.test(softRule), softRule.slice(0, 40));
+  check("compose:strategy rule", /车道 strategy|运营|策略/.test(stratRule), stratRule.slice(0, 40));
+}
+
+function phase8cSmoke() {
+  const { shouldRefineCopilot } = require("../lib/copilot/refine.cjs");
+  const prevRefine = process.env.COPILOT_LLM_REFINE;
+  delete process.env.COPILOT_LLM_REFINE;
+  check("refine:default on", shouldRefineCopilot({ force: false }) === true);
+  process.env.COPILOT_LLM_REFINE = "0";
+  check("refine:0 off", shouldRefineCopilot({ force: false }) === false);
+  check("refine:force still on", shouldRefineCopilot({ force: true }) === true);
+  process.env.COPILOT_LLM_REFINE = "1";
+  check("refine:1 on", shouldRefineCopilot({}) === true);
+  if (prevRefine == null) delete process.env.COPILOT_LLM_REFINE;
+  else process.env.COPILOT_LLM_REFINE = prevRefine;
+
+  const advisor = String(copilotCfg().refine?.advisorSystem || "");
+  check("refine:advisorSystem", /副驾驶顾问|不是话术润色器/.test(advisor), advisor.slice(0, 48));
+  check("refine:advisor 禁按现有口径", /按现有口径/.test(advisor), "prompt should ban the phrase");
+  check("refine:advisor 三角", /push_forward/.test(advisor) && /push_back/.test(advisor));
+}
+
 hostDraftSmoke()
   .then(() => phase3Smoke())
   .then(() => phase4Smoke())
@@ -594,6 +753,9 @@ hostDraftSmoke()
   .then(() => {
     phase6Smoke();
     phase7Smoke();
+    phase8aSmoke();
+    phase8bSmoke();
+    phase8cSmoke();
     console.log(`\nwave-r smoke: ${pass} pass, ${fail} fail`);
     process.exit(fail ? 1 : 0);
   })

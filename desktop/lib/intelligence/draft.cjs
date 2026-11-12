@@ -46,14 +46,17 @@ function writeLastIntelligence(state, result) {
 /**
  * 定卡成功时的便捷写回。
  */
-function commitDraft(state, { text, arkMode, title, card, sticky } = {}) {
+function commitDraft(state, { text, arkMode, title, card, sticky, debug } = {}) {
   const draft = makeSpeakDraft({ text, arkMode, title });
   writeLastIntelligence(state, {
     gate: GATES.COMMITTED,
     card: card || (title ? { title, speak: text } : null),
     draft,
     sticky: sticky || undefined,
-    debug: { releasedToAgent: false }
+    debug: {
+      releasedToAgent: false,
+      ...(debug && typeof debug === "object" ? debug : {})
+    }
   });
   return draft;
 }
@@ -61,12 +64,16 @@ function commitDraft(state, { text, arkMode, title, card, sticky } = {}) {
 /**
  * 放行 Agent 时的写回（不定卡）。
  */
-function releaseDraft(state, { why, card } = {}) {
+function releaseDraft(state, { why, card, debug } = {}) {
   writeLastIntelligence(state, {
     gate: GATES.AGENT,
     card: card || null,
     draft: null,
-    debug: { releasedToAgent: true, reason: String(why || "") }
+    debug: {
+      releasedToAgent: true,
+      reason: String(why || ""),
+      ...(debug && typeof debug === "object" ? debug : {})
+    }
   });
 }
 

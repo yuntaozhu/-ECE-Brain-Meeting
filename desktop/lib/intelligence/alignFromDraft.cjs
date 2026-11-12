@@ -7,6 +7,7 @@ const { sanitizeSpeakText } = require("../copilot/sanitizeSpeakText.cjs");
 const { fillTpl } = require("../copilot/counterPattern.cjs");
 const { isUsableFact } = require("../copilot/topicQuality.cjs");
 const { copilotCfg } = require("../copilot/gate.cjs");
+const { shortAskTopic } = require("./askLane.cjs");
 
 function clipSpeak(text, maxChars) {
   return smartClip(sanitizeSpeakText(text), maxChars);
@@ -26,17 +27,16 @@ function alignCopilotFromDraft(packet, draft, opts = {}) {
   const maxChars = Number(opts.maxChars) || Number(cfg.limits?.maxSuggestionChars) || 60;
   const templates = opts.templates || cfg.templates || {};
   const fact = clipSpeak(text, maxChars);
-  const topic = String(packet.target_topic || "").trim() || "这一点";
+  const topic = shortAskTopic(packet.target_topic || packet.segment || "", "这一点");
 
   const pushForward = clipSpeak(
-    fillTpl(templates.push_forward_with_fact || "可以，按现有口径先推进：{fact}", { fact }) ||
-      `可以，按现有口径先推进：${fact}`,
+    fillTpl(templates.push_forward_with_fact || "{fact}", { fact }) || fact,
     maxChars
   );
   const pushBack = clipSpeak(
-    fillTpl(templates.push_back_with_topic || "关于{topic}，我建议先确认边界与代价，再拍板。", {
+    fillTpl(templates.push_back_with_topic || "关于{topic}，建议先确认边界与代价再拍板。", {
       topic
-    }) || `关于${topic}，我建议先确认边界与代价，再拍板。`,
+    }) || `关于${topic}，建议先确认边界与代价再拍板。`,
     maxChars
   );
   const counter =

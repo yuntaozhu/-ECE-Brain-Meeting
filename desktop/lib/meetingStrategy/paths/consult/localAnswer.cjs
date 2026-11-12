@@ -13,6 +13,7 @@ const {
   isHowDoAsk
 } = require("../../../knowledge/chains/match.cjs");
 const { evaluateCommitRelease } = require("../../../intelligence/commitGate.cjs");
+const { isOpenIntelligenceLane, classifyAskLane } = require("../../../intelligence/askLane.cjs");
 const { commitDraft, releaseDraft } = require("../../../intelligence/draft.cjs");
 const { observeTurn } = require("../../../intelligence/observe.cjs");
 const { isTopicShift } = require("../../../intelligence/topicShift.cjs");
@@ -417,19 +418,22 @@ function tryLocalAnswer(ctx) {
         state
       });
       if (release.release) {
+        const laneInfo = classifyAskLane(askText);
         releaseDraft(state, {
           why: release.why,
           card: {
             title: bayes.title,
             posterior: bayes.posterior,
             align: bayes.align
-          }
+          },
+          debug: { askLane: laneInfo.lane, askLaneWhy: laneInfo.why }
         });
         S.debugLog.info("Strategy", "弱定卡放行 Agent", {
           text: askText.slice(0, 40),
           title: String(bayes.title || "").slice(0, 48),
           extra: bayes.extra,
           why: release.why,
+          askLane: laneInfo.lane,
           ...observeTurn(state, {
             gate: "agent",
             source: "agent",
@@ -665,6 +669,25 @@ function tryLocalAnswer(ctx) {
       // 完整问句无证据：记待答，不续播上一句
       if (!String(offline || "").trim()) {
         const complete = completeAsk(askText);
+        // soft/strategy：无本地证据时放行 Agent，避免静默 skip
+        if (
+          complete &&
+          hasDoubaoKey() &&
+          !ctx.opts?.forceRule &&
+          isOpenIntelligenceLane(askText)
+        ) {
+          const laneInfo = classifyAskLane(askText);
+          releaseDraft(state, {
+            why: `open_lane_no_evidence:${laneInfo.lane}`,
+            debug: { askLane: laneInfo.lane, askLaneWhy: laneInfo.why }
+          });
+          S.debugLog.info("Strategy", "开车道无证据放行 Agent", {
+            text: askText.slice(0, 40),
+            askLane: laneInfo.lane,
+            reason: bayes.reason || "no_evidence"
+          });
+          return null;
+        }
         if (state && complete) {
           state.pendingAsk = String(askText).slice(0, 200);
           state.pendingAskAt = Date.now();

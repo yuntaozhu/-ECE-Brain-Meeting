@@ -29,6 +29,7 @@
 | `adr/016-wave-p-copilot-dialogue-thread.md` | Wave P′：试播开链 + 短答选题巡检 |
 | `adr/017-shared-intelligence-layer.md` | Wave R + 共用智能层 + 副驾驶 Seed-Evolving |
 | `adr/018-audience-frame-correction.md` | Wave R7：受众帧对齐 + 纠偏闭环 |
+| `adr/019-wave-r8-dual-lane-advisor.md` | Wave R8：双通道开口 + 副驾驶顾问精炼 |
 | `../knowledge_wiki/` | 会中 Evidence Wiki 2.0（与论文 wiki 分离） |
 | `session_logs/dev_sessions.jsonl` | 开发会话归档（追加写入） |
 | `session_logs/meeting_bridge.json` | 会中桥接态（MCP 可读） |
