@@ -16,6 +16,8 @@ const {
 } = require("./relevance.cjs");
 const { decideSpeak } = require("../decideSpeak.cjs");
 const { validateSlots } = require("../../text/universalOperators.cjs");
+const { commitDraft, writeLastIntelligence } = require("../../intelligence/draft.cjs");
+const { GATES } = require("../../intelligence/contract.cjs");
 
 function speakDecision(intentObj, askText, retrieval, state, lastHost) {
   return decideSpeak({
@@ -206,6 +208,17 @@ function finishSpoken(ctx, payload) {
     S.rememberRealAsk(state, askText);
   }
   if (state && payload.design) state.lastDesign = payload.design;
+  if (answer) {
+    commitDraft(state, {
+      text: answer,
+      arkMode: payload.decision || "agent",
+      title: payload.decisionObj?.title || payload.design?.hypothesisId || "",
+      card: {
+        title: payload.decisionObj?.title || payload.design?.hypothesisId || "",
+        speak: answer
+      }
+    });
+  }
   // 全文已由 emitLead/onEarlySpeak 播出：interventionText 留空，避免 strategyEvaluate 再 TTS 一遍
   return {
     shouldIntervene: Boolean(answer),
@@ -561,6 +574,31 @@ async function runMeetingAgent(ctx) {
   });
 
   if (state && grounded.design) state.lastDesign = grounded.design;
+
+  const spokenFull = (() => {
+    if (streamed) {
+      return `${streamed}${S.continuationAfter(finalAnswer, streamed) || ""}`.replace(/\s+/g, " ").trim() || finalAnswer;
+    }
+    return String(finalAnswer || "").trim();
+  })();
+  if (spokenFull) {
+    commitDraft(state, {
+      text: spokenFull,
+      arkMode: doubaoSpeak ? chat.arkMode : fallbackGate === "kb-fallback" ? "kb-script" : "clarify",
+      title: grounded.decisionObj?.title || grounded.design?.hypothesisId || retrievalTitle || "",
+      card: {
+        title: grounded.decisionObj?.title || grounded.design?.hypothesisId || retrievalTitle || "",
+        speak: spokenFull
+      }
+    });
+  } else if (state?.lastIntelligence?.debug?.releasedToAgent) {
+    writeLastIntelligence(state, {
+      gate: GATES.SKIP,
+      card: state.lastIntelligence.card || null,
+      draft: null,
+      debug: { releasedToAgent: true, reason: "agent_empty" }
+    });
+  }
 
   let shadowDraft = null;
   if (chat && chat.answer) {

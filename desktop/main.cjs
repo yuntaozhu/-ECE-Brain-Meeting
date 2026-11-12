@@ -43,8 +43,11 @@ const {
 const {
   MODE_LABEL,
   LIFE_LABEL,
+  AGENT_MODE,
   createMeetingSession,
-  deriveMeetingLife
+  deriveMeetingLife,
+  setMode,
+  dialogueThread
 } = require("./lib/meetingSession");
 const {
   appendSession,
@@ -712,6 +715,30 @@ app.whenReady().then(() => {
     if (speakRes?.ok) {
       lastHostSpeakAt = Date.now();
       lastHostSpeakText = clean;
+      // Wave P′：试播可选题反问 → 开对话链 + 切入咨询粘滞
+      let thread = null;
+      try {
+        thread = dialogueThread.openFromOffer(clean, { source: "copilot-trial" });
+        if (thread && meetingState) {
+          setMode(meetingState, AGENT_MODE.HA_ASK);
+          emitInteractionMode();
+          broadcastBridgeEvent({
+            type: "dialogue-thread",
+            action: "open",
+            thread
+          });
+          debugLog.info("DialogueThread", "试播开链", {
+            id: thread.id,
+            choices: thread.choices,
+            source: thread.source
+          });
+        }
+      } catch (err) {
+        debugLog.warn("DialogueThread", "开链失败", {
+          error: String(err?.message || err)
+        });
+      }
+      return { ok: true, ...speakRes, dialogueThread: thread };
     }
     return { ok: true, ...speakRes };
   });

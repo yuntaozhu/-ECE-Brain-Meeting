@@ -18,6 +18,11 @@
     "opinionSeeking": "(怎么看|你觉得|你们觉得|有没有更好|方案|选型|评审|分歧|反对|赞同|要不要|值不值得|能不能落地|怎么推进)",
     "informationSharing": "(汇报一下|给大家同步|接下来讲|这一页|翻到|PPT|先说一下背景|目前进度是)",
     "chitchat": "(哈哈|呵呵|嗯嗯|好累|累了|没事了|测一下麦|听得到吗|可以听到吗|虚拟声卡|设备调试)",
+    "ack": "^(好的|好|知道了|明白了|嗯|哦|行)([，,]?(知道了|明白了|好的))?([。.!！？?]*)$",
+    "summaryRequest": "(请|帮)?.*(总结|小结|归纳|做个纪要)|总结一下|小结一下",
+    "summaryDoneAsk": "总结完了吗|小结完了吗|总结好了吗|小结好了吗|总结说完了吗",
+    "topicNoise": "反应速度|基本上能够接受|虚拟声卡|测一下麦|听得到吗|旁听记录|轻量拉回|秋亮拉回|需要时请呼叫",
+    "topicBizHints": "全园美语|美语课|美语|收费|三万九|39000|盈利|赚钱|招生|落地|加盟|申请|打折|优惠|太贵|喜欢|学生|老师|收益|保障|退款|菲教|价值|回报|开办|签约",
     "prefetchCue": "(怎么|如何|为什么|方案|架构|接口|延迟|配额|ASR|TTS|Whisper|选型|评审|风险|排期|值得|贵不贵|\\?|？)",
     "recapDisagree": "(不同意|反对|有分歧|争议|不行|不对|质疑|风险|担心|但是|不过|我反对|存疑|有顾虑)",
     "recapDecision": "(拍板|决定|定下来|要不要|是否采用|确认一下|下一步|待定|谁负责|截止日期|DDL)",
@@ -27,11 +32,20 @@
     "mermaidDualTrack": "(双通道|Me|Others|内录|CABLE)",
     "mermaidVadWhisper": "(Whisper|VAD|静音)"
   },
+  "topicExtract": {
+    "stripWake": "^(大智|大致|大志)[，,\\s]*",
+    "maxLen": 24,
+    "blacklistExact": ["大智", "当前议题", ""],
+    "factBan": "我是大智|正在旁听|请讲|你是说|稍等|对照一下|核一下口径|轻量拉回|需要时请呼叫|人与人讨论"
+  },
   "urgencyByCategory": {
     "DIRECT_QUESTION": "High",
     "OPINION_SEEKING": "Medium",
     "INFORMATION_SHARING": "Low",
-    "CHITCHAT": "Ignore"
+    "CHITCHAT": "Ignore",
+    "ACK": "Ignore",
+    "SUMMARY_DONE": "Ignore",
+    "NOISE": "Ignore"
   },
   "triggerCategories": ["DIRECT_QUESTION", "OPINION_SEEKING"],
   "templates": {

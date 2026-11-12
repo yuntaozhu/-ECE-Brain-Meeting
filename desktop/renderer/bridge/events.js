@@ -180,6 +180,13 @@ export function handleBridgeEvent(msg) {
         } else if (quotaType === "concurrency" || businessCode === "TTS_QUOTA_CONCURRENCY") {
           alertText =
             "Host TTS 并发配额超限。请增购并发包或降低同时合成路数；桥接会对并发错误做有限退避重试。";
+        } else if (
+          businessCode === "TTS_AUTH_FORBIDDEN" ||
+          /err:Forbidden|Forbidden|45000030|http_?403|unauthorized/i.test(String(reason))
+        ) {
+          alertText =
+            msg.alert ||
+            "[TTS] 独立合成鉴权失败（Forbidden）。请确认：①豆包语音控制台已开通 seed-tts-2.0；②DOUBAO_TTS_API_KEY（优先）或 DOUBAO_SPEECH_API_KEY 属于该同一语音应用（勿用方舟 LLM Key，勿与 ASR 以外产品 Key 混用）；③新版鉴权不传 AppId（默认已忽略），旧版才设 DOUBAO_TTS_LEGACY_AUTH=1。可用 npm run tts:smoke 查看 key_source / X-Tt-Logid。";
         } else if (businessCode === "TTS_CONFIG_INVALID") {
           alertText = `独立 TTS 配置无效：${reason}。请确认 HOST_TTS_MODE=independent，并设置 DOUBAO_TTS_API_KEY（或 DOUBAO_SPEECH_API_KEY）、DOUBAO_TTS_RESOURCE_ID=seed-tts-2.0、DOUBAO_TTS_SPEAKER（2.0 音色）。`;
         } else if (businessCode === "TTS_BAD_SPEAKER_OR_TEXT" || /4500200|45000001/.test(String(reason))) {
@@ -189,7 +196,22 @@ export function handleBridgeEvent(msg) {
         } else {
           alertText = `Host TTS 失败（${reason}${channel ? ` / ${channel}` : ""}）。5xx/网络抖动可有限重试；配额类错误不会重试。`;
         }
-        showAlert(alertText, "bad");
+        const authForbidden =
+          businessCode === "TTS_AUTH_FORBIDDEN" ||
+          /err:Forbidden|Forbidden|45000030|http_?403|unauthorized/i.test(String(reason));
+        const quotaExhausted =
+          businessCode === "TTS_QUOTA_EXHAUSTED" ||
+          quotaType === "text_words_lifetime" ||
+          /text_words_lifetime/i.test(String(reason));
+        showAlert(
+          alertText,
+          "bad",
+          authForbidden
+            ? { mergeKey: "tts-auth-forbidden", mergeMs: 60000 }
+            : quotaExhausted
+              ? { mergeKey: "tts-quota-exhausted", mergeMs: 60000 }
+              : undefined
+        );
         slog("ERROR", "TTS", "合成失败", msg);
         const last = S.transcriptLines[S.transcriptLines.length - 1];
         if (last && /（合成中…）$/.test(last.text)) {

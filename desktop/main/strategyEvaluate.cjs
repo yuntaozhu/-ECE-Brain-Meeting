@@ -27,6 +27,8 @@ const {
   shouldRefineCopilot,
   refineCopilotPacketAsync
 } = require("../lib/copilot/index.cjs");
+const { alignCopilotFromDraft } = require("../lib/intelligence/alignFromDraft.cjs");
+const { observeTurn } = require("../lib/intelligence/observe.cjs");
 
 function createStrategyEvaluate(rt) {
   return async function handleStrategyEvaluate(_e, payload) {
@@ -53,14 +55,25 @@ function createStrategyEvaluate(rt) {
       rt.copilotRefineAbort = null;
     }
     // 副驾驶旁路：意图门控 + Option 建议卡（不改 decideSpeak / 口播）
+    let copilotInstant = null;
     try {
+      const priorDraft = rt.meetingState?.lastSpeakDraft || null;
+      const draftAgeMs =
+        priorDraft && rt.meetingState?.lastIntelligence
+          ? Date.now() - (Number(rt.meetingState.lastSpeakAt) || Date.now())
+          : undefined;
       const copilot = buildCopilotPacketThrottled(transcript, {
         agenda,
-        force: forceCopilot
+        force: forceCopilot,
+        speakDraft: priorDraft || undefined,
+        draftAgeMs
       });
+      copilotInstant = copilot;
       if (copilot?.enabled && !copilot.throttled) {
         const willRefine =
-          Boolean(copilot.should_trigger) && shouldRefineCopilot({ force: forceCopilot });
+          Boolean(copilot.should_trigger) &&
+          !copilot.aligned &&
+          shouldRefineCopilot({ force: forceCopilot });
         emitUi({
           type: "smart-replies",
           ...copilot,
@@ -76,10 +89,17 @@ function createStrategyEvaluate(rt) {
             mode: getTriggerMode().mode,
             force: forceCopilot || undefined,
             prefetchUsed: copilot.prefetch?.used || false,
-            stage: "instant",
-            refining: willRefine || false
+            stage: copilot.stage || "instant",
+            aligned: Boolean(copilot.aligned),
+            refining: willRefine || false,
+            ...observeTurn(rt.meetingState, {
+              stage: copilot.stage || "instant",
+              aligned: Boolean(copilot.aligned),
+              draftFp: copilot.draftFp || null,
+              cardId: copilot.faq_title || ""
+            })
           });
-          // 第二阶段：可选 LLM 精炼
+          // 第二阶段：可选 LLM 精炼（已 aligned 同源草稿则跳过，省一次调用）
           if (willRefine) {
             rt.copilotRefineAbort = new AbortController();
             const refineSignal = rt.copilotRefineAbort.signal;
@@ -87,7 +107,8 @@ function createStrategyEvaluate(rt) {
               transcript,
               agenda,
               signal: refineSignal,
-              timeoutMs: Number(process.env.COPILOT_LLM_REFINE_TIMEOUT_MS) || 10000
+              timeoutMs: Number(process.env.COPILOT_LLM_REFINE_TIMEOUT_MS) || 15000,
+              speakDraft: rt.meetingState?.lastSpeakDraft || priorDraft || null
             })
               .then((res) => {
                 if (refineSignal.aborted || !res?.ok || !res.packet) {
@@ -99,7 +120,7 @@ function createStrategyEvaluate(rt) {
                     emitUi({
                       type: "smart-replies",
                       ...copilot,
-                      stage: "instant",
+                      stage: copilot.stage || "instant",
                       refining: false,
                       refine_error: res?.error || "failed"
                     });
@@ -110,7 +131,14 @@ function createStrategyEvaluate(rt) {
                 debugLog.info("Copilot", "建议卡已精炼", {
                   category: res.packet.category,
                   refine_ms: res.packet.refine_ms,
-                  provider: res.packet.refine_provider
+                  provider: res.packet.refine_provider,
+                  ...observeTurn(rt.meetingState, {
+                    stage: "refined",
+                    refined: true,
+                    refine_model: res.packet.refine_model || null,
+                    draftFp: res.packet.draftFp || null,
+                    cardId: res.packet.faq_title || ""
+                  })
                 });
               })
               .catch((err) => {
@@ -121,7 +149,7 @@ function createStrategyEvaluate(rt) {
                 emitUi({
                   type: "smart-replies",
                   ...copilot,
-                  stage: "instant",
+                  stage: copilot.stage || "instant",
                   refining: false,
                   refine_error: String(err?.message || err)
                 });
@@ -250,8 +278,39 @@ function createStrategyEvaluate(rt) {
         faqScore: result.faqScore,
         retrievalTitle: result.retrievalTitle,
         fallbackGate: result.fallbackGate,
-        composeMs: result.composeMs
+        composeMs: result.composeMs,
+        ...observeTurn(rt.meetingState, {
+          source: result.arkMode || null,
+          speakTitle: result.speakTitle || result.retrievalTitle || "",
+          posterior: result.faqScore
+        })
       });
+
+      // Wave R Phase 4：口播 Draft 落盘后，同源覆盖副驾驶建议卡（aligned）
+      try {
+        const draft = rt.meetingState?.lastSpeakDraft || null;
+        if (
+          draft?.text &&
+          copilotInstant?.should_trigger &&
+          !copilotInstant.throttled &&
+          !thisAbort.signal.aborted
+        ) {
+          const aligned = alignCopilotFromDraft(copilotInstant, draft);
+          if (aligned?.aligned) {
+            rt.meetingState.lastSpeakAt = Date.now();
+            emitUi({ type: "smart-replies", ...aligned, refining: false });
+            debugLog.info("Copilot", "建议卡已对齐 Draft", {
+              draftFp: aligned.draftFp,
+              stage: "aligned",
+              preview: String(aligned.suggestions?.push_forward || "").slice(0, 40)
+            });
+          }
+        }
+      } catch (alignErr) {
+        debugLog.warn("Copilot", "Draft 对齐失败（保留 instant）", {
+          error: String(alignErr?.message || alignErr)
+        });
+      }
 
       if (result.reason === "ABORTED" || thisAbort.signal.aborted) {
         debugLog.info("Strategy", "巡检已取消（停听会或新巡检）", { reason: result.reason });
@@ -438,9 +497,12 @@ function createStrategyEvaluate(rt) {
           speakResult = { ok: false, error: "echo_suppressed", suppressed: true };
           result.suppressed = true;
         } else if (!rt.listen.isOpen()) {
-          debugLog.warn("Strategy", "需要发言但 Duplex 未连接，跳过 TTS", {
-            text: text.slice(0, 80)
-          });
+          debugLog.debug(
+            "Strategy",
+            "需要发言但听会未就绪，跳过 TTS",
+            { text: text.slice(0, 80) },
+            { rateKey: "speak-not-open", rateMs: 8000 }
+          );
           speakResult = { ok: false, error: "not_open" };
         } else {
           if (rt.listen.expectingSpeak) {
@@ -486,7 +548,12 @@ function createStrategyEvaluate(rt) {
         debugLog.warn("Strategy", "需要干预但听会通道未启动，无法 TTS（请先点启动听会）");
         speakResult = { ok: false, error: "listen_not_started" };
       } else if (result.shouldIntervene && rt.listen && !rt.listen.isOpen()) {
-        debugLog.warn("Strategy", "需要干预但 Duplex 未连接，等待重连后再试播");
+        debugLog.debug(
+          "Strategy",
+          "需要干预但听会未就绪，等待重连后再试播",
+          {},
+          { rateKey: "intervene-not-open", rateMs: 8000 }
+        );
         speakResult = { ok: false, error: "not_open" };
       }
 

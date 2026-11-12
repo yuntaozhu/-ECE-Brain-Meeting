@@ -7,6 +7,9 @@
  *   LLM_API_KEY → DOUBAO_API_KEY / ARK_API_KEY
  *   LLM_BASE_URL → ARK_BASE_URL
  *   LLM_MODEL / LLM_MODEL_FAST → DOUBAO_CHAT_* Endpoint
+ * 副驾驶专用：
+ *   COPILOT_LLM_MODEL（推荐 doubao-seed-evolving 或对应 ep-）
+ *   COPILOT_LLM_THINKING=disabled|enabled（会中默认 disabled）
  */
 const SUPPORTED = new Set(["doubao", "ark"]);
 const PLANNED = new Set(["openai", "deepseek", "claude", "ollama", "groq"]);
@@ -15,6 +18,17 @@ function normalizeProvider(raw) {
   const p = String(raw || "doubao").trim().toLowerCase();
   if (p === "ark" || p === "volc" || p === "volcengine") return "doubao";
   return p || "doubao";
+}
+
+function thinkingDisabledFor(opts = {}) {
+  if (opts.disableThinking === true) return true;
+  if (opts.disableThinking === false) return false;
+  if (opts.channel !== "copilot") return false;
+  const v = String(process.env.COPILOT_LLM_THINKING || "disabled")
+    .trim()
+    .toLowerCase();
+  if (v === "enabled" || v === "1" || v === "true" || v === "on") return false;
+  return true;
 }
 
 function resolveLlmConfig(opts = {}) {
@@ -30,7 +44,9 @@ function resolveLlmConfig(opts = {}) {
       apiKey: "",
       baseUrl: "",
       model: "",
-      fastModel: ""
+      fastModel: "",
+      channel: opts.channel || "default",
+      disableThinking: false
     };
   }
 
@@ -57,14 +73,34 @@ function resolveLlmConfig(opts = {}) {
     ""
   ).trim();
 
-  const model = (
-    (opts.fast ? fastModel : null) ||
-    process.env.LLM_MODEL ||
-    process.env.DOUBAO_CHAT_MODEL ||
-    process.env.DOUBAO_MODEL_ENDPOINT ||
-    process.env.DOUBAO_CHAT_FAST_MODEL ||
+  const copilotModel = (
+    process.env.COPILOT_LLM_MODEL ||
+    process.env.LLM_MODEL_COPILOT ||
     ""
   ).trim();
+
+  let model = "";
+  if (opts.channel === "copilot") {
+    model = (
+      copilotModel ||
+      fastModel ||
+      process.env.LLM_MODEL ||
+      process.env.DOUBAO_CHAT_MODEL ||
+      process.env.DOUBAO_MODEL_ENDPOINT ||
+      ""
+    ).trim();
+  } else {
+    model = (
+      (opts.fast ? fastModel : null) ||
+      process.env.LLM_MODEL ||
+      process.env.DOUBAO_CHAT_MODEL ||
+      process.env.DOUBAO_MODEL_ENDPOINT ||
+      process.env.DOUBAO_CHAT_FAST_MODEL ||
+      ""
+    ).trim();
+  }
+
+  const disableThinking = thinkingDisabledFor(opts);
 
   if (!apiKey) {
     return {
@@ -74,7 +110,10 @@ function resolveLlmConfig(opts = {}) {
       apiKey: "",
       baseUrl,
       model,
-      fastModel
+      fastModel,
+      copilotModel,
+      channel: opts.channel || "default",
+      disableThinking
     };
   }
   if (!model) {
@@ -85,7 +124,10 @@ function resolveLlmConfig(opts = {}) {
       apiKey,
       baseUrl,
       model: "",
-      fastModel
+      fastModel,
+      copilotModel,
+      channel: opts.channel || "default",
+      disableThinking
     };
   }
 
@@ -96,6 +138,9 @@ function resolveLlmConfig(opts = {}) {
     baseUrl,
     model,
     fastModel,
+    copilotModel,
+    channel: opts.channel || "default",
+    disableThinking,
     /** 方舟兼容鉴权头 */
     headers: {
       "Content-Type": "application/json",
@@ -118,6 +163,7 @@ function hasLlmKey() {
 function llmProviderStatus() {
   const provider = normalizeProvider(process.env.LLM_PROVIDER || "doubao");
   const cfg = resolveLlmConfig({ fast: true });
+  const copilot = resolveLlmConfig({ channel: "copilot" });
   return {
     provider,
     supported: SUPPORTED.has(provider),
@@ -125,6 +171,8 @@ function llmProviderStatus() {
     hasKey: hasLlmKey(),
     baseUrl: cfg.baseUrl || "",
     modelConfigured: Boolean(cfg.model || cfg.fastModel),
+    copilotModel: copilot.model || "",
+    copilotThinkingDisabled: Boolean(copilot.disableThinking),
     error: cfg.ok ? null : cfg.error || null
   };
 }
@@ -134,6 +182,7 @@ module.exports = {
   PLANNED,
   normalizeProvider,
   resolveLlmConfig,
+  thinkingDisabledFor,
   hasLlmKey,
   llmProviderStatus
 };

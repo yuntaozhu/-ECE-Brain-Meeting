@@ -225,6 +225,8 @@ export function renderSmartReplies(msg) {
       badges.push(`<span class="sr-badge hot">✨ AI 已精炼</span>`);
     } else if (msg.counter_refined || msg.stage === "counter_refined") {
       badges.push(`<span class="sr-badge hot">✨ C 已精炼</span>`);
+    } else if (msg.aligned || msg.stage === "aligned") {
+      badges.push(`<span class="sr-badge hot">◎ 与口播同源</span>`);
     } else if (msg.refining) {
       badges.push(`<span class="sr-badge warn">✨ 精炼中…</span>`);
     } else {

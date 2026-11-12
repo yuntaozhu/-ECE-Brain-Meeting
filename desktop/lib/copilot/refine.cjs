@@ -1,6 +1,6 @@
 /**
- * 两阶段建议卡精炼：instant 模板之后可选豆包 LLM 刷新（旁路，不改 decideSpeak）。
- * Option C 按 counter_pattern 专治；出口统一 sanitize。
+ * 两阶段建议卡精炼：instant/aligned 之后可选豆包 LLM 刷新（旁路，不改 decideSpeak）。
+ * Phase 5：走 copilot 通道（COPILOT_LLM_MODEL，默认关深度思考）；事实锁 Draft/Evidence。
  */
 const { llmChat } = require("../meetingStrategy/llm/transport.cjs");
 const { resolveLlmConfig } = require("../meetingStrategy/llm/providers/resolve.cjs");
@@ -34,6 +34,14 @@ function clipSpeak(text, maxChars) {
   return smartClip(sanitizeSpeakText(text), maxChars);
 }
 
+function copilotLlmOpts(extra = {}) {
+  return {
+    channel: "copilot",
+    fast: true,
+    ...extra
+  };
+}
+
 /**
  * 仅精炼 Option C（失败则保留 instant）。
  */
@@ -45,7 +53,7 @@ async function refineCounterInquiryAsync(packet, opts = {}) {
 
   let cfg;
   try {
-    cfg = resolveLlmConfig({ fast: true });
+    cfg = resolveLlmConfig(copilotLlmOpts());
   } catch (_) {
     return { ok: false, error: "resolve_failed" };
   }
@@ -58,10 +66,12 @@ async function refineCounterInquiryAsync(packet, opts = {}) {
     gate.refine?.counterSystem ||
     "你只精炼 Option C 一句澄清反问。必须使用「您」，禁止「对方」。只输出 JSON：{\"counter_inquiry\":\"...\",\"pattern_id\":\"...\"}";
 
+  const draftText = String(opts.speakDraft?.text || packet.speak_draft || "").trim();
   const user = [
     `pattern_id: ${patternId}`,
     `会场片段: ${packet.segment || ""}`,
     `topic: ${packet.target_topic || ""}`,
+    draftText ? `SpeakDraft: ${draftText.slice(0, 200)}` : "",
     `instant_C: ${packet.suggestions.counter_inquiry}`,
     opts.transcript ? `Context:\n${String(opts.transcript).slice(-500)}` : ""
   ]
@@ -71,10 +81,10 @@ async function refineCounterInquiryAsync(packet, opts = {}) {
   const t0 = Date.now();
   const res = await llmChat(system, user, {
     signal: opts.signal,
-    timeoutMs: Number(opts.timeoutMs) || 8000,
+    timeoutMs: Number(opts.timeoutMs) || Number(process.env.COPILOT_LLM_REFINE_TIMEOUT_MS) || 8000,
     temperature: 0.35,
     maxTokens: 220,
-    fast: true
+    ...copilotLlmOpts()
   });
   if (opts.signal?.aborted) return { ok: false, error: "aborted" };
   if (!res?.ok || !res.content) {
@@ -100,14 +110,15 @@ async function refineCounterInquiryAsync(packet, opts = {}) {
       stage: packet.stage === "refined" ? "refined" : "counter_refined",
       counter_refined: true,
       counter_refine_ms: Date.now() - t0,
-      refine_provider: res.provider || "doubao"
+      refine_provider: res.provider || "doubao",
+      refine_model: res.model || cfg.model || ""
     }
   };
 }
 
 /**
  * @param {object} packet buildCopilotPacket 产物
- * @param {{ transcript?: string, agenda?: string, signal?: AbortSignal, timeoutMs?: number, maxChars?: number, counterOnly?: boolean }} [opts]
+ * @param {{ transcript?: string, agenda?: string, signal?: AbortSignal, timeoutMs?: number, maxChars?: number, counterOnly?: boolean, speakDraft?: object }} [opts]
  */
 async function refineCopilotPacketAsync(packet, opts = {}) {
   if (!packet?.should_trigger || !packet.suggestions) {
@@ -121,7 +132,7 @@ async function refineCopilotPacketAsync(packet, opts = {}) {
 
   let cfg;
   try {
-    cfg = resolveLlmConfig({ fast: true });
+    cfg = resolveLlmConfig(copilotLlmOpts());
   } catch (_) {
     return { ok: false, error: "resolve_failed" };
   }
@@ -131,6 +142,7 @@ async function refineCopilotPacketAsync(packet, opts = {}) {
   const patternId = packet.counter_pattern || "generic";
   const system = `你是会中副驾驶话术精炼器。把三条建议改成可对会场脱口而出的口语。
 人称：自述用「我」，反问用「您」；禁止「对方/会场/控场」。
+事实只能来自【SpeakDraft】与【Evidence】，禁止新报价、包赚、绕规或另起数字。
 Option C 必须贴合 pattern_id=${patternId}，禁止万金油「成功标准」套话（除非 pattern 就是 success_criteria）。
 deep_dive.speak_script 只含可口述正文，禁止「历史已否决/可参考FAQ/可反问」。
 只输出 JSON（不要 markdown 围栏）：
@@ -138,11 +150,13 @@ deep_dive.speak_script 只含可口述正文，禁止「历史已否决/可参�
 约束：每条建议≤${maxChars}字；push_back 体现风险/边界但不念「历史已否决」原文；deep_dive.speak_script≈100字。`;
 
   const facts = (packet.key_facts || []).slice(0, 6).join("\n· ");
+  const draftText = String(opts.speakDraft?.text || packet.speak_draft || "").trim();
   const user = [
     `议程: ${opts.agenda || packet.agenda || ""}`,
     `会场片段: ${packet.segment || ""}`,
     `意图分类: ${packet.category || ""} / ${packet.urgency || ""}`,
     `counter_pattern: ${patternId}`,
+    draftText ? `[SpeakDraft]\n${draftText.slice(0, 400)}` : "",
     facts ? `[Evidence]\n· ${facts}` : "",
     packet.wiki_evidence?.preview
       ? `[Wiki Preview]\n${String(packet.wiki_evidence.preview).slice(0, 500)}`
@@ -158,10 +172,10 @@ deep_dive.speak_script 只含可口述正文，禁止「历史已否决/可参�
   const t0 = Date.now();
   const res = await llmChat(system, user, {
     signal: opts.signal,
-    timeoutMs: Number(opts.timeoutMs) || 10000,
+    timeoutMs: Number(opts.timeoutMs) || Number(process.env.COPILOT_LLM_REFINE_TIMEOUT_MS) || 15000,
     temperature: 0.35,
     maxTokens: 700,
-    fast: true
+    ...copilotLlmOpts()
   });
   if (opts.signal?.aborted) return { ok: false, error: "aborted" };
   if (!res?.ok || !res.content) {
@@ -219,7 +233,8 @@ deep_dive.speak_script 只含可口述正文，禁止「历史已否决/可参�
       stage: "refined",
       refined: true,
       refine_ms: Date.now() - t0,
-      refine_provider: res.provider || "doubao"
+      refine_provider: res.provider || "doubao",
+      refine_model: res.model || cfg.model || ""
     }
   };
 }
@@ -228,5 +243,6 @@ module.exports = {
   shouldRefineCopilot,
   refineCopilotPacketAsync,
   refineCounterInquiryAsync,
-  extractJson
+  extractJson,
+  copilotLlmOpts
 };

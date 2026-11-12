@@ -52,21 +52,25 @@ async function arkChatStream(system, user, opts = {}) {
     } catch (_) {}
   };
   try {
+    const streamBody = {
+      model,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user }
+      ],
+      temperature: opts.temperature != null ? opts.temperature : 0.3,
+      stream: true
+    };
+    if (cfg.disableThinking || opts.disableThinking === true) {
+      streamBody.thinking = { type: "disabled" };
+    }
     response = await fetch(`${cfg.baseUrl}/chat/completions`, {
       method: "POST",
       headers: cfg.headers || {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`
       },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user }
-        ],
-        temperature: opts.temperature != null ? opts.temperature : 0.3,
-        stream: true
-      }),
+      body: JSON.stringify(streamBody),
       signal: ac.signal
     });
   } catch (err) {
@@ -171,6 +175,8 @@ async function arkChat(system, user, opts = {}) {
   debugLog.info("Strategy", "llmChat request", {
     provider: cfg.provider,
     model,
+    channel: cfg.channel || opts.channel || "default",
+    disableThinking: Boolean(cfg.disableThinking || opts.disableThinking),
     baseUrl: cfg.baseUrl,
     systemLen: system.length,
     userLen: user.length,
@@ -188,6 +194,10 @@ async function arkChat(system, user, opts = {}) {
       temperature: opts.temperature != null ? opts.temperature : 0.3
     };
     if (Number(opts.maxTokens) > 0) body.max_tokens = Number(opts.maxTokens);
+    // 会中副驾驶：默认关深度思考，压 TTFT（方舟 Seed 系）
+    if (cfg.disableThinking || opts.disableThinking === true) {
+      body.thinking = { type: "disabled" };
+    }
     response = await fetch(`${cfg.baseUrl}/chat/completions`, {
       method: "POST",
       headers: cfg.headers || {
@@ -223,7 +233,15 @@ async function arkChat(system, user, opts = {}) {
     provider: cfg.provider,
     preview: String(content || "").slice(0, 160)
   });
-  return { ok: true, content, error: null, billingOverdue: false, provider: cfg.provider };
+  return {
+    ok: true,
+    content,
+    error: null,
+    billingOverdue: false,
+    provider: cfg.provider,
+    model,
+    channel: cfg.channel || opts.channel || "default"
+  };
 }
 
 module.exports = {

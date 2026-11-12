@@ -254,59 +254,26 @@ async function rewriteStandalone(ask, lastTitle) {
   }
 }
 
-function choiceInviteRe() {
-  return pat("choiceInvite");
-}
-
-function extractOfferedChoices(hostText) {
-  const h = String(hostText || "").trim();
-  if (!h || !choiceInviteRe().test(h)) return [];
-  let chunk = "";
-  const colon = h.match(pat("choiceColon"));
-  if (colon) chunk = colon[1];
-  else {
-    const idx = h.search(choiceInviteRe());
-    if (idx > 4) chunk = h.slice(Math.max(0, idx - lim("choiceLookback")), idx);
-  }
-  chunk = chunk.replace(/与/g, "、");
-  const parts = chunk
-    .split(/[、，,/／]/)
-    .map((s) =>
-      String(s || "")
-        .replace(pat("choiceNoisePrefix"), "")
-        .replace(/[的呢啊哦呀\s]/g, "")
-        .trim()
-    )
-    .filter((s) => s.length >= lim("choicePartMin") && s.length <= lim("choicePartMax"))
-    .filter((s) => !pat("choiceNoiseFilter").test(s));
-  return [...new Set(parts)];
-}
-
-function rewriteChoiceLabel(cb) {
-  for (const row of load().classify.choiceRewrite || []) {
-    if (row && row.test && new RegExp(row.test).test(cb)) return row.rewritten;
-  }
-  return `${cb}是什么`;
-}
+const {
+  extractOfferedChoices,
+  rewriteChoiceLabel,
+  matchOfferedChoice: matchOfferedChoiceCore
+} = require("./offerExtract.cjs");
 
 /**
  * 会场短句是否在选上一答给出的选项。命中则改写成可秒答问句。
+ * 优先命中 dialogueThread 上的试播选项。
  */
 function matchOfferedChoice(floor, lastHostAnswer) {
-  const raw = normalizeDazhiAliases(String(floor || "").trim());
-  const bare = raw.replace(/[，,。．.!！？?\s]/g, "");
-  if (!bare || bare.length < lim("choiceBareMin") || bare.length > lim("choiceBareMax")) return null;
-  if (pat("choiceCommand").test(bare)) return null;
-  const choices = extractOfferedChoices(lastHostAnswer);
-  if (!choices.length) return null;
-  for (const c of choices) {
-    const cb = String(c || "").replace(/\s+/g, "");
-    if (!cb) continue;
-    if (bare === cb || bare.includes(cb) || cb.includes(bare)) {
-      return { choice: cb, rewritten: rewriteChoiceLabel(cb) };
+  try {
+    const { matchFloor, noteChoice } = require("../../meetingSession/dialogueThread.cjs");
+    const hit = matchFloor(floor);
+    if (hit) {
+      noteChoice(hit.choice);
+      return hit;
     }
-  }
-  return null;
+  } catch (_) {}
+  return matchOfferedChoiceCore(floor, lastHostAnswer);
 }
 
 function stripEchoPrefix(text, lastHostAnswer) {
@@ -482,7 +449,7 @@ function rewriteQueryRuleBased(opts = {}) {
 
 module.exports = {
   get CHOICE_INVITE_RE() {
-    return choiceInviteRe();
+    return pat("choiceInvite");
   },
   extractOfferedChoices,
   matchOfferedChoice,

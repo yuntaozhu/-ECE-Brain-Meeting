@@ -116,9 +116,21 @@ function handleGate(ctx) {
   if (S.isRecallLastAsk(lastFloor) || S.isRecallLastAsk(cmd.payload || "")) {
     S.setMode(state, S.INTERACTION_MODE.HA_ASK);
     state.haLockedUntil = Date.now() + 90000;
-    const prev = String(state.lastRealAsk || "").trim();
-    const prevFresh = prev && Date.now() - (state.lastRealAskAt || 0) < 30 * 60 * 1000;
-    if (prevFresh) {
+    const ttl = 30 * 60 * 1000;
+    const now = Date.now();
+    const pick = (text, at) => {
+      const t = String(text || "").trim();
+      if (!t || t.length < 6) return "";
+      if (S.isRecallLastAsk(t) || S.isSessionMemoryMeta(t)) return "";
+      if (at && now - at >= ttl) return "";
+      return t;
+    };
+    // 上一实质问：lastRealAsk → prevRealAsk → lastOpenAsk → 近场 floor
+    const prev =
+      pick(state.lastRealAsk, state.lastRealAskAt) ||
+      pick(state.prevRealAsk, state.prevRealAskAt) ||
+      pick(state.lastOpenAsk, state.lastOpenAskAt);
+    if (prev) {
       return S.playAnswer(
         S.speakFill("recallPrevNow", { prev: S.clipUtterance(prev, 80) }),
         "WAKE_ANSWER",

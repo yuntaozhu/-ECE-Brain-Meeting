@@ -28,6 +28,9 @@ async function handle(ctx) {
     });
   }
   if (cmd.command === "STOP") {
+    try {
+      require("../../meetingSession/dialogueThread.cjs").close("stop");
+    } catch (_) {}
     S.setMode(state, S.INTERACTION_MODE.IDLE_LISTEN);
     state.holdToEnd = false;
     state.interrupted = false;

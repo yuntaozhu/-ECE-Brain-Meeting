@@ -1,5 +1,8 @@
 {
   "stickyMs": 90000,
+  "dialogueThreadTtlMs": 90000,
+  "dialogueThreadExtendMs": 60000,
+  "dialogueThreadMaxMs": 180000,
   "rewriteAskMs": 4500,
   "negationWindow": 1,
   "faqKeywordAnswerable": 45,
@@ -44,6 +47,11 @@
     "doc": { "absent": 1, "script": 1, "doc": 1 }
   },
   "posteriorMin": 0.42,
+  "commitPosteriorMin": 0.55,
+  "commitAlignMin": 0.3,
+  "releaseHighExtra": 0.5,
+  "agentReleaseOnWeakCommit": true,
+  "topicShiftAlignMax": 0.22,
   "bayesFactor": 3,
   "alignMin": 0.28,
   "closedAlignMin": 0.18,

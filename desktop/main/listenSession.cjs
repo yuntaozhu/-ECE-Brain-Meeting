@@ -434,18 +434,28 @@ class ListenSession {
       }
       return true;
     }
-    // PCM 上行在断线时很吵，限流；其它类型每次都记
+    // 独立听会不依赖 Duplex：预期会 skip，降为 DEBUG 并限流，避免 WARN/ERROR 刷屏
+    const independentOnly = useIndependentListenOnly();
     const isAppend = payload?.type === "input_audio_buffer.append";
-    debugLog.warn(
-      "Duplex",
-      "send skipped — socket not open",
-      {
-        type: payload?.type,
-        readyState: this.upstream?.readyState ?? null,
-        reconnectAttempt: this.reconnectAttempt
-      },
-      isAppend ? { rateKey: "send-skip-append", rateMs: 8000 } : undefined
-    );
+    const detail = {
+      type: payload?.type,
+      readyState: this.upstream?.readyState ?? null,
+      reconnectAttempt: this.reconnectAttempt,
+      independentOnly
+    };
+    if (independentOnly) {
+      debugLog.debug("Duplex", "send skipped — independent mode (no dialog socket)", detail, {
+        rateKey: `send-skip-ind-${payload?.type || "other"}`,
+        rateMs: isAppend ? 15000 : 8000
+      });
+    } else {
+      debugLog.warn(
+        "Duplex",
+        "send skipped — socket not open",
+        detail,
+        isAppend ? { rateKey: "send-skip-append", rateMs: 8000 } : { rateKey: "send-skip-other", rateMs: 5000 }
+      );
+    }
     return false;
   }
 

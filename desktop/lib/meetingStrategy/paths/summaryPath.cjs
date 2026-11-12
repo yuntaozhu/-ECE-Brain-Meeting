@@ -35,9 +35,10 @@ async function runSummaryPath(state, agenda, opts, a2aTrace, kbStatus, withTopic
   const ac = new AbortController();
   const sumTimer = setTimeout(() => ac.abort(), 4000);
   try {
+    const { speakLine, speakFill } = require("../../knowledge/schemaStore.cjs");
     const res = await arkChat(
-      "你是大智会议秘书。只根据下面转写里真实出现的提问作总结，禁止编造样板班、负责人或转写里没有的动作。口播≤40字。若转写里没有下一议题，不要写下一议题。",
-      `议程：${agenda}\n转写：\n${body}\n\n按格式：\n总结：...\n下一议题：...`,
+      speakLine("summaryLlmSystem"),
+      speakFill("summaryLlmUserTpl", { agenda, body }),
       { fast: true, temperature: 0.2, signal: ac.signal, timeoutMs: 4000 }
     );
     if (res.ok && res.content) {

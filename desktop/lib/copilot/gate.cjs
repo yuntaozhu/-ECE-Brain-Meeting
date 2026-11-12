@@ -5,6 +5,11 @@
 const { schemaStore } = require("../knowledge");
 const { isQuestionForm } = require("../duplex");
 const { isCasualChitchat } = require("../meetingSession/intents");
+const {
+  classifySegmentKind,
+  shouldSuppressCopilotCard,
+  extractCopilotTopic
+} = require("./topicQuality.cjs");
 
 function copilotCfg() {
   return schemaStore.load().copilot || {};
@@ -31,20 +36,40 @@ function lastTranscriptSegment(transcript) {
  *   should_trigger: boolean,
  *   urgency: string,
  *   target_topic: string,
- *   segment: string
+ *   segment: string,
+ *   segment_kind?: string
  * }}
  */
 function classifyCopilotIntent(segment) {
   const cfg = copilotCfg();
   const t = String(segment || "").trim();
   const minChars = Number(cfg.limits?.minChars) || 4;
+  const kind = classifySegmentKind(t);
+  const topic = extractCopilotTopic(t);
+
   if (!t || t.length < minChars) {
     return {
       category: "CHITCHAT",
       should_trigger: false,
       urgency: "Ignore",
       target_topic: "",
-      segment: t
+      segment: t,
+      segment_kind: kind
+    };
+  }
+
+  // 应答 / 噪声 / 总结完成追问：不出建议卡（避免整句 ASR 灌进 A/B/C）
+  if (shouldSuppressCopilotCard(kind)) {
+    const cat =
+      kind === "ACK" ? "ACK" : kind === "SUMMARY_DONE" ? "SUMMARY_DONE" : "NOISE";
+    const urgencyMap = cfg.urgencyByCategory || {};
+    return {
+      category: cat,
+      should_trigger: false,
+      urgency: urgencyMap[cat] || "Ignore",
+      target_topic: topic,
+      segment: t,
+      segment_kind: kind
     };
   }
 
@@ -52,8 +77,9 @@ function classifyCopilotIntent(segment) {
   try {
     if (isCasualChitchat(t) || copilotRx("chitchat").test(t)) {
       category = "CHITCHAT";
+    } else if (kind === "SUMMARY_REQUEST") {
+      category = "OPINION_SEEKING";
     } else if (copilotRx("opinionSeeking").test(t)) {
-      // 征集观点优先于泛问句（避免「怎么推进」被归成 DIRECT_QUESTION）
       category = "OPINION_SEEKING";
     } else if (copilotRx("directQuestion").test(t) || isQuestionForm(t)) {
       category = "DIRECT_QUESTION";
@@ -70,14 +96,14 @@ function classifyCopilotIntent(segment) {
     : ["DIRECT_QUESTION", "OPINION_SEEKING"];
   const urgencyMap = cfg.urgencyByCategory || {};
   const should_trigger = triggerCats.includes(category);
-  const target_topic = t.replace(/[？?。.!！，,、\s]+$/g, "").slice(0, 36);
 
   return {
     category,
     should_trigger,
     urgency: urgencyMap[category] || (should_trigger ? "Medium" : "Low"),
-    target_topic,
-    segment: t
+    target_topic: topic,
+    segment: t,
+    segment_kind: kind
   };
 }
 

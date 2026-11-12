@@ -79,8 +79,15 @@ export function renderDuplexStats() {
 }
 
 let alertTimer = null;
+/** 合并同类 bad 告警（如 TTS 403），避免条幅连闪 */
+const alertMerge = { key: "", at: 0 };
 
-export function showAlert(text, kind) {
+/**
+ * @param {string} text
+ * @param {"ok"|"warn"|"bad"|string} [kind]
+ * @param {{ mergeKey?: string, mergeMs?: number }} [opts]
+ */
+export function showAlert(text, kind, opts = {}) {
   const el = $("alertBanner");
   if (!el) return;
   if (alertTimer) {
@@ -91,6 +98,16 @@ export function showAlert(text, kind) {
     el.style.display = "none";
     el.textContent = "";
     return;
+  }
+  const mergeKey = opts.mergeKey || "";
+  const mergeMs = opts.mergeMs || 60000;
+  if (mergeKey) {
+    const now = Date.now();
+    if (alertMerge.key === mergeKey && now - alertMerge.at < mergeMs) {
+      return;
+    }
+    alertMerge.key = mergeKey;
+    alertMerge.at = now;
   }
   el.style.display = "block";
   el.textContent = text;
@@ -108,8 +125,8 @@ export function showAlert(text, kind) {
     el.style.background = "#422006";
     el.style.color = "#fde68a";
   }
-  // ok / warn 自动收起，bad 多留一会
-  const ms = kind === "bad" ? 6000 : kind === "ok" ? 2200 : 3800;
+  // ok / warn 自动收起，bad 多留一会；合并告警延长展示
+  const ms = mergeKey ? Math.max(mergeMs, 12000) : kind === "bad" ? 6000 : kind === "ok" ? 2200 : 3800;
   alertTimer = setTimeout(() => {
     el.style.display = "none";
     alertTimer = null;

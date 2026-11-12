@@ -25,6 +25,9 @@
 | `adr/012-wave-h-prefetch-vad-paths.md` | Wave H：partial 预热 / VAD 预卷 / 打包路径 |
 | `adr/013-wave-i-llm-refine.md` | Wave I：smartClip + 两阶段 LLM 精炼 |
 | `adr/014-wave-m-speakable-counter.md` | Wave M：口播清洗 + Option C 模式族 + 盈利槽位 |
+| `adr/015-wave-q-copilot-topic-summary.md` | Wave Q：Copilot topic/fact 净化 + 总结噪声过滤 |
+| `adr/016-wave-p-copilot-dialogue-thread.md` | Wave P′：试播开链 + 短答选题巡检 |
+| `adr/017-shared-intelligence-layer.md` | Wave R + 共用智能层 + 副驾驶 Seed-Evolving |
 | `../knowledge_wiki/` | 会中 Evidence Wiki 2.0（与论文 wiki 分离） |
 | `session_logs/dev_sessions.jsonl` | 开发会话归档（追加写入） |
 | `session_logs/meeting_bridge.json` | 会中桥接态（MCP 可读） |

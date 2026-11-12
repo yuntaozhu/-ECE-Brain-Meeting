@@ -9,7 +9,9 @@
  * 配置生效通常延迟 5–10 分钟。不要对 lifetime 配额错误重试。
  *
  * HTTP：POST https://openspeech.bytedance.com/api/v3/tts/unidirectional
- * 鉴权：X-Api-Key；资源：X-Api-Resource-Id=seed-tts-2.0
+ * 鉴权（默认新版）：仅 X-Api-Key + X-Api-Resource-Id=seed-tts-2.0
+ * 旧版（DOUBAO_TTS_LEGACY_AUTH=1）：X-Api-App-Id + X-Api-Access-Key + Resource-Id，勿再带 X-Api-Key
+ * 禁止新/旧字段混用（曾导致 Forbidden）。
  */
 const https = require("https");
 const { randomUUID } = require("crypto");
@@ -112,6 +114,15 @@ function makeTtsError(p) {
     quotaType = "concurrency";
     retriable = true;
     businessCode = "TTS_QUOTA_CONCURRENCY";
+  } else if (
+    Number(p.httpStatus) === 401 ||
+    Number(p.httpStatus) === 403 ||
+    Number(p.code) === 45000030 ||
+    /forbidden|unauthorized|not granted|requested resource/i.test(message)
+  ) {
+    // 独立 TTS 鉴权/资源未开通：与额度耗尽区分，勿自动重试
+    retriable = false;
+    businessCode = "TTS_AUTH_FORBIDDEN";
   } else if (Number(p.code) === 45000000 && /payload unmarshal/i.test(message)) {
     retriable = false;
     businessCode = "TTS_BAD_PAYLOAD";
@@ -162,21 +173,97 @@ function textMaxChars() {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : TEXT_MAX_DEFAULT;
 }
 
+/**
+ * 独立 TTS 用的 API Key。
+ * 默认优先 DOUBAO_SPEECH_API_KEY（与 ASR 同源、已验证可调 seed-tts-2.0）。
+ * 仅当 DOUBAO_TTS_USE_DEDICATED_KEY=1 时才优先 DOUBAO_TTS_API_KEY，
+ * 避免 Shell/系统里残留的未授权 TTS Key 盖住可用 SPEECH Key（表现为 45000030 Forbidden）。
+ */
 function speechApiKey() {
-  return (
-    process.env.DOUBAO_TTS_API_KEY ||
-    process.env.DOUBAO_SPEECH_API_KEY ||
-    process.env.DOUBAO_REALTIME_API_KEY ||
-    ""
-  ).trim();
+  const dedicated = (process.env.DOUBAO_TTS_API_KEY || "").trim();
+  const speech = (process.env.DOUBAO_SPEECH_API_KEY || "").trim();
+  const realtime = (process.env.DOUBAO_REALTIME_API_KEY || "").trim();
+  if (process.env.DOUBAO_TTS_USE_DEDICATED_KEY === "1") {
+    return dedicated || speech || realtime;
+  }
+  return speech || dedicated || realtime;
+}
+
+/** 实际命中的 API Key 环境变量名（脱敏诊断用，不返回密钥）。 */
+function speechApiKeySource() {
+  const dedicated = (process.env.DOUBAO_TTS_API_KEY || "").trim();
+  const speech = (process.env.DOUBAO_SPEECH_API_KEY || "").trim();
+  const realtime = (process.env.DOUBAO_REALTIME_API_KEY || "").trim();
+  if (process.env.DOUBAO_TTS_USE_DEDICATED_KEY === "1") {
+    if (dedicated) return "DOUBAO_TTS_API_KEY";
+    if (speech) return "DOUBAO_SPEECH_API_KEY";
+    if (realtime) return "DOUBAO_REALTIME_API_KEY";
+    return "(none)";
+  }
+  if (speech) return "DOUBAO_SPEECH_API_KEY";
+  if (dedicated) return "DOUBAO_TTS_API_KEY";
+  if (realtime) return "DOUBAO_REALTIME_API_KEY";
+  return "(none)";
 }
 
 function speechAppId() {
   return (process.env.DOUBAO_SPEECH_APP_ID || process.env.DOUBAO_APP_ID || "").trim();
 }
 
+/** 旧版 AppID+AccessKey；默认关，避免与新版 X-Api-Key 混用被拒（对齐 ASR）。 */
+function useLegacyTtsAuth() {
+  return process.env.DOUBAO_TTS_LEGACY_AUTH === "1";
+}
+
 function ttsResourceId() {
   return (process.env.DOUBAO_TTS_RESOURCE_ID || TTS_RESOURCE_DEFAULT).trim();
+}
+
+/**
+ * 组装独立 TTS HTTP 鉴权头：新/旧只保留一套。
+ * @param {{ requestId?: string, includeContentType?: boolean, includeUsageControl?: boolean }} [opts]
+ * @returns {{ headers: Record<string,string>, authMode: "x-api-key"|"legacy-app+access", resourceId: string, appIdUsed: string|null, keySource: string, headerNames: string[] }}
+ */
+function buildIndependentTtsAuthHeaders(opts = {}) {
+  const apiKey = speechApiKey();
+  const resourceId = ttsResourceId();
+  const requestId = opts.requestId || randomUUID();
+  const legacy = useLegacyTtsAuth();
+  const appId = speechAppId();
+  /** @type {Record<string, string>} */
+  const headers = {};
+  if (opts.includeContentType !== false) {
+    headers["Content-Type"] = "application/json";
+  }
+  headers["X-Api-Resource-Id"] = resourceId;
+  headers["X-Api-Request-Id"] = requestId;
+  if (opts.includeUsageControl !== false) {
+    headers["X-Control-Require-Usage-Tokens-Return"] = "*";
+  }
+
+  let authMode = "x-api-key";
+  let appIdUsed = null;
+  if (legacy) {
+    authMode = "legacy-app+access";
+    headers["X-Api-Access-Key"] = apiKey;
+    if (appId && /^\d{6,}$/.test(appId)) {
+      headers["X-Api-App-Id"] = appId;
+      appIdUsed = appId;
+    }
+  } else {
+    headers["X-Api-Key"] = apiKey;
+    // 新版禁止附带 App-Id / Access-Key，即使 .env 里有 DOUBAO_SPEECH_APP_ID
+  }
+
+  return {
+    headers,
+    authMode,
+    resourceId,
+    appIdUsed,
+    keySource: speechApiKeySource(),
+    requestId,
+    headerNames: Object.keys(headers).sort()
+  };
 }
 
 function ttsVoice() {
@@ -235,6 +322,7 @@ function validateIndependentTtsConfig() {
   }
 
   const apiKey = speechApiKey();
+  const keySource = speechApiKeySource();
   if (!apiKey) {
     const msg =
       "DOUBAO_TTS_API_KEY / DOUBAO_SPEECH_API_KEY 为空，独立 TTS 无法鉴权";
@@ -267,14 +355,53 @@ function validateIndependentTtsConfig() {
     { speaker }
   );
 
+  const legacy = useLegacyTtsAuth();
+  const appId = speechAppId();
+  const ttsKey = (process.env.DOUBAO_TTS_API_KEY || "").trim();
+  const speechKey = (process.env.DOUBAO_SPEECH_API_KEY || "").trim();
+  const keysDiffer = Boolean(ttsKey && speechKey && ttsKey !== speechKey);
+  if (keysDiffer) {
+    const usingDedicated = process.env.DOUBAO_TTS_USE_DEDICATED_KEY === "1";
+    debugLog.warn(
+      "HostTts",
+      usingDedicated
+        ? "已启用 DOUBAO_TTS_USE_DEDICATED_KEY：正使用 DOUBAO_TTS_API_KEY；请确认该 Key 已开通 seed-tts-2.0 且与语音应用同属"
+        : "检测到 DOUBAO_TTS_API_KEY 与 DOUBAO_SPEECH_API_KEY 不同：默认忽略专用 TTS Key，改用 SPEECH Key；若确需专用 Key，设 DOUBAO_TTS_USE_DEDICATED_KEY=1",
+      {
+        usingDedicated,
+        keySource,
+        ttsKeyLen: ttsKey.length,
+        speechKeyLen: speechKey.length,
+        ttsKeyTail: ttsKey.slice(-4),
+        speechKeyTail: speechKey.slice(-4)
+      }
+    );
+  }
+  if (!legacy && appId) {
+    debugLog.info(
+      "HostTts",
+      "新版鉴权忽略 DOUBAO_SPEECH_APP_ID（仅使用 X-Api-Key）；旧版请设 DOUBAO_TTS_LEGACY_AUTH=1",
+      { appIdPresent: true, appIdLen: appId.length }
+    );
+  }
+  if (legacy && !appId) {
+    debugLog.warn(
+      "HostTts",
+      "DOUBAO_TTS_LEGACY_AUTH=1 但未设置 DOUBAO_SPEECH_APP_ID：旧版需要 AppId+AccessKey 成对"
+    );
+  }
+
   const sampleRate = ttsSampleRate();
   const config = {
     mode: "independent",
+    auth_mode: legacy ? "legacy-app+access" : "x-api-key",
     resource_id: resourceId,
     speaker,
     sample_rate: sampleRate,
+    api_key_source: keySource,
     api_key_masked: maskSecret(apiKey),
-    app_id: speechAppId() || "(none)",
+    app_id: legacy ? appId || "(none)" : "(ignored-new-auth)",
+    keys_tts_vs_speech_differ: keysDiffer,
     text_max: textMaxChars()
   };
   debugLog.info("HostTts", "独立 TTS 配置已校验（已脱敏）", config);
@@ -387,25 +514,22 @@ function synthesizeOnce(text, opts = {}) {
   const format = opts.format || "pcm";
   const voice = opts.voice || ttsVoice();
   const resourceId = opts.resourceId || ttsResourceId();
-  const apiKey = speechApiKey();
-  const requestId = randomUUID();
   const startedAt = Date.now();
   let firstPacketMs;
 
-  const headers = {
-    "Content-Type": "application/json",
-    "X-Api-Key": apiKey,
-    "X-Api-Resource-Id": resourceId,
-    "X-Api-Request-Id": requestId,
-    // 打开时网关可能回传本次计费字符数，便于对账
-    "X-Control-Require-Usage-Tokens-Return": "*"
-  };
-  const appId = speechAppId();
-  if (appId && /^\d{6,}$/.test(appId)) {
-    headers["X-Api-App-Id"] = appId;
-    headers["X-Api-App-ID"] = appId;
-  }
-
+  const auth = buildIndependentTtsAuthHeaders();
+  const headers = auth.headers;
+  const requestId = auth.requestId;
+  debugLog.info("HostTts", "独立 TTS 请求鉴权", {
+    authMode: auth.authMode,
+    keySource: auth.keySource,
+    resourceId: auth.resourceId,
+    headerNames: auth.headerNames,
+    appIdUsed: auth.appIdUsed,
+    speaker: voice,
+    text_len: t.length,
+    requestId
+  });
   // 官方：顶层必须是 req_params；audio_params 在其内。user 为兼容字段。
   const bodyObj = {
     user: { uid: "dazhi-host" },
@@ -565,8 +689,11 @@ function synthesizeOnce(text, opts = {}) {
             let message = res.statusMessage || `http_${httpStatus}`;
             try {
               const j = JSON.parse(bodyText);
+              const h = j.header && typeof j.header === "object" ? j.header : null;
               if (j.code != null) code = Number(j.code);
+              else if (h?.code != null) code = Number(h.code);
               if (j.message || j.msg) message = String(j.message || j.msg);
+              else if (h?.message || h?.msg) message = String(h.message || h.msg);
             } catch (_) {
               message = bodyText.slice(0, 512) || message;
             }
@@ -670,7 +797,8 @@ function synthesizeOnce(text, opts = {}) {
             message: err.message,
             logid: err.logid,
             request_id: requestId
-          }
+          },
+          { rateKey: "tts-quota-lifetime", rateMs: 60000 }
         );
         noteLifetimeQuota();
         try {
@@ -686,6 +814,22 @@ function synthesizeOnce(text, opts = {}) {
           message: err.message,
           logid: err.logid
         });
+      } else if (err.businessCode === "TTS_AUTH_FORBIDDEN") {
+        // 同一会话鉴权失败会连打：合并 ERROR，避免刷屏盖住后续 SPEECH/策略日志
+        debugLog.error(
+          "HostTts",
+          "TTS 鉴权/资源未授权（Forbidden）：请在豆包语音控制台为当前 App 开通 seed-tts-2.0，并核对 DOUBAO_TTS_API_KEY（或 DOUBAO_SPEECH_API_KEY）与 DOUBAO_SPEECH_APP_ID 同属该应用；开通后约 5–10 分钟生效，勿用方舟 LLM Key 顶替",
+          {
+            code: err.code,
+            message: err.message,
+            httpStatus: err.httpStatus,
+            logid: err.logid,
+            request_id: requestId,
+            resource_id: resourceId,
+            speaker: voice
+          },
+          { rateKey: "tts-auth-forbidden", rateMs: 60000 }
+        );
       } else if (err.businessCode === "TTS_BAD_PAYLOAD") {
         debugLog.error("HostTts", "协议/JSON 异常（payload unmarshal），请检查请求体", {
           code: err.code,
@@ -795,6 +939,7 @@ function metricResultFromError(ttsError) {
   if (!ttsError) return "server_error";
   if (ttsError.quotaType === "text_words_lifetime") return "quota_words";
   if (ttsError.quotaType === "concurrency") return "quota_concurrency";
+  if (ttsError.businessCode === "TTS_AUTH_FORBIDDEN") return "auth_forbidden";
   if (ttsError.businessCode === "TTS_TIMEOUT" || ttsError.businessCode === "TTS_FIRST_PACKET_TIMEOUT") {
     return "timeout";
   }
@@ -1021,6 +1166,10 @@ module.exports = {
   ttsEvents,
   maskSecret,
   speechApiKey,
+  speechApiKeySource,
+  speechAppId,
+  useLegacyTtsAuth,
+  buildIndependentTtsAuthHeaders,
   splitTextForTts,
   resetTtsCircuitForTests,
   TTS_URL,

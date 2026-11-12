@@ -29,6 +29,10 @@ function rememberRealAsk(state, question) {
   const prev = String(state.lastRealAsk || "").trim();
   // Short how-do tails must not overwrite a longer grounded business ask.
   if (prev && rx("speak", "realAskShortHowDo").test(q) && prev.length > q.length + 2) return;
+  if (prev && prev !== q) {
+    state.prevRealAsk = prev.slice(0, 200);
+    state.prevRealAskAt = state.lastRealAskAt || Date.now();
+  }
   state.lastRealAsk = q.slice(0, 200);
   state.lastRealAskAt = Date.now();
 }

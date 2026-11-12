@@ -77,6 +77,20 @@ async function handle(ctx) {
       return null;
     }
     if (alreadyConsult) {
+      // 有未答完的实质问：再喊「大智」时重跑待答，避免空 ACK / 静默待问
+      const pendingAsk = String(state.pendingAsk || state.lastOpenAsk || "").trim();
+      if (pendingAsk.length >= 8) {
+        ctx.lastFloor = pendingAsk;
+        cmd.command = null;
+        cmd.named = false;
+        cmd.payload = "";
+        cmd.text = pendingAsk;
+        S.debugLog.info("Strategy", "咨询中重复唤醒，重跑待答", {
+          text: pendingAsk.slice(0, 40),
+          stickyLeft: Math.max(0, (state.haLockedUntil || 0) - Date.now())
+        });
+        return null;
+      }
       S.debugLog.info("Strategy", "咨询中重复唤醒，静默待问", {
         text: lastFloor.slice(0, 20),
         stickyLeft: Math.max(0, (state.haLockedUntil || 0) - Date.now())

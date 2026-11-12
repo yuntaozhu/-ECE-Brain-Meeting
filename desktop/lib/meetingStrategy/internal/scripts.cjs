@@ -66,6 +66,16 @@ function isPresenceOrControlAsk(text) {
   return false;
 }
 
+/** 总结/回顾时剔除测麦、天气、元对话噪声问句 */
+function isSummaryNoiseAsk(text) {
+  const t = String(text || "").trim();
+  if (!t) return true;
+  try {
+    if (rx("speak", "summaryNoiseAsk").test(t)) return true;
+  } catch (_) {}
+  return false;
+}
+
 function formatAskRecap(rows, opts = {}) {
   const list = Array.isArray(rows) ? rows : [];
   const pendingAsk = String(opts.pendingAsk || "").trim();
@@ -74,7 +84,7 @@ function formatAskRecap(rows, opts = {}) {
     const row = list[i];
     if (row?.speaker !== "会场" || !looksLikeQuestionLine(row.text)) continue;
     const q = String(row.text).replace(/^大智[，,\s]*/, "").trim();
-    if (q.length < 4 || isPresenceOrControlAsk(q)) continue;
+    if (q.length < 4 || isPresenceOrControlAsk(q) || isSummaryNoiseAsk(q)) continue;
     let answered = false;
     for (let j = i + 1; j < list.length; j++) {
       if (list[j]?.speaker === "会场" && looksLikeQuestionLine(list[j].text)) break;
@@ -129,5 +139,6 @@ module.exports = {
   looksLikeQuestionLine,
   formatAskRecap,
   extractiveSummary,
+  isSummaryNoiseAsk,
   CHITCHAT_LINE
 };

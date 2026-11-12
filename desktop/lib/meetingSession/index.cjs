@@ -11,6 +11,7 @@ const {
 const sessionState = require("./SessionState.cjs");
 const intents = require("./intents");
 const patrol = require("./patrolPolicy.cjs");
+const dialogueThread = require("./dialogueThread.cjs");
 
 module.exports = {
   ...constants,
@@ -20,5 +21,6 @@ module.exports = {
   detectMeetingCommand,
   ...sessionState,
   ...intents,
-  ...patrol
+  ...patrol,
+  dialogueThread
 };

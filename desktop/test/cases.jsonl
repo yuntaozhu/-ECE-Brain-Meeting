@@ -56,3 +56,14 @@
 {"id":"see-progress-how","suite":"eval","kind":"ask","q":"家长通过什么方式看见进步？","setup":{"lastHostSpeakText":"按开口次数、读准度生成个性化数据，总部系统出报告，老师转发即可"},"expect":{"intent":["other"],"answerForbids":["你想先听哪一步"],"answerIncludesAll":["报告"],"answerIncludesAny":["实拍","成果展"],"speakReason":["posterior"],"titleIncludesAny":["家长看得见","看见进步"],"answerFromCard":true}}
 {"id":"fallback-no-agenda","suite":"eval","kind":"fallback","q":"我的投资能回本吗？","forbidAny":["今天主题是","您可以问全园美语是什么","第二条路"]}
 {"id":"fallback-loss-no-alternate","suite":"eval","kind":"fallback","q":"我的园所经营的不是很好，引入39,000的课程后会不会让我亏损？","forbidAny":["第二条路","今天主题是"],"needAny":["不保证","测算","一点八","三万九"]}
+{"id":"wr-contact-who","suite":"wave-r","kind":"faq","q":"想加入找谁联系？","need":"项目负责人|0756|对接|预约","forbid":"不以在籍人数乘单价|三笔账"}
+{"id":"wr-term-or-year","suite":"wave-r","kind":"faq","q":"三万九是学期还是一年？","need":"每学期","forbid":"^$"}
+{"id":"wr-teacher-bar","suite":"wave-r","kind":"faq","q":"老师不是英语专业，门槛高吗？","need":"不需要先招专业|Teacher说|意愿","forbid":"教育局不允许|偷偷上课"}
+{"id":"wr-vs-training","suite":"wave-r","kind":"faq","q":"全园美语班和外面的英语培训机构有什么区别？","need":"系统建设|四端|特色园","forbid":"教育局不允许|先护收费盘面"}
+{"id":"wr-intl-garden","suite":"wave-r","kind":"faq","q":"是不是只有高端国际园才适合做全园美语？","need":"不是|外校园|四万九","forbid":"偷偷上课"}
+{"id":"wr-unprofessional","suite":"wave-r","kind":"faq","q":"家长觉得幼儿园开英语课不太专业，老师也不专业怎么办？","need":"看得见|开口|测评|成果展","forbid":"教育局不允许|偷偷上课"}
+{"id":"wr-edu-bureau","suite":"wave-r","kind":"faq","q":"当地教育局不允许幼儿园开英语课怎么办？","need":"教育局|不能按英语课|本地规定","forbid":"只有高端国际园"}
+{"id":"wr-apply-who","suite":"wave-r","kind":"faq","q":"申请找谁？","need":"项目负责人|对接|0756|预约","forbid":"不以在籍人数乘单价"}
+{"id":"wr-copilot-contact","suite":"wave-r","kind":"copilot-align","q":"想加入找谁联系？","need":"负责人|0756|对接|预约"}
+{"id":"wr-copilot-unprofessional","suite":"wave-r","kind":"copilot-align","q":"家长觉得老师不专业怎么办？","need":"看得见|开口|测评|成果|Teacher","forbid":"教育局不允许|偷偷上课"}
+{"id":"wr-copilot-intl","suite":"wave-r","kind":"copilot-align","q":"高端国际园做英语是不是更有优势？","need":"外校园|四万九|不是|系统执行|合作园","forbid":"偷偷上课|绕过教育局"}

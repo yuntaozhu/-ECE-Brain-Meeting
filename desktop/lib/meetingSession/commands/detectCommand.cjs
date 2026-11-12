@@ -96,12 +96,22 @@ function detectAgentCommand(lastFloor) {
     !stop &&
     scan.some((s) => re("continueBare").test(clauseBare(s)));
 
+  const summaryDoneAsk =
+    !meetingEnd &&
+    (re("summaryDoneAsk").test(t) ||
+      re("summaryDoneAsk").test(full) ||
+      re("summaryDoneAsk").test(payload)) &&
+    !re("summaryForceRepeat").test(t) &&
+    !re("summaryForceRepeat").test(full);
   const summaryHint = (s) =>
     Boolean(s) &&
     (re("summaryMain").test(s) || re("summaryContext").test(s)) &&
-    !re("summaryDeny").test(s);
+    !re("summaryDeny").test(s) &&
+    !re("summaryDoneAsk").test(s);
   const summary =
-    !meetingEnd && (summaryHint(t) || summaryHint(full) || summaryHint(payload));
+    !meetingEnd &&
+    !summaryDoneAsk &&
+    (summaryHint(t) || summaryHint(full) || summaryHint(payload));
   const confirmSummary = re("confirmSummaryTail").test(t) || re("confirmSummaryFull").test(full);
   const pauseLog = re("pauseLog").test(t);
   const resumeLog = re("resumeLog").test(t) && !continueSpeak;
@@ -124,6 +134,7 @@ function detectAgentCommand(lastFloor) {
   else if (reask) command = "REASK";
   else if (pauseLog) command = "PAUSE_LOG";
   else if (resumeLog) command = "RESUME_LOG";
+  else if (summaryDoneAsk) command = "SUMMARY_STATUS";
   else if (summary) command = "SUMMARY";
   else if (confirmSummary) command = "CONFIRM_SUMMARY";
   else if (continueHH) command = "CONTINUE_HH";

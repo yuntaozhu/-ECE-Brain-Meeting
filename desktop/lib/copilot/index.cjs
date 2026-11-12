@@ -16,6 +16,7 @@ const ocrWin = require("./ocrWin.cjs");
 const refine = require("./refine.cjs");
 const sanitize = require("./sanitizeSpeakText.cjs");
 const counterPattern = require("./counterPattern.cjs");
+const topicQuality = require("./topicQuality.cjs");
 
 module.exports = {
   ...gate,
@@ -30,5 +31,6 @@ module.exports = {
   ...ocrWin,
   ...refine,
   ...sanitize,
-  ...counterPattern
+  ...counterPattern,
+  ...topicQuality
 };

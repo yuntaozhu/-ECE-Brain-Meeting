@@ -14,3 +14,9 @@
 
 - UI 显示「精炼中…」→「✨ AI 已精炼」。
 - 默认 `COPILOT_LLM_REFINE=0` 时仅手动出卡尝试精炼（有 Key 才成功）。
+
+## 补丁（Wave R Phase 5）
+
+- 精炼走 `channel:"copilot"`：`COPILOT_LLM_MODEL`（推荐 `doubao-seed-evolving` / `ep-`），不污染 Host `DOUBAO_CHAT_MODEL`。
+- `COPILOT_LLM_THINKING` 默认 `disabled`，请求带 `thinking.type=disabled`。
+- 与 ADR-017 的 SpeakDraft 对齐：已 `aligned` 可跳过 refine；refine 时事实锁 Draft/Evidence。

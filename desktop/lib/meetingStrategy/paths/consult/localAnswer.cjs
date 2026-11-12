@@ -12,6 +12,10 @@ const {
   loadChains,
   isHowDoAsk
 } = require("../../../knowledge/chains/match.cjs");
+const { evaluateCommitRelease } = require("../../../intelligence/commitGate.cjs");
+const { commitDraft, releaseDraft } = require("../../../intelligence/draft.cjs");
+const { observeTurn } = require("../../../intelligence/observe.cjs");
+const { isTopicShift } = require("../../../intelligence/topicShift.cjs");
 
 function hasDoubaoKey() {
   return Boolean((process.env.DOUBAO_API_KEY || process.env.ARK_API_KEY || "").trim());
@@ -241,15 +245,35 @@ function tryLocalAnswer(ctx) {
     }
   }
   const retrieved = { hits };
-  const lastHost = String(ctx.opts?.lastHostSpeakText || "");
+  let lastHost = String(ctx.opts?.lastHostSpeakText || "");
   // 资料卡与澄清 probe 可作 prev；脚本/alternate_path 不当粘滞。
-  const prevForBayes = (() => {
+  let prevForBayes = (() => {
     const d = state?.lastDesign;
     if (!d) return null;
     if (materialAnswer(d)) return d;
     if (d.type === "clarify" && (d.hypothesisId === "probe" || (d.segments || []).length === 2)) return d;
     return null;
   })();
+  // Wave R2：异题清粘滞——禁旧否定边界 carry / 旧卡 markov
+  const shifted =
+    completeAsk(askText) && isTopicShift(askText, prevForBayes, lastHost);
+  if (shifted) {
+    S.debugLog.info("Strategy", "异题清粘滞", {
+      text: askText.slice(0, 40),
+      prev: String(prevForBayes && prevForBayes.hypothesisId || "").slice(0, 48)
+    });
+    prevForBayes = null;
+    lastHost = "";
+    if (state) {
+      state.lastDesign = null;
+      if (state.lastIntelligence) {
+        state.lastIntelligence = {
+          ...state.lastIntelligence,
+          sticky: { ...(state.lastIntelligence.sticky || {}), clearCarry: true }
+        };
+      }
+    }
+  }
   const bayes = decideSpeak({
     ask: askText,
     hits: retrieved?.hits || [],
@@ -263,6 +287,57 @@ function tryLocalAnswer(ctx) {
     bayes.action === "answer" && S.isDefinitionSpeak(bayes.speak) && !S.rx("faq", "defMark").test(askText);
 
   const hadMaterial = materialAnswer(state?.lastDesign);
+
+  // Wave R3：闭题有 FAQ 证据且贝叶斯未定答 → 强制念 FAQ（避免空洞确认）
+  if (
+    completeAsk(askText) &&
+    (rw.closed || S.isClosedFaqQuestion(askText)) &&
+    bayes.action !== "answer" &&
+    !definitionMismatch
+  ) {
+    const closedFaq = S.matchFaqInstant(askText);
+    const closedSpeak = String((closedFaq && closedFaq.answer) || "").trim();
+    if (closedSpeak && !(isHowDoAsk(askText) && S.isDefinitionSpeak(closedSpeak))) {
+      const line = S.stripIntroBoilerplate(S.clipUtterance(closedSpeak, 160));
+      if (state) {
+        state.lastDesign = {
+          type: "answer",
+          hypothesisId: String((closedFaq && closedFaq.title) || askText).slice(0, 120),
+          segments: [],
+          depth: "final"
+        };
+        state.lastOpenAsk = "";
+        state.pendingAsk = "";
+      }
+      commitDraft(state, {
+        text: line,
+        arkMode: "faq",
+        title: (closedFaq && closedFaq.title) || "",
+        card: { title: (closedFaq && closedFaq.title) || "", speak: line },
+        sticky: shifted ? { clearCarry: true } : undefined
+      });
+      S.debugLog.info("Strategy", "闭题 FAQ 强制秒答", {
+        text: askText.slice(0, 40),
+        title: String((closedFaq && closedFaq.title) || "").slice(0, 48),
+        ...observeTurn(state, { gate: "committed", source: "faq", stage: "instant" })
+      });
+      return S.playAnswer(
+        line,
+        useBiz && !S.isClosedFaqQuestion(askText) ? "BIZ_ANSWER" : "WAKE_ANSWER",
+        state,
+        a2aTrace,
+        kbStatus,
+        qFp,
+        "faq",
+        {
+          cacheQuestion: askText,
+          speakReason: "closed-force",
+          speakTitle: (closedFaq && closedFaq.title) || "",
+          oralize: true
+        }
+      );
+    }
+  }
 
   function playChainHit(chainHit, preferredTitle) {
     if (!chainHit || !chainHit.answer) return null;
@@ -295,8 +370,15 @@ function tryLocalAnswer(ctx) {
       seedAlign: chainHit.seedAlign,
       step: chainHit.ask.slice(0, 40)
     });
+    const chainSpeak = S.stripIntroBoilerplate(S.clipUtterance(chainHit.answer, 160));
+    commitDraft(state, {
+      text: chainSpeak,
+      arkMode: "chain",
+      title: chainHit.ask || preferredTitle || "",
+      card: { title: chainHit.ask || preferredTitle || "", speak: chainSpeak, align: chainHit.align }
+    });
     return S.playAnswer(
-      S.stripIntroBoilerplate(S.clipUtterance(chainHit.answer, 160)),
+      chainSpeak,
       useBiz && !S.isClosedFaqQuestion(askText) ? "BIZ_ANSWER" : "WAKE_ANSWER",
       state,
       a2aTrace,
@@ -327,17 +409,56 @@ function tryLocalAnswer(ctx) {
   if (bayes.action === "answer" && bayes.speak && !definitionMismatch) {
     const answer = S.stripIntroBoilerplate(S.clipUtterance(bayes.speak, 160));
     if (answer) {
+      const release = evaluateCommitRelease(bayes, {
+        forceRule: Boolean(ctx.opts?.forceRule),
+        hasKey: hasDoubaoKey()
+      });
+      if (release.release) {
+        releaseDraft(state, {
+          why: release.why,
+          card: {
+            title: bayes.title,
+            posterior: bayes.posterior,
+            align: bayes.align
+          }
+        });
+        S.debugLog.info("Strategy", "弱定卡放行 Agent", {
+          text: askText.slice(0, 40),
+          title: String(bayes.title || "").slice(0, 48),
+          extra: bayes.extra,
+          why: release.why,
+          ...observeTurn(state, {
+            gate: "agent",
+            source: "agent",
+            posterior: bayes.posterior,
+            align: bayes.align,
+            releasedToAgent: true
+          })
+        });
+        return null;
+      }
       if (state && bayes.design) state.lastDesign = bayes.design;
       if (state) {
         state.lastOpenAsk = "";
         state.pendingAsk = "";
       }
       const ark = bayes.reason === "script" ? "kb-script" : "faq";
+      commitDraft(state, {
+        text: answer,
+        arkMode: ark,
+        title: bayes.title || "",
+        card: {
+          title: bayes.title,
+          speak: answer,
+          posterior: bayes.posterior,
+          align: bayes.align
+        }
+      });
       S.debugLog.info("Strategy", bayes.reason === "script" ? "意图脚本秒答" : "贝叶斯 FAQ 秒答", {
         text: askText.slice(0, 40),
         title: bayes.title,
-        posterior: bayes.posterior,
-        reason: bayes.reason
+        reason: bayes.reason,
+        ...observeTurn(state, { gate: "committed", source: ark, stage: "instant" })
       });
       return S.playAnswer(
         answer,
@@ -387,6 +508,38 @@ function tryLocalAnswer(ctx) {
     }
     if (!speak) return null;
     if (isHowDoAsk(askText) && S.isDefinitionSpeak(speak)) return null;
+    const softBayes = {
+      action: "answer",
+      reason: "shadow-kb",
+      posterior: Number(bayes.posterior) || 0,
+      align: bayes.align != null ? bayes.align : bayes.shadow && bayes.shadow.align,
+      extra: bayes.extra != null ? bayes.extra : bayes.shadow && bayes.shadow.extra,
+      title: preferredTitle,
+      shadow: bayes.shadow
+    };
+    const shadowRelease = evaluateCommitRelease(softBayes, {
+      forceRule: Boolean(ctx.opts?.forceRule),
+      hasKey: hasDoubaoKey()
+    });
+    if (shadowRelease.release) {
+      releaseDraft(state, {
+        why: shadowRelease.why,
+        card: { title: preferredTitle, posterior: softBayes.posterior, align: softBayes.align }
+      });
+      S.debugLog.info("Strategy", "弱 shadow 定卡放行 Agent", {
+        text: askText.slice(0, 40),
+        title: preferredTitle.slice(0, 40),
+        why: shadowRelease.why,
+        ...observeTurn(state, {
+          gate: "agent",
+          source: "agent",
+          posterior: softBayes.posterior,
+          align: softBayes.align,
+          releasedToAgent: true
+        })
+      });
+      return null;
+    }
     if (state) {
       state.lastDesign = {
         type: "answer",
@@ -401,8 +554,20 @@ function tryLocalAnswer(ctx) {
       text: askText.slice(0, 40),
       title: preferredTitle.slice(0, 40)
     });
+    const shadowSpeak = S.stripIntroBoilerplate(S.clipUtterance(speak, 160));
+    commitDraft(state, {
+      text: shadowSpeak,
+      arkMode: "kb-fallback",
+      title: preferredTitle || "",
+      card: {
+        title: preferredTitle,
+        speak: shadowSpeak,
+        posterior: softBayes.posterior,
+        align: softBayes.align
+      }
+    });
     return S.playAnswer(
-      S.stripIntroBoilerplate(S.clipUtterance(speak, 160)),
+      shadowSpeak,
       useBiz && !S.isClosedFaqQuestion(askText) ? "BIZ_ANSWER" : "WAKE_ANSWER",
       state,
       a2aTrace,
@@ -480,6 +645,8 @@ function tryLocalAnswer(ctx) {
         if (state && complete) {
           state.pendingAsk = String(askText).slice(0, 200);
           state.pendingAskAt = Date.now();
+          state.lastOpenAsk = String(askText).slice(0, 200);
+          state.lastOpenAskAt = Date.now();
         }
         return skipResult(state, a2aTrace, kbStatus, qFp, "OK", bayes.reason || "no_evidence");
       }

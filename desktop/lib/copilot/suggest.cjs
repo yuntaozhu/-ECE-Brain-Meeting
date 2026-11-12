@@ -13,7 +13,11 @@ const { buildDeepDive } = require("./deepDive.cjs");
 const { smartClip, clip } = require("./suggestClip.cjs");
 const { pickCounterPattern, fillTpl } = require("./counterPattern.cjs");
 const { sanitizeSpeakText } = require("./sanitizeSpeakText.cjs");
-
+const { isUsableFact } = require("./topicQuality.cjs");
+const {
+  alignCopilotFromDraft,
+  draftUsableForSegment
+} = require("../intelligence/alignFromDraft.cjs");
 
 function isCopilotEnabled(cfg) {
   if (process.env.COPILOT_ENABLED === "0") return false;
@@ -23,7 +27,7 @@ function isCopilotEnabled(cfg) {
 
 /**
  * @param {string} transcript
- * @param {{ agenda?: string, force?: boolean, skipPrefetch?: boolean }} [opts]
+ * @param {{ agenda?: string, force?: boolean, skipPrefetch?: boolean, speakDraft?: object, draftAgeMs?: number }} [opts]
  */
 function buildCopilotPacket(transcript, opts = {}) {
   const cfg = copilotCfg();
@@ -56,6 +60,7 @@ function buildCopilotPacket(transcript, opts = {}) {
     urgency: gate.urgency,
     should_trigger: gate.should_trigger,
     target_topic: gate.target_topic,
+    segment_kind: gate.segment_kind || "",
     segment: gate.segment,
     agenda: opts.agenda || "",
     speaker_role: "Others",
@@ -91,38 +96,54 @@ function buildCopilotPacket(transcript, opts = {}) {
 
   if (!packet.should_trigger) return packet;
 
-  const topic = gate.target_topic || "当前议题";
+  const topic = gate.target_topic || "";
   let fact = "";
+  let fromDraft = false;
+  const draft = opts.speakDraft || null;
+  if (
+    draft &&
+    draftUsableForSegment(segment, draft, { force, draftAgeMs: opts.draftAgeMs })
+  ) {
+    const body = String(draft.text || "").trim();
+    if (isUsableFact(body)) {
+      fact = clip(body, maxChars);
+      fromDraft = true;
+      packet.faq_title = draft.title || packet.faq_title || null;
+      packet.draftFp = draft.draftFp || "";
+      packet.key_facts.push(clip(body, 48));
+    }
+  }
   const pre = takePrefetch(segment);
-  if (pre?.faq?.answer) {
+  if (!fromDraft && pre?.faq?.answer && isUsableFact(pre.faq.answer)) {
     packet.faq_title = pre.faq.title || null;
-    fact = clip(pre.faq.answer || pre.faq.title || "", maxChars);
-    packet.key_facts = Array.isArray(pre.keyFacts) ? pre.keyFacts.slice(0, 4) : [];
+    fact = clip(pre.faq.answer || "", maxChars);
+    packet.key_facts = Array.isArray(pre.keyFacts)
+      ? pre.keyFacts.filter(isUsableFact).slice(0, 4)
+      : [];
     if (packet.prefetch) packet.prefetch.used = true;
-  } else {
+  } else if (!fromDraft) {
     try {
       const faq = matchFaqInstant(segment) || (force ? runPrefetch(segment)?.faq : null);
-      if (faq) {
+      if (faq && isUsableFact(faq.answer || faq.title)) {
         packet.faq_title = faq.title || null;
         const body = String(faq.answer || "").trim();
-        fact = clip(body || faq.title || "", maxChars);
+        if (isUsableFact(body)) fact = clip(body, maxChars);
         if (faq.title) packet.key_facts.push(clip(faq.title, 40));
-        if (body) packet.key_facts.push(clip(body, 48));
+        if (body && isUsableFact(body)) packet.key_facts.push(clip(body, 48));
       }
     } catch (_) {}
     if (pre?.keyFacts?.length && !packet.key_facts.length) {
-      packet.key_facts = pre.keyFacts.slice(0, 4);
+      packet.key_facts = pre.keyFacts.filter(isUsableFact).slice(0, 4);
       if (packet.prefetch) packet.prefetch.used = true;
     }
   }
 
-  // Wiki superseded → 权衡口径
-  let supersededHint = "";
+  // Wiki superseded → 仅 internal / key_facts，不进可播 Option
   try {
     const preEv = takePrefetch(segment);
     const sup = preEv?.superseded?.[0] || preEv?.wiki2?.superseded?.[0];
     if (sup?.statement) {
-      supersededHint = clip(
+      const supersededHint = clip(
         `历史已否决：${sup.statement}${
           sup.reason_for_rejection ? `（${sup.reason_for_rejection}）` : ""
         }`,
@@ -134,14 +155,15 @@ function buildCopilotPacket(transcript, opts = {}) {
     }
   } catch (_) {}
 
-  const pushForward = fact
-    ? fillTpl(templates.push_forward_with_fact || templates.push_forward_generic, { fact })
-    : templates.push_forward_generic || "";
-  // 否决只进 key_facts / Deep Dive internal，不拼进可试播 Option B
-  const pushBack = fillTpl(templates.push_back_with_topic || templates.push_back_generic, {
-    topic
-  });
-  const counterPick = pickCounterPattern(segment, topic);
+  // 无合格 fact / topic 时只用 generic，禁止把整句 ASR 灌进模板
+  const pushForward =
+    fact && isUsableFact(fact)
+      ? fillTpl(templates.push_forward_with_fact || templates.push_forward_generic, { fact })
+      : templates.push_forward_generic || "";
+  const pushBack = topic
+    ? fillTpl(templates.push_back_with_topic || templates.push_back_generic, { topic })
+    : templates.push_back_generic || "";
+  const counterPick = pickCounterPattern(segment, topic || "这一点");
   const counter = counterPick.text;
 
   packet.suggestions = {
@@ -152,6 +174,11 @@ function buildCopilotPacket(transcript, opts = {}) {
   packet.counter_pattern = counterPick.id;
   packet.stage = "instant";
   packet.refined = false;
+
+  if (fromDraft && draft) {
+    const aligned = alignCopilotFromDraft(packet, draft, { maxChars, templates });
+    Object.assign(packet, aligned);
+  }
 
   try {
     const screenLine = formatScreenForPrompt();

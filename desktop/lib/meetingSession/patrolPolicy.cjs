@@ -183,7 +183,7 @@ function displayCorrectAsr(text) {
 }
 
 /**
- * 上一答在让选题时，短句命中候选项（与 query/rewrite.matchOfferedChoice 对齐）。
+ * 上一答 / 对话链在让选题时，短句命中候选项。
  * @param {string} text
  * @param {string} [lastHostAnswer]
  */
@@ -191,21 +191,15 @@ function looksLikeOfferedChoicePick(text, lastHostAnswer) {
   const bare = normalizeDazhiAliases(String(text || "").trim()).replace(/[，,。．.!！？?\s]/g, "");
   if (!bare || bare.length < 2 || bare.length > 14) return false;
   if (re("patrolChoiceSkip").test(bare)) return false;
-  const host = String(lastHostAnswer || "").trim();
-  if (!host || !re("choiceInvite").test(host)) return false;
-  let chunk = "";
-  const colon = host.match(/[：:]([^。！？?\n]{4,80})/);
-  if (colon) chunk = colon[1];
-  else {
-    const idx = host.search(re("choiceInvite"));
-    if (idx > 4) chunk = host.slice(Math.max(0, idx - 48), idx);
-  }
-  chunk = chunk.replace(/与/g, "、");
-  const parts = chunk
-    .split(/[、，,/／]/)
-    .map((s) => String(s || "").replace(/[的呢啊哦呀\s]/g, "").trim())
-    .filter((s) => s.length >= 2 && s.length <= 12);
-  return parts.some((c) => bare === c || bare.includes(c) || c.includes(bare));
+  try {
+    const { matchFloor, isActive } = require("./dialogueThread.cjs");
+    if (isActive() && matchFloor(text)) return true;
+  } catch (_) {}
+  try {
+    const { matchOfferedChoice } = require("../meetingStrategy/query/offerExtract.cjs");
+    if (matchOfferedChoice(text, lastHostAnswer)) return true;
+  } catch (_) {}
+  return false;
 }
 
 /**
@@ -249,7 +243,15 @@ function shouldImmediatePatrolForUi(text, opts = {}) {
 
   if (isConsultMode(mode) && re("commitAct").test(last)) return true;
 
-  if (isConsultMode(mode) && looksLikeOfferedChoicePick(text, lastHost)) {
+  // 对话链 / 咨询中：选题短答立刻巡检（不要求叫「大智」）
+  let threadActive = false;
+  try {
+    threadActive = require("./dialogueThread.cjs").isActive();
+  } catch (_) {}
+  if (
+    (isConsultMode(mode) || threadActive) &&
+    looksLikeOfferedChoicePick(text, lastHost)
+  ) {
     return true;
   }
 
@@ -260,6 +262,13 @@ function shouldImmediatePatrolForUi(text, opts = {}) {
   if (echo.echo && !looksLikeOfferedChoicePick(text, lastHost)) return false;
 
   if (re("patrolNamed").test(last)) return true;
+
+  // 链上进行中的短业务追问（已选 focus 后继续聊）
+  if (threadActive && last.length >= 2 && last.length <= 36 && !echo.echo) {
+    if (re("consultExpand").test(last) || re("consultTopic").test(last) || re("consultQuestionWords").test(last)) {
+      return true;
+    }
+  }
 
   if (isConsultMode(mode)) {
     try {
