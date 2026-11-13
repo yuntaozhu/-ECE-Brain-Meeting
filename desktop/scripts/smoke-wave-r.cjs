@@ -743,7 +743,34 @@ function phase8cSmoke() {
   const advisor = String(copilotCfg().refine?.advisorSystem || "");
   check("refine:advisorSystem", /副驾驶顾问|不是话术润色器/.test(advisor), advisor.slice(0, 48));
   check("refine:advisor 禁按现有口径", /按现有口径/.test(advisor), "prompt should ban the phrase");
+  check("refine:advisor 禁边界与代价骨架", /边界与代价再拍板/.test(advisor));
   check("refine:advisor 三角", /push_forward/.test(advisor) && /push_back/.test(advisor));
+
+  const { isSkeletonSuggestion, buildPushBackLine } = require("../lib/copilot/skeleton.cjs");
+  check(
+    "skeleton:旧 B 套话可识别",
+    isSkeletonSuggestion("关于加入后1年能赚多少，建议先确认边界与代价再拍板。") === true
+  );
+  const bFact = buildPushBackLine({
+    fact: "三万九要对照三笔账看，测算不保证招满。",
+    topic: "一年能赚多少"
+  });
+  check(
+    "skeleton:B+fact 非旧套话",
+    Boolean(bFact) && !isSkeletonSuggestion(bFact) && /测算|风险|落空|招满/.test(bFact),
+    bFact.slice(0, 48)
+  );
+  const earnPkt = buildCopilotPacket("会场: 加入后1年能赚多少？", {
+    agenda: DEFAULT_AGENDA,
+    force: true
+  });
+  check(
+    "instant:一年赚多少 B 去模板",
+    earnPkt.should_trigger &&
+      !isSkeletonSuggestion(earnPkt.suggestions?.push_back || "") &&
+      !/建议先确认边界与代价再拍板/.test(earnPkt.suggestions?.push_back || ""),
+    String(earnPkt.suggestions?.push_back || "").slice(0, 56)
+  );
 }
 
 hostDraftSmoke()

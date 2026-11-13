@@ -57,6 +57,43 @@ async function prepareAsk(ctx) {
       correctReask
   });
   let askText = rw.rewritten || peeledAsk;
+
+  // R10c：短窗续句粘合（ASR 把一句拆成两 final）
+  try {
+    const { pickLatestFocus, focusGlueMs, commitFocusAsk } = require("../../../intelligence/memory.cjs");
+    const glueMs = focusGlueMs();
+    const shortFollow = storeEarly.rx("commands", "followOnShort").test(peeledAsk);
+    const focus = pickLatestFocus(state, {
+      ttlMs: glueMs,
+      reject: (t) =>
+        storeEarly.rx("commands", "urgeAct").test(t) ||
+        S.isRecallLastAsk(t) ||
+        S.isSessionMemoryMeta(t)
+    });
+    const within =
+      focus.text &&
+      focus.at &&
+      Date.now() - focus.at <= glueMs &&
+      focus.text !== peeledAsk &&
+      !peeledAsk.includes(focus.text.slice(0, 12));
+    if (
+      within &&
+      (shortFollow ||
+        (peeledAsk.length <= 16 && storeEarly.rx("operators", "interrogative").test(peeledAsk)))
+    ) {
+      const merged = `${focus.text}。追问：${peeledAsk}`.slice(0, 200);
+      askText = merged;
+      rw.followUp = true;
+      rw.contextHint = focus.text.slice(0, 80);
+      commitFocusAsk(state, merged, { asPending: true });
+      S.debugLog.info("Strategy", "Focus 短窗粘合", {
+        prev: focus.text.slice(0, 36),
+        cur: peeledAsk.slice(0, 24),
+        ms: Date.now() - focus.at
+      });
+    }
+  } catch (_) {}
+
   if (correctReask && expandTitle) {
     const { expandEllipsis, rewriteStandalone } = require("../../query/rewrite.cjs");
     const ruleExpanded =

@@ -157,7 +157,7 @@ function tryLocalAnswer(ctx) {
   let askText = focusAsk(ctx.askText);
   const { agenda, state, a2aTrace, kbStatus, qFp, rw, useBiz, lastFloor } = ctx;
 
-  // 催答：用待答原句重跑；有待确认假设时先提交
+  // 催答：用 Focus SSOT 重跑；有待确认假设时先提交
   if (urgeOnlyAsk(rawFloor) || commitOnlyAsk(rawFloor)) {
     const design = state?.lastDesign;
     if (!voidHypothesis(design)) {
@@ -169,11 +169,19 @@ function tryLocalAnswer(ctx) {
         });
       }
     }
-    const pendingAsk = String(state?.pendingAsk || "").trim();
+    const { pickLatestFocus } = require("../../../intelligence/memory.cjs");
+    const focus = pickLatestFocus(state, {
+      reject: (t) => S.rx("commands", "urgeAct").test(t) || S.isRecallLastAsk(t)
+    });
+    const pendingAsk = focus.text || String(state?.pendingAsk || "").trim();
     if (pendingAsk.length >= 4 && (urgeOnlyAsk(rawFloor) || voidHypothesis(design))) {
-      S.debugLog.info("Strategy", "催答重跑待答", { pendingAsk: pendingAsk.slice(0, 40) });
+      S.debugLog.info("Strategy", "催答重跑待答", {
+        pendingAsk: pendingAsk.slice(0, 40),
+        source: focus.source || "pendingAsk"
+      });
       askText = focusAsk(pendingAsk);
       ctx.askText = askText;
+      ctx._urgeReplay = true;
     } else if (commitOnlyAsk(rawFloor) && materialAnswer(design)) {
       const rest = hostRest(String(ctx.opts?.lastHostSpeakText || ""));
       if (rest) {
@@ -628,8 +636,8 @@ function tryLocalAnswer(ctx) {
     !useBiz &&
     (bayes.action === "clarify" || bayes.action === "repeat")
   ) {
-    state.pendingAsk = String(askText).slice(0, 200);
-    state.pendingAskAt = Date.now();
+    const { commitFocusAsk } = require("../../../intelligence/memory.cjs");
+    commitFocusAsk(state, askText, { asPending: true });
     return S.playAnswer(
       S.speakLine("pendingMiss"),
       "WAKE_ANSWER",
@@ -676,6 +684,8 @@ function tryLocalAnswer(ctx) {
           !ctx.opts?.forceRule &&
           isOpenIntelligenceLane(askText)
         ) {
+          const { commitFocusAsk } = require("../../../intelligence/memory.cjs");
+          commitFocusAsk(state, askText, { asPending: true });
           const laneInfo = classifyAskLane(askText);
           releaseDraft(state, {
             why: `open_lane_no_evidence:${laneInfo.lane}`,
@@ -689,10 +699,23 @@ function tryLocalAnswer(ctx) {
           return null;
         }
         if (state && complete) {
-          state.pendingAsk = String(askText).slice(0, 200);
-          state.pendingAskAt = Date.now();
-          state.lastOpenAsk = String(askText).slice(0, 200);
-          state.lastOpenAskAt = Date.now();
+          const { commitFocusAsk } = require("../../../intelligence/memory.cjs");
+          commitFocusAsk(state, askText, { asPending: true });
+        }
+        // R10e：催答重跑或完整硬问无证据 → 坦诚短答，禁止纯 skip
+        if (complete && (ctx._urgeReplay || !isOpenIntelligenceLane(askText))) {
+          const clipAsk = S.clipUtterance(askText, 36);
+          const honest =
+            S.speakFill("focusGapHonest", { ask: clipAsk }) ||
+            S.speakLine("pendingMiss");
+          S.debugLog.info("Strategy", "Focus 无证据坦诚", {
+            text: askText.slice(0, 40),
+            urge: Boolean(ctx._urgeReplay)
+          });
+          return S.playAnswer(honest, "WAKE_ANSWER", state, a2aTrace, kbStatus, qFp, "clarify", {
+            speakReason: "focus-gap-honest",
+            speakKind: "meta"
+          });
         }
         return skipResult(state, a2aTrace, kbStatus, qFp, "OK", bayes.reason || "no_evidence");
       }
@@ -705,11 +728,12 @@ function tryLocalAnswer(ctx) {
     if (line) {
       if (state && bayes.design) state.lastDesign = bayes.design;
       if (state && (bayes.reason === "near" || bayes.reason === "probe")) {
-        state.lastOpenAsk = String(askText || "").slice(0, 200);
-        state.lastOpenAskAt = Date.now();
         if (!isTruncatedAsk(askText)) {
-          state.pendingAsk = String(askText).slice(0, 200);
-          state.pendingAskAt = Date.now();
+          const { commitFocusAsk } = require("../../../intelligence/memory.cjs");
+          commitFocusAsk(state, askText, { asPending: true });
+        } else {
+          state.lastOpenAsk = String(askText || "").slice(0, 200);
+          state.lastOpenAskAt = Date.now();
         }
       }
       return S.playAnswer(line, useBiz ? "BIZ_ANSWER" : "WAKE_ANSWER", state, a2aTrace, kbStatus, qFp, bayes.action, {

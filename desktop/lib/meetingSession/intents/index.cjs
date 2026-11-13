@@ -79,6 +79,15 @@ function isRecallLastAsk(text) {
   const t = normalizeDazhiAliases(String(text || "").trim());
   if (!t) return false;
   if (isAskListRequest(t)) return false;
+  // R10d：纠偏复述句不是纯回放
+  try {
+    if (s("recallExcludeRepair").test(t)) return false;
+  } catch (_) {}
+  try {
+    const { rx } = require("../../knowledge/schemaStore.cjs");
+    if (rx("commands", "askRepairBody").test(t)) return false;
+    if (rx("commands", "urgeAct").test(t)) return false;
+  } catch (_) {}
   if (s("recallExact").test(t)) return true;
   return s("recallLoose").test(t);
 }

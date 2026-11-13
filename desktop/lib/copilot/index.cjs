@@ -17,6 +17,7 @@ const refine = require("./refine.cjs");
 const sanitize = require("./sanitizeSpeakText.cjs");
 const counterPattern = require("./counterPattern.cjs");
 const topicQuality = require("./topicQuality.cjs");
+const skeleton = require("./skeleton.cjs");
 
 module.exports = {
   ...gate,
@@ -32,5 +33,6 @@ module.exports = {
   ...refine,
   ...sanitize,
   ...counterPattern,
-  ...topicQuality
+  ...topicQuality,
+  ...skeleton
 };

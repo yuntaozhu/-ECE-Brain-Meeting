@@ -63,6 +63,7 @@
     "smoke:wave-r9a": "node scripts/smoke-wave-r9a.cjs",
     "smoke:wave-r9b": "node scripts/smoke-wave-r9b.cjs",
     "smoke:wave-r9c": "node scripts/smoke-wave-r9c.cjs",
+    "smoke:wave-r10": "node scripts/smoke-wave-r10.cjs",
     "smoke:scene-faq": "node scripts/smoke-scene-faq.cjs",
     "mcp:meeting": "node scripts/meeting-context-mcp.cjs",
     "test:bench": "node test/benchmarkRunner.cjs",

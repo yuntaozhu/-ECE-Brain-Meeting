@@ -44,4 +44,5 @@ R8 后 FAQ 硬题与 soft 放行已稳，但对话元问题（「你是怎么回
 ## 后果
 
 - 与 ADR-017/018/019 正交；R9b/c 再补 oralize/Agent。
+- **写槽/催答/纠偏**见 ADR-023（R10）：R9a 保证读通道不进 FAQ；Focus 受理写与按 At 回放由 R10 补齐。
 - 改 schema / 主进程后须 `npm run desktop`。

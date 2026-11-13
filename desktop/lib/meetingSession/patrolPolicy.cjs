@@ -240,6 +240,8 @@ function shouldImmediatePatrolForUi(text, opts = {}) {
 
   if (re("patrolForce").test(last)) return true;
   if (re("correctReask").test(last)) return true;
+  // R10b：催答口令在咨询中立即巡检（不要求问号）
+  if (isConsultMode(mode) && re("urgeAct").test(last)) return true;
 
   if (isConsultMode(mode) && re("commitAct").test(last)) return true;
 

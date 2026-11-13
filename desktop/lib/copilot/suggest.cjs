@@ -163,14 +163,13 @@ function buildCopilotPacket(transcript, opts = {}) {
     }
   } catch (_) {}
 
-  // 无合格 fact / topic 时只用 generic，禁止把整句 ASR 灌进模板
+  // Instant：A 用 fact；B 有 fact 走风险改写（去「边界与代价再拍板」空壳）
+  const { buildPushBackLine } = require("./skeleton.cjs");
   const pushForward =
     fact && isUsableFact(fact)
       ? fillTpl(templates.push_forward_with_fact || templates.push_forward_generic, { fact })
       : templates.push_forward_generic || "";
-  const pushBack = topic
-    ? fillTpl(templates.push_back_with_topic || templates.push_back_generic, { topic })
-    : templates.push_back_generic || "";
+  const pushBack = buildPushBackLine({ fact, topic, templates }, cfg);
   const counterPick = pickCounterPattern(segment, topic || "这一点");
   const counter = counterPick.text;
 
@@ -178,6 +177,11 @@ function buildCopilotPacket(transcript, opts = {}) {
     push_forward: smartClip(sanitizeSpeakText(pushForward), maxChars),
     push_back: smartClip(sanitizeSpeakText(pushBack), maxChars),
     counter_inquiry: smartClip(sanitizeSpeakText(counter), maxChars)
+  };
+  packet.suggestion_sources = {
+    push_forward: fact ? "fact" : "generic",
+    push_back: fact && isUsableFact(fact) ? "fact_risk" : "topic",
+    counter_inquiry: counterPick.id || "generic"
   };
   packet.counter_pattern = counterPick.id;
   packet.stage = "instant";

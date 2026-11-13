@@ -6,7 +6,10 @@ const { load, rx } = require("../knowledge/schemaStore.cjs");
 const {
   readSlots,
   pickFresh,
+  pickLatestFocus,
   commitMetaSpeak,
+  commitFocusAsk,
+  extractAskRepairBody,
   SLOT_TTL_MS_DEFAULT
 } = require("./memory.cjs");
 
@@ -15,6 +18,7 @@ const META_TYPES = Object.freeze({
   RECALL_ASK: "recall_ask",
   RECALL_ANSWER: "recall_answer",
   MEMORY_REPAIR: "memory_repair",
+  ASK_REPAIR: "ask_repair",
   WHY_SILENT: "why_silent",
   TONE: "tone"
 });
@@ -98,6 +102,19 @@ function classifyBySchema(text) {
     return emptyMeta({ confidence: 0.9, source: "schema" });
   }
 
+  // R10d：纠偏复述优先于纯 recall
+  const repairBody = extractAskRepairBody(t);
+  if (repairBody || metaRx("askRepair").test(t)) {
+    return emptyMeta({
+      metaType: META_TYPES.ASK_REPAIR,
+      confidence: 0.92,
+      needsRepair: Boolean(repairBody),
+      shouldSpeak: true,
+      directSpeak: null,
+      memoryRead: { lastRealAsk: true },
+      repairAsk: repairBody || ""
+    });
+  }
   if (metaRx("recallAnswer").test(t)) {
     return emptyMeta({
       metaType: META_TYPES.RECALL_ANSWER,
@@ -265,10 +282,8 @@ function resolveSlotText(state, memoryRead, ttlMs) {
     return pickFresh(slots.lastMetaSpeak, slots.lastMetaSpeakAt, ttlMs);
   }
   if (memoryRead?.lastRealAsk) {
-    return (
-      pickFresh(slots.lastRealAsk, slots.lastRealAskAt, ttlMs) ||
-      pickFresh(slots.prevRealAsk, slots.prevRealAskAt, ttlMs)
-    );
+    const focus = pickLatestFocus({ ...slots }, { ttlMs });
+    return focus.text || "";
   }
   return "";
 }
@@ -280,6 +295,12 @@ function buildMetaSpeak(decision, state) {
     return clipSpeak(decision.directSpeak, lim.directSpeakMax) || metaLine("repair");
   }
   const type = decision.metaType;
+  if (type === META_TYPES.ASK_REPAIR) {
+    const prev = String(decision.repairAsk || "").trim();
+    return prev
+      ? metaLine("askRepairAck", { prev: prev.slice(0, 80) }) || metaLine("repair")
+      : metaLine("repair");
+  }
   if (type === META_TYPES.RECALL_ASK) {
     const prev = resolveSlotText(state, { lastRealAsk: true }, ttl);
     return prev
@@ -346,6 +367,20 @@ async function handleDialogueMeta(ctx) {
 
   S.setMode(state, S.INTERACTION_MODE.HA_ASK);
   state.haLockedUntil = Date.now() + 90000;
+
+  // R10d：ask_repair 写 Focus 后按更正问重答（gate 未拦下时的兜底）
+  if (decision.metaType === META_TYPES.ASK_REPAIR) {
+    const body =
+      String(decision.repairAsk || "").trim() || extractAskRepairBody(lastFloor);
+    if (body) {
+      commitFocusAsk(state, body, { asPending: true });
+      const corrected = S.answerCorrectionForPrev(body, "retry", state, a2aTrace, kbStatus, qFp);
+      if (corrected) {
+        corrected.debug = { ...(corrected.debug || {}), dialogueMeta: decision };
+        return corrected;
+      }
+    }
+  }
 
   let speech = buildMetaSpeak(decision, state);
   if (!speech) {

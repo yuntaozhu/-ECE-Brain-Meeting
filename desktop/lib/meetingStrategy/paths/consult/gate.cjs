@@ -13,7 +13,7 @@ function currentAskSurvivesTimeout(text) {
   return q.replace(/[^\u4e00-\u9fffA-Za-z0-9]/g, "").length >= 4;
 }
 
-function markCorrecting(state) {
+function markCorrecting(state, keepFocusAsk) {
   if (!state) return;
   const wrongTitle = String(
     (state.lastDesign && state.lastDesign.hypothesisId) ||
@@ -26,8 +26,14 @@ function markCorrecting(state) {
     const { frameCfg } = require("../../../intelligence/frameGate.cjs");
     state.correctingUntil = Date.now() + frameCfg().correctWindowMs;
   }
-  state.lastOpenAsk = "";
-  state.pendingAsk = "";
+  const keep = String(keepFocusAsk || "").trim();
+  if (keep.length >= 8) {
+    const { commitFocusAsk } = require("../../../intelligence/memory.cjs");
+    commitFocusAsk(state, keep, { asPending: true });
+  } else {
+    state.lastOpenAsk = "";
+    state.pendingAsk = "";
+  }
   if (state.lastIntelligence) {
     state.lastIntelligence = {
       ...state.lastIntelligence,
@@ -140,29 +146,41 @@ function handleGate(ctx) {
     });
   }
 
+  // R10d：不对，我刚刚问的是 X → 写 Focus 并按 X 重答
+  {
+    const { extractAskRepairBody, commitFocusAsk } = require("../../../intelligence/memory.cjs");
+    const repairBody = extractAskRepairBody(lastFloor) || extractAskRepairBody(cmd.payload || "");
+    if (repairBody) {
+      S.setMode(state, S.INTERACTION_MODE.HA_ASK);
+      state.haLockedUntil = Date.now() + 90000;
+      markCorrecting(state, repairBody);
+      commitFocusAsk(state, repairBody, { asPending: true });
+      S.debugLog.info("Strategy", "ask_repair 写回 Focus", { prev: repairBody.slice(0, 48) });
+      return S.answerCorrectionForPrev(repairBody, "retry", state, a2aTrace, kbStatus, qFp);
+    }
+  }
+
   if (S.isRecallLastAsk(lastFloor) || S.isRecallLastAsk(cmd.payload || "")) {
     S.setMode(state, S.INTERACTION_MODE.HA_ASK);
     state.haLockedUntil = Date.now() + 90000;
     const ttl = 30 * 60 * 1000;
-    const now = Date.now();
-    const pick = (text, at) => {
-      const t = String(text || "").trim();
-      if (!t || t.length < 6) return "";
-      if (S.isRecallLastAsk(t) || S.isSessionMemoryMeta(t)) return "";
-      if (at && now - at >= ttl) return "";
-      return t;
-    };
-    // 上一实质问：lastRealAsk → prevRealAsk → lastOpenAsk → 近场 floor
-    const prev =
-      pick(state.lastRealAsk, state.lastRealAskAt) ||
-      pick(state.prevRealAsk, state.prevRealAskAt) ||
-      pick(state.lastOpenAsk, state.lastOpenAskAt);
+    const { pickLatestFocus } = require("../../../intelligence/memory.cjs");
+    const rejectMeta = (t) =>
+      S.isRecallLastAsk(t) || S.isSessionMemoryMeta(t) || S.rx("commands", "urgeAct").test(t);
+    const focus = pickLatestFocus(state, { ttlMs: ttl, reject: rejectMeta });
+    let prev = focus.text || "";
     // 纠偏窗口内再问「上一问」：默认按实质问重答，避免只会复述问句
     if (prev && inCorrectingWindow(state)) {
       S.debugLog.info("Strategy", "纠偏窗口内 recall→重答", { prev: prev.slice(0, 40) });
       return S.answerCorrectionForPrev(prev, "retry", state, a2aTrace, kbStatus, qFp);
     }
+    // R10a/d：未答 Focus 也只回放问句（禁止弱匹配错卡当「重答」）
     if (prev) {
+      S.debugLog.info("Strategy", "recall Focus", {
+        prev: prev.slice(0, 40),
+        source: focus.source,
+        unanswered: Boolean(state.focusUnanswered)
+      });
       return S.playAnswer(
         S.speakFill("recallPrevNow", { prev: S.clipUtterance(prev, 80) }),
         "WAKE_ANSWER",
@@ -183,7 +201,8 @@ function handleGate(ctx) {
           !S.isRecallLastAsk(l) &&
           !S.isSessionMemoryMeta(l) &&
           l.length >= 8 &&
-          !S.rx("speak", "realAskSkip").test(l)
+          !S.rx("speak", "realAskSkip").test(l) &&
+          !S.rx("commands", "urgeAct").test(l)
       );
     if (priorFloor) {
       return S.playAnswer(
@@ -212,9 +231,10 @@ function handleGate(ctx) {
   if (S.isSessionMemoryMeta(lastFloor) || S.isSessionMemoryMeta(cmd.payload || "")) {
     S.setMode(state, S.INTERACTION_MODE.HA_ASK);
     state.haLockedUntil = Date.now() + 90000;
-    const prev = String(state.lastRealAsk || "").trim();
-    const tip = prev
-      ? S.speakFill("memoryPrevLong", { prev: S.clipUtterance(prev, 60) })
+    const { pickLatestFocus } = require("../../../intelligence/memory.cjs");
+    const focus = pickLatestFocus(state, { ttlMs: 30 * 60 * 1000 });
+    const tip = focus.text
+      ? S.speakFill("memoryPrevLong", { prev: S.clipUtterance(focus.text, 60) })
       : S.speakLine("memoryEmptyLong");
     return S.playAnswer(tip, "WAKE_ANSWER", state, a2aTrace, kbStatus, qFp, "template", {
       speakKind: "meta",

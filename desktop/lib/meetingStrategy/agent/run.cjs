@@ -291,9 +291,18 @@ function finishSpoken(ctx, payload) {
       riskRewrite: Boolean(payload.riskRewrite)
     }
   });
+  // R10a：完整问受理即写 Focus；有正文才记 Answer 缓存
+  if (state && String(askText || "").trim().length >= 8) {
+    try {
+      const { commitFocusAsk, markFocusAnswered } = require("../../intelligence/memory.cjs");
+      commitFocusAsk(state, askText, { asPending: !answer, answered: Boolean(answer) });
+      if (answer) markFocusAnswered(state);
+    } catch (_) {
+      S.rememberRealAsk(state, askText);
+    }
+  }
   if (answer && state?.meetingId) {
     S.rememberAnswer(state.meetingId, { question: askText, tts: answer, arkMode: payload.decision });
-    S.rememberRealAsk(state, askText);
   }
   if (state && payload.design) state.lastDesign = payload.design;
   if (answer) {

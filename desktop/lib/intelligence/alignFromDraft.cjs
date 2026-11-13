@@ -29,19 +29,19 @@ function alignCopilotFromDraft(packet, draft, opts = {}) {
   const fact = clipSpeak(text, maxChars);
   const topic = shortAskTopic(packet.target_topic || packet.segment || "", "这一点");
 
+  const { buildPushBackLine } = require("../copilot/skeleton.cjs");
   const pushForward = clipSpeak(
     fillTpl(templates.push_forward_with_fact || "{fact}", { fact }) || fact,
     maxChars
   );
-  const pushBack = clipSpeak(
-    fillTpl(templates.push_back_with_topic || "关于{topic}，建议先确认边界与代价再拍板。", {
-      topic
-    }) || `关于${topic}，建议先确认边界与代价再拍板。`,
-    maxChars
-  );
+  const pushBack = clipSpeak(buildPushBackLine({ fact, topic, templates }, cfg), maxChars);
   const counter =
     packet.suggestions.counter_inquiry ||
-    clipSpeak(`您最关心的是${topic}里的哪一条边界？`, maxChars);
+    clipSpeak(
+      fillTpl(templates.counter_inquiry_with_topic || "", { topic }) ||
+        `您说的「${topic}」，更想先对齐价格、回报口径，还是落地节奏？`,
+      maxChars
+    );
 
   return {
     ...packet,

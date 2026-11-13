@@ -35,6 +35,18 @@ assert.ok(pkt.should_trigger);
 assert.strictEqual(pkt.stage, "instant");
 assert.strictEqual(pkt.refined, false);
 assert.ok(pkt.suggestions?.push_forward);
+const { isSkeletonSuggestion } = require("../lib/copilot/skeleton.cjs");
+assert.strictEqual(
+  isSkeletonSuggestion("关于收费，建议先确认边界与代价再拍板。"),
+  true,
+  "old B skeleton"
+);
+const earn = buildCopilotPacket("加入后1年能赚多少？", { agenda: "Wave I", force: true });
+assert.ok(earn.should_trigger);
+assert.ok(
+  !/建议先确认边界与代价再拍板/.test(earn.suggestions?.push_back || ""),
+  `B detemplated: ${earn.suggestions?.push_back}`
+);
 
 const prev = process.env.COPILOT_LLM_REFINE;
 delete process.env.COPILOT_LLM_REFINE;

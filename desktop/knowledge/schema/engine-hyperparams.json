@@ -99,6 +99,7 @@
   "nearMax": 18,
   "hitSpeakMax": 160,
   "scriptSpeakMax": 160,
+  "focusGlueMs": 2500,
   "focusWordMin": 2,
   "focusWordMax": 6,
   "sharedTopicMin": 2,

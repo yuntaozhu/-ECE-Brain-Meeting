@@ -39,5 +39,6 @@ alwaysApply: true
 | Wave R9a Dialogue-Meta | `adr/020-wave-r9a-dialogue-meta.md` · `lib/intelligence/dialogueMeta.cjs` |
 | Wave R9b oralize/lane | `adr/021-wave-r9b-oralize-lane.md` · `paths/consult/oralize.cjs` · `laneArbiter.cjs` |
 | Wave R9c Agent/Copilot | `adr/022-wave-r9c-agent-copilot.md` · `agent/toolHops.cjs` · `copilot/refine.cjs` |
+| Wave R10 Focus/Recovery | `adr/023-wave-r10-session-focus.md` · `lib/intelligence/memory.cjs` · `paths/consult/gate.cjs` |
 
 红线摘要：`[Me]`/`[Others]` 禁混轨；本地 Whisper 不绑 Electron native addon；静音须 VAD；BYOK 当前仅 `doubao`。
