@@ -7,16 +7,18 @@
 引擎只做算子和状态转移。词、槽位、口令和业务句子放在数据和配置里。
 
 - **引擎** `desktop/lib/**/*.cjs`：概率、极性加权字二元组、槽位集合运算、状态转移、半双工。不决定某句业务该怎么说。
-- **策略** `desktop/knowledge/schema/*.json`：口令表、槽位本体、否定与残句算子、会话元词、算法超参。目标目录；尚未建齐前，不要在 `.cjs` 里新增一份平行词表。
+- **策略** `desktop/knowledge/schema/*.json`：口令表、槽位本体、否定与残句算子、会话元词、Dialogue-Meta、askLane、副驾驶门控、算法超参。目标目录；尚未建齐前，不要在 `.cjs` 里新增一份平行词表。
 - **知识** `desktop/knowledge/`：`faq-meeting.txt`、`wiki/`、`quan-yuan-meiyu.txt`、`distilled/`、离线索引 `.rag-index.json`。会中只读内存。FAQ 在主进程启动时缓存，改文件或主进程后必须重新 `npm run desktop`。
 
 字面量分三层迁出，禁止混成一条「代码里不许有任何汉字」：
 
 | 层 | 归宿 | 例子 |
 | --- | --- | --- |
-| 领域内容 | 卡片正文与编译标签 | 园所、回本、收费、全园美语 |
-| 会场口令 | `schema/session-commands.json` | 听我说、我说完了、回复刚才 |
+| 领域内容 | 卡片正文与编译证据 | 园所、回本、收费、全园美语 |
+| 会场口令 | `schema/session-commands.json` | 听我说、请回答、催答、ask_repair 捕获 |
 | 汉语算子 | `schema/linguistic-operators.json` | 不/没/未、句尾悬空、口水词 |
+| 会话元 | `schema/dialogue-meta.json` | recall_ask / recall_answer / ask_repair |
+| 副驾驶 | `schema/copilot-gate.json` | skeletonBan、advisor、三角模板 |
 
 口令字符串可以留在 JSON 里。引擎只做匹配和转移。
 
@@ -29,32 +31,57 @@
 - 新的业务词、测试补丁词、句式正则（用来修某一个坏例的 `if` / `switch` / 字面量正则）。
 - 新的停用词数组、骨架词表、按意图名写的覆盖分支。
 
-现存硬编码是迁移债，不是立刻删除的对象。`relevance.cjs` 的 `slotOk`、`zhSegment.cjs` 的 `DROP`、`mentionedIn`、`detectCommand.cjs`、`intent.cjs` 里的句式，只能在对应算子或 schema 落地、并且下面两条基线仍全绿时删掉。禁止为了「看起来零字面量」一次重写 `decideSpeak`。
+现存硬编码是迁移债，不是立刻删除的对象。`relevance.cjs` 的 `slotOk`、`zhSegment.cjs` 的 `DROP`、`mentionedIn`、`detectCommand.cjs`、`intent.cjs`、咨询路径里的口令/意图分支，只能在对应算子或 schema 落地、并且下面基线仍全绿时删掉。禁止为了「看起来零字面量」一次重写 `decideSpeak`。
 
 `desktop/test/no-hardcode-lint.cjs` 存在之后，改 `desktop/lib/` 必须跑通它。文件尚不存在时，以本节为准，不要先发明一个会误伤迁移债的扫描器。
 
 ### B. 单向流水线
 
 ```
-转写 → 模型(meetingSession + duplex) → 知识库 → 智能层定卡/Draft → decideSpeak → 写回模型 → 合成
+转写 → 模型(meetingSession + duplex)
+     → 咨询责任链: gate → dialogueMeta → prepareAsk → intelligence.evaluateConsult
+     → 知识库召回 → 定卡 / SpeakDraft → decideSpeak → 写回 Focus/记忆 → 合成
 ```
 
-- **模型**管姿态、生命周期、口令、半双工（空闲 / 正在说 / 冷却）、咨询粘滞，以及 `lastDesign`、`lastOpenAsk`、`lastRealAsk`、上一句口播。静默、占麦、播报中的非放行输入不到检索。咨询中的实质问句才进知识库。
+责任链顺序保持：回声 → 停止 → 会议起止 → 占麦 → 唤醒 → 总结 → **咨询（上图）** → 静默。
+
+- **模型**管姿态、生命周期、口令、半双工、咨询粘滞；以及 Focus / 三槽记忆（见下节）。静默、占麦、播报中的非放行输入不到检索。咨询中的实质问句才进知识库。
 - **知识库**只召回候选和特征分。不决定开口，会中不改文件。
-- **智能层**（`desktop/lib/intelligence/`，ADR-017 / ADR-019 / ADR-020–022）：`dialogueMeta` → 定卡闸 → `SpeakDraft` / `lastIntelligence`；`askLane` + `laneArbiter` 分流；`oralize` 首句；Agent `toolHops`≤2；副驾驶同源 Draft + 顾问 refine（禁 Meta/repair 精炼）。不重写贝叶斯公式，禁止业务字面量进引擎。
-- **记忆槽**：`lastRealAsk` / `lastContentSpeak` / `lastMetaSpeak`；incomplete/abort 不写槽；Meta 口播不得当业务 Draft。
-- **`decideSpeak`**（入口 `desktop/lib/meetingStrategy/decideSpeak.cjs`，比较仍在 `agent/relevance.cjs`）把「没有证据」、召回卡片、意图脚本放进同一假设空间。出口只有作答、确认、复述。结果写回 `lastDesign` / `lastOpenAsk`（及 Draft）。
-- **豆包**：分 channel 专职（meta/lane/oralize/agent/copilot）；闸与路由 JSON；扩展 `llm/transport`+`resolve`，禁止平行 arkClient。
+- **智能层**（`desktop/lib/intelligence/`，ADR-017～023）：
+  - **Dialogue-Meta**（ADR-020）：会话控制问（刚才问什么 / 怎么回复 / 没听清 / ask_repair）在 FAQ 之前拦下；规则优先，`DIALOGUE_META_LLM=1` 才打 `channel=meta`。
+  - **定卡闸 / Draft**：`SpeakDraft` / `lastIntelligence`；`askLane` + `laneArbiter`；`oralize` 首句（ADR-021）。
+  - **Agent**：`toolHops`≤2；`AGENT_SEARCH_WEB` 默认关（ADR-022）。
+  - **副驾驶**：同源 Draft + 顾问 refine；禁 Meta/repair 当业务 Draft 精炼；骨架套话禁出（`skeletonBan` / `lib/copilot/skeleton.cjs`）。
+  - 不重写贝叶斯公式；禁止业务字面量进引擎。
+- **`decideSpeak`**（入口 `decideSpeak.cjs`，比较在 `agent/relevance.cjs`）把「没有证据」、召回卡片、意图脚本放进同一假设空间。出口只有作答、确认、复述。禁止整段重写。
+- **豆包**：BYOK 当前仅 `doubao`。分 channel 专职（`meta` / `lane` / `oralize` / `agent` / `copilot`）；闸与路由 JSON；扩展 `llm/transport`+`resolve`，禁止平行 `arkClient`。
 - **渲染进程** `desktop/renderer/` 只采音、播放、画状态。禁止口令、检索和策略。
 - `desktop/lib/` 必须能被纯 Node 冒烟调用，不依赖 Electron。
 
-责任链顺序保持：回声 → 停止 → 会议起止 → 占麦 → 唤醒 → 总结 → 咨询 → 静默。
+### C. 会话 Focus 与记忆（ADR-020 / ADR-023）
 
-### C. 对齐、焦点、失败回退
+三槽与 Focus 是不同契约，禁止混用：
+
+| 槽 / 焦点 | 语义 | 写入时机 |
+| --- | --- | --- |
+| **Focus**（`lastRealAsk` + `pendingAsk` / `lastOpenAsk`，`pickLatestFocus` 按 At） | 用户上一句实质问 / 当前追问 | **受理即写**（完整业务问进咨询主链、催答重跑、ask_repair）；不绑成功口播 |
+| `lastContentSpeak` | 上一句业务口播 | 仅 `draftState=committed` 的业务播报 |
+| `lastMetaSpeak` | 上一句 Meta 口播 | Meta / recall / 坦诚缺口等 `speakKind=meta` |
+
+硬约束：
+
+1. **Fail closed on speech ≠ fail closed on state**：hard 无证据可坦诚（`focusGapHonest`）或不编价格，但必须 `commitFocusAsk`；禁止完整硬问纯 `skip` 且不写槽。
+2. **回放 / 催答 SSOT**：`gate` 与 `dialogueMeta` 同源 `pickLatestFocus`（按时间戳最新），禁止固定 `lastRealAsk → …` 链压住更新的 `pendingAsk`。
+3. **催答**（`urgeAct`：含「请回答」「请回答我刚刚的问题」）读 Focus 重跑；咨询中立即巡检；催答句禁止当新业务 clarify 再 skip。
+4. **ask_repair**（「不对，我刚刚问的是 X」）：抽 X 写 Focus 并纠偏重答；禁止当 `recall_ask` 只读脏槽。纯「我刚刚问了什么」只回放 Focus 问句，禁止弱匹配错卡冒充重答。
+5. **短窗粘合**（`followOnShort` + `focusGlueMs`）：ASR 把一句拆成两 final 时合并 Focus，不在 `.cjs` 写死业务词。
+6. incomplete / interrupted / failed **不写 Answer 槽**；完整 Ask 仍写 Focus。
+
+### D. 对齐、焦点、失败回退
 
 - 主路径对齐用字二元组。IDF 权重和极性内积先与现有对齐并列记日志；评测不掉点之前，不得替换现有作答线（后验 ≥ 0.42、对齐 ≥ 0.28、闭题放宽对齐 ≥ 0.18）。
 - 反问焦点取高信息连续片段。结巴只允许留在尚未替换的焦点路径上，不得进入检索对齐。
-- 豆包超时、失败，或槽位不满足时，回退到上一句后半句或单步焦点反问。禁止再念无依据套话。
+- 豆包超时、失败，或槽位不满足时，回退到上一句后半句、Focus 坦诚缺口或单步焦点反问。禁止再念无依据套话，禁止用失败路径抹掉 Focus。
 - 槽位标签必须可复现（人写或由 schema 规则编译）。禁止用在线模型在每次构建时改写标签。
 - 句尾完备度用通用语料的转移分布，不从这批 FAQ 里现估。已高置信命中的闭题优先作答。
 
@@ -62,12 +89,13 @@
 
 新失败句按这个顺序处理，禁止直接改 `.cjs` 加词：
 
-1. 把句子、前置状态、预期口播写入回归集（目标 `desktop/test/cases.jsonl`；现用 `desktop/scripts/smoke-scene-faq.cjs` 与 `desktop/scripts/eval-agent-variants.cjs`）。
-2. 先打诊断再改：对齐、窄度、槽位差、各假设后验、续播原因。算子未落地时，用现有日志里的 `align`、`extra`、`posterior`、`slotOk`、`reason`。
+1. 把句子、前置状态、预期口播写入回归集（目标 `desktop/test/cases.jsonl`；现用 `smoke-scene-faq` / `eval-agent-variants` / `smoke:wave-r*` / `smoke:wave-r10`）。
+2. 先打诊断再改：对齐、窄度、槽位差、各假设后验、续播原因、**Focus 槽与 At**、dialogueMeta 类型。算子未落地时，用现有日志里的 `align`、`extra`、`posterior`、`slotOk`、`reason`、`arkMode`、`催答重跑待答`、`recall Focus`。
 3. 分流：
    - 缺说法或槽位 → 改 FAQ / Wiki，再编译索引。
-   - 口令、否定窗口、元词、超参 → 改 `desktop/knowledge/schema/`。
-   - 算子公式本身不够 → 改通用公式或超参，并让全量回归仍为 **场景冒烟 23/23、变体评测 22/22**。条数增加后，新基线是全部通过，不是放宽旧断言。
+   - 口令、催答、元词、ask_repair、副驾驶骨架、超参 → 改 `desktop/knowledge/schema/`。
+   - Focus / 回放 / 静默状态 → 改 `memory.cjs` / `gate.cjs` / `localAnswer.cjs` 的**通用契约**，禁止教育局等业务清粘滞补丁。
+   - 算子公式本身不够 → 改通用公式或超参，并让相关冒烟仍全绿：`smoke:wave-r`、`smoke:wave-r9a|b|c`、`smoke:wave-r10`、场景冒烟与变体评测。条数增加后，新基线是全部通过，不是放宽旧断言。
 
 ## 4. 迁移顺序
 
@@ -76,9 +104,25 @@
 3. 离线编译 IDF 与 `providedSlots`，运行时仍走现有决策，只加日志。
 4. 按焦点 → 极性续播 → 槽位门 → 句尾完备度切换，每步全绿才进入下一步。
 5. 意图脚本降成假设池里的宽卡片，用特异度压低似然峰值，再删除按意图名写的覆盖。
+6. 现存 `slotOk`、`DROP`、口令正则、意图覆盖、咨询门控分支：对应算子与场景冒烟全绿之前，禁止整段删除或「先清零字面量」。
 
 换行业时替换 `desktop/knowledge/` 与 `schema/`。半双工、责任链和决策引擎保持不动。
 
 ## 5. 开发知识库（与会中库隔离）
 
-算法论文与引擎取舍在 `desktop/dev_knowledge/wiki/index.md`（Karpathy LLM Wiki：raw → wiki → schema）。会中召回与口播 **禁止** 读该目录；该目录句子 **禁止** 写入 `faq-meeting.txt`。改对齐、后验、豆包、评测前先 Query 开发 wiki；以代码与本文件为现状。
+算法论文与引擎取舍在 `desktop/dev_knowledge/`（INDEX + `adr/` + wiki）。会中召回与口播 **禁止** 读该目录；该目录句子 **禁止** 写入 `faq-meeting.txt`。
+
+改对齐、后验、豆包、记忆、副驾驶、评测前先查：
+
+| 主题 | 打开 |
+| --- | --- |
+| 导航 | `dev_knowledge/INDEX.md` |
+| 智能层总览 | `adr/017` · `lib/intelligence/contract.cjs` |
+| 受众帧 | `adr/018` · `frameGate.cjs` |
+| 双通道 / 顾问 | `adr/019` · `askLane.cjs` |
+| Dialogue-Meta | `adr/020` · `dialogueMeta.cjs` · `schema/dialogue-meta.json` |
+| oralize / lane | `adr/021` |
+| Agent / Copilot | `adr/022` · `toolHops.cjs` · `copilot/refine.cjs` · `skeleton.cjs` |
+| Focus / 催答 / 纠偏 | `adr/023` · `memory.cjs` · `paths/consult/gate.cjs` |
+
+以代码与本文件为现状；新决策先进 `adr/`，再回写本宪法与 `.cursor/rules/desktop-architecture.mdc`。
