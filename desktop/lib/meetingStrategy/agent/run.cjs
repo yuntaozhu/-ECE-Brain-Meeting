@@ -18,7 +18,8 @@ const { decideSpeak } = require("../decideSpeak.cjs");
 const { validateSlots } = require("../../text/universalOperators.cjs");
 const { commitDraft, writeLastIntelligence } = require("../../intelligence/draft.cjs");
 const { GATES } = require("../../intelligence/contract.cjs");
-const { classifyAskLane, LANES } = require("../../intelligence/askLane.cjs");
+const { LANES, resolveAskLane } = require("../../intelligence/askLane.cjs");
+const { runToolHops, MAX_TOOL_HOPS } = require("./toolHops.cjs");
 
 function speakDecision(intentObj, askText, retrieval, state, lastHost) {
   return decideSpeak({
@@ -72,42 +73,107 @@ function hasApiKey() {
   return Boolean((process.env.DOUBAO_API_KEY || process.env.ARK_API_KEY || "").trim());
 }
 
-function mergeHits(into, more) {
-  const seen = new Set(into.map((h) => String(h.title || "")));
-  for (const h of more || []) {
-    const key = String(h?.title || "");
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    into.push(h);
-  }
-  return into;
+async function retrieveForIntent(intentObj, askText, opts, state, askLane) {
+  // Wave R9c：最多两跳；意图附带 query 计入 hop 预算
+  const segs = (state?.lastDesign?.segments || []).map((s) => String(s || "").trim()).filter(Boolean);
+  const enriched = {
+    ...intentObj,
+    retrieve_queries: [
+      ...(intentObj?.retrieve_queries || []),
+      ...segs
+    ].slice(0, 4)
+  };
+  return runToolHops(
+    {
+      retrieveKnowledge: S.retrieveKnowledge,
+      retrieveSemantic: S.retrieveSemantic,
+      queryWiki: S.queryWiki,
+      hasApiKey
+    },
+    { askText, intentObj: enriched, opts, state, askLane: askLane || "hard" }
+  );
 }
 
-async function retrieveForIntent(intentObj, askText, opts, state) {
-  const segs = (state?.lastDesign?.segments || []).map((s) => String(s || "").trim()).filter(Boolean);
-  const queries = [focusAsk(askText), ...segs, ...(intentObj?.retrieve_queries || [])]
-    .map((q) => String(q || "").trim())
-    .filter(Boolean);
-  const unique = [...new Set(queries)].slice(0, 3);
-  const hits = [];
-  let preview = "";
-  let instantAnswer = "";
-  for (const q of unique) {
-    const kw = S.retrieveKnowledge(q, 4);
-    mergeHits(hits, kw?.hits);
-    if (!preview && kw?.preview) preview = kw.preview;
-    if (!instantAnswer && kw?.instantAnswer) instantAnswer = kw.instantAnswer;
-  }
-  if (!(opts.forceRule || !hasApiKey())) {
-    try {
-      const sem = await S.retrieveSemantic(unique[0] || askText, 4, { signal: opts.signal, preferBiz: true });
-      mergeHits(hits, sem?.hits);
-      if (!preview && sem?.preview) preview = sem.preview;
-    } catch (_) {
-      /* 关键词候选已经够贝叶斯用 */
+/** 两跳后仍证据不足：转 card / repair，主链不抢麦硬编 */
+function finishCardOrRepair(ctx, payload = {}) {
+  const { opts, state, a2aTrace, kbStatus, qFp, askText, lastFloor, runId, intentObj, t0 } = ctx;
+  const { speakLine } = require("../../knowledge/schemaStore.cjs");
+  const line =
+    String(payload.answer || "").trim() ||
+    speakLine("pendingMiss") ||
+    speakLine("clarify") ||
+    "这句我还没对上合格资料。您把问题再说完整一点，或换个说法。";
+  const draftMode = payload.draftMode || "card";
+  pushAgent(a2aTrace, {
+    runId,
+    role: "MeetingAgent",
+    action: "FALLBACK",
+    summary: `两跳收口 ${draftMode}`,
+    detail: {
+      hopCount: payload.hopCount,
+      maxHops: MAX_TOOL_HOPS,
+      evidenceInsufficient: true,
+      draftMode,
+      tools: payload.tool
     }
+  });
+  pushAgent(a2aTrace, {
+    runId,
+    role: "MeetingAgent",
+    action: "RUN_END",
+    summary: `完成 ${Date.now() - t0}ms · ${draftMode}`,
+    detail: { ms: Date.now() - t0, draftMode, hopCount: payload.hopCount }
+  });
+  if (state) {
+    writeLastIntelligence(state, {
+      gate: GATES.SKIP,
+      card: {
+        title: "资料不足",
+        speak: line,
+        draftMode
+      },
+      draft: null,
+      debug: {
+        releasedToAgent: true,
+        evidenceInsufficient: true,
+        hopCount: payload.hopCount,
+        draftMode,
+        askLane: payload.askLane
+      }
+    });
   }
-  return { hits, preview, instantAnswer, tool: "search_faq", mode: "bayes" };
+  // 主链短 repair 一句；副驾驶可继续出卡
+  const speak = draftMode === "silent" ? "" : S.clipUtterance(line, 80);
+  if (speak) {
+    S.emitLead(opts, speak);
+  }
+  return {
+    shouldIntervene: Boolean(speak),
+    interventionText: "",
+    fullAnswer: speak,
+    spokenPrefix: speak,
+    earlySpoken: Boolean(speak),
+    earlyCovered: Boolean(speak),
+    reason: "WAKE_ANSWER",
+    speakReason: "evidence_insufficient",
+    speakTitle: "资料不足",
+    draftMode,
+    evidenceInsufficient: true,
+    hopCount: payload.hopCount,
+    latestToDos: ["请补充具体问题", "或改问收费/落地/招生抓手"],
+    nextStageRecommendation: "MainDiscussion",
+    a2aTrace,
+    arkConfigured: hasApiKey(),
+    arkMode: "agent-card",
+    arkBillingOverdue: false,
+    arkError: null,
+    agentMode: state.mode,
+    kbStatus,
+    questionFp: qFp,
+    runId,
+    intent: intentObj,
+    wake: { lastFloor, chatReply: false, rewritten: askText, agent: "MeetingAgent", intent: intentObj?.intent }
+  };
 }
 
 /** Retrieval head card already grounded → speak FAQ line (no silent on Doubao fail). */
@@ -309,7 +375,9 @@ async function runMeetingAgent(ctx) {
     }
   });
 
-  const retrieval = await retrieveForIntent(intentObj, askText, opts, state);
+  const askLaneInfoEarly = resolveAskLane(askText);
+  const askLaneEarly = askLaneInfoEarly.lane;
+  const retrieval = await retrieveForIntent(intentObj, askText, opts, state, askLaneEarly);
   const score = topScore(retrieval);
   const live = hasApiKey() && !opts.forceRule;
   const lastHost = String(opts.lastHostSpeakText || "").trim();
@@ -319,7 +387,7 @@ async function runMeetingAgent(ctx) {
     role: "KnowledgeTool",
     action: "RETRIEVE",
     target: "MeetingAgent",
-    summary: `${retrieval.tool || "search_wiki"} · ${grounded.decision} · 分 ${score}`,
+    summary: `${retrieval.tool || "search_wiki"} · ${grounded.decision} · 分 ${score} · hops ${retrieval.hopCount || 0}/${MAX_TOOL_HOPS}`,
     detail: {
       tool: retrieval.tool,
       mode: retrieval.mode,
@@ -327,6 +395,9 @@ async function runMeetingAgent(ctx) {
       gate: grounded.decision,
       intent: intentObj.intent,
       answerable: isAnswerable(retrieval),
+      hopCount: retrieval.hopCount,
+      hops: retrieval.hops,
+      evidenceInsufficient: Boolean(retrieval.evidenceInsufficient),
       hits: (retrieval.hits || []).slice(0, 4).map((h) => ({
         title: h.title,
         score: h.score,
@@ -334,6 +405,23 @@ async function runMeetingAgent(ctx) {
       }))
     }
   });
+
+  // soft/strategy：两跳用尽仍无证据 → card/repair，禁止继续编
+  if (
+    retrieval.evidenceInsufficient &&
+    (askLaneEarly === LANES.SOFT || askLaneEarly === LANES.STRATEGY) &&
+    !isAnswerable(retrieval)
+  ) {
+    return finishCardOrRepair(
+      { opts, state, a2aTrace, kbStatus, qFp, askText, lastFloor, runId, intentObj, t0 },
+      {
+        hopCount: retrieval.hopCount,
+        tool: retrieval.tool,
+        askLane: askLaneEarly,
+        draftMode: "card"
+      }
+    );
+  }
 
   if (!live || grounded.decision !== "compose") {
     let answer = grounded.text;
@@ -381,7 +469,7 @@ async function runMeetingAgent(ctx) {
   }
 
   // P1：缩短 kbBite，降低 Compose 首包延迟
-  const askLaneInfo = classifyAskLane(askText);
+  const askLaneInfo = askLaneInfoEarly || resolveAskLane(askText);
   const askLane = askLaneInfo.lane;
   const kbBite = String(retrieval.preview || retrieval.instantAnswer || "").slice(0, 900);
   const recentCtx = (floors || [])

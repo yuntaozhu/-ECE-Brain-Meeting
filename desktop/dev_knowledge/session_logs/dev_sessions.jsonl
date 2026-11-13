@@ -13,3 +13,4 @@
 {"at":"2026-11-12T17:40:00+08:00","wave":"R7","summary":"audience frameGate + child benefit FAQ + tone correction loop; ban shadow kb-fallback on frame mismatch","smokes":["smoke-wave-r","smoke-scene-faq","build:kb"]}
 {"at":"2026-11-12T19:30:00+08:00","wave":"R8a","summary":"ask-lane schema + classifyAskLane/shortAskTopic; copilot remove ????? prefix; smoke phase8a","smokes":["smoke-wave-r"]}
 {"at":"2026-11-12T22:30:00+08:00","wave":"R8d","summary":"Wave R8 closeout: askLane+soft release+advisor refine; smokes green","smokes":["build:kb","smoke-wave-r","smoke-wave-i","smoke-scene-faq"]}
+{"at":"2026-11-13T10:51:00+08:00","wave":"R9","summary":"Wave R9a/b/c: Dialogue-Meta+memory slots; oralize lead+laneArbiter; Agent toolHops<=2+Copilot meta skip/smart_replies","adrs":["020","021","022"],"smokes":["smoke-wave-r9a","smoke-wave-r9b","smoke-wave-r9c","smoke-wave-r","smoke-scene-faq"]}

@@ -36,5 +36,8 @@ alwaysApply: true
 | Wave R / 智能层 | `adr/017-shared-intelligence-layer.md` · `lib/intelligence/contract.cjs` |
 | 受众帧 / 纠偏 | `adr/018-audience-frame-correction.md` · `lib/intelligence/frameGate.cjs` |
 | Wave R8 双通道/顾问 | `adr/019-wave-r8-dual-lane-advisor.md` · `lib/intelligence/askLane.cjs` |
+| Wave R9a Dialogue-Meta | `adr/020-wave-r9a-dialogue-meta.md` · `lib/intelligence/dialogueMeta.cjs` |
+| Wave R9b oralize/lane | `adr/021-wave-r9b-oralize-lane.md` · `paths/consult/oralize.cjs` · `laneArbiter.cjs` |
+| Wave R9c Agent/Copilot | `adr/022-wave-r9c-agent-copilot.md` · `agent/toolHops.cjs` · `copilot/refine.cjs` |
 
 红线摘要：`[Me]`/`[Others]` 禁混轨；本地 Whisper 不绑 Electron native addon；静音须 VAD；BYOK 当前仅 `doubao`。

@@ -129,18 +129,40 @@ function fillAdvisorSystem(tpl, vars) {
 }
 
 function defaultAdvisorSystem(maxChars, patternId) {
-  return `你是会中副驾驶顾问（不是话术润色器）。根据用户原话与【Evidence】产出三条可脱口的不同立场建议。
+  return `你是会中副驾驶顾问（不是话术润色器）。根据用户原话与【Evidence】产出三条可脱口的不同立场建议，外加 2～3 条 smart_replies。
 人称：自述用「我」，反问用「您」；禁止「对方/会场/控场/按现有口径」。
 Evidence / SpeakDraft 只作证据；禁止新报价、包赚、绕规、伪造好评率/家长原话/NPS。
+禁止把 Meta 回放句、repair 句当业务答案精炼。
 三条必须角度不同：
 - push_forward：推进路径（下一步动作 + 为何可行）
 - push_back：边界/代价/风险（勿念「历史已否决」原文）
 - counter_inquiry：澄清缺口；贴合 pattern_id=${patternId}；禁止复读用户整句原话
+- smart_replies：2～3 条短跟进问/动作提示（≤24字）
 deep_dive.speak_script 只含可口述正文（约100字），禁止「历史已否决/可参考FAQ/可反问」。
 若 Evidence 与用户目标明显错配，先点明局限再给过渡建议，禁止硬套邻卡流水账。
 只输出 JSON（不要 markdown 围栏）：
-{"push_forward":"...","push_back":"...","counter_inquiry":"...","deep_dive":{"thesis":"...","bullets":["..."],"speak_script":"..."}}
+{"push_forward":"...","push_back":"...","counter_inquiry":"...","smart_replies":["...","..."],"deep_dive":{"thesis":"...","bullets":["..."],"speak_script":"..."}}
 每条建议≤${maxChars}字。`;
+}
+
+/** Meta / repair / 回放句禁止当业务 Draft 精炼 */
+function isMetaOrRepairDraft(speakDraft, packet) {
+  const mode = String(speakDraft?.arkMode || packet?.ark_mode || "").toLowerCase();
+  if (
+    mode === "dialogue-meta" ||
+    mode === "recall" ||
+    mode === "recall-list" ||
+    mode === "agent-card"
+  ) {
+    return true;
+  }
+  if (packet?.speakKind === "meta" || speakDraft?.speakKind === "meta") return true;
+  const text = String(speakDraft?.text || packet?.speak_draft || "").trim();
+  if (!text) return false;
+  if (/^刚才您问的是[：:]/.test(text)) return true;
+  if (/^刚才我答的是[：:]/.test(text)) return true;
+  if (/这句我没听清|还没记下您上一句|还没记下上一句业务回答/.test(text)) return true;
+  return false;
 }
 
 async function refineCopilotPacketAsync(packet, opts = {}) {
@@ -151,6 +173,11 @@ async function refineCopilotPacketAsync(packet, opts = {}) {
 
   if (opts.counterOnly) {
     return refineCounterInquiryAsync(packet, opts);
+  }
+
+  const speakDraft = opts.speakDraft || null;
+  if (isMetaOrRepairDraft(speakDraft, packet)) {
+    return { ok: false, error: "meta_draft_skip" };
   }
 
   let cfg;
@@ -168,7 +195,7 @@ async function refineCopilotPacketAsync(packet, opts = {}) {
     defaultAdvisorSystem(maxChars, patternId);
 
   const facts = (packet.key_facts || []).slice(0, 6).join("\n· ");
-  const draftText = String(opts.speakDraft?.text || packet.speak_draft || "").trim();
+  const draftText = String(speakDraft?.text || packet.speak_draft || "").trim();
   const topic = shortAskTopic(packet.target_topic || packet.segment || "", "这一点");
   const faqHint = packet.faq_title
     ? `FAQ 标题（可能错配，仅供参考）：${String(packet.faq_title).slice(0, 80)}`
@@ -180,7 +207,7 @@ async function refineCopilotPacketAsync(packet, opts = {}) {
     `ask_lane: ${packet.ask_lane || "hard"}`,
     `意图分类: ${packet.category || ""} / ${packet.urgency || ""}`,
     `counter_pattern: ${patternId}`,
-    draftText ? `[SpeakDraft 硬事实句]\n${draftText.slice(0, 400)}` : "",
+    draftText ? `[SpeakDraft 硬事实句·禁止 Meta/repair]\n${draftText.slice(0, 400)}` : "",
     facts ? `[Evidence]\n· ${facts}` : "[Evidence]\n· （暂无合格证据，请坦诚缺口并给澄清/邀约）",
     faqHint,
     packet.wiki_evidence?.preview
@@ -228,6 +255,15 @@ async function refineCopilotPacketAsync(packet, opts = {}) {
     )
   };
 
+  const smartReplies = Array.isArray(parsed.smart_replies)
+    ? parsed.smart_replies
+        .map((s) => smartClip(sanitizeSpeakText(s), 24))
+        .filter(Boolean)
+        .slice(0, 3)
+    : Array.isArray(packet.smart_replies)
+      ? packet.smart_replies
+      : [];
+
   let deepDive = packet.deep_dive || null;
   if (parsed.deep_dive && typeof parsed.deep_dive === "object") {
     const d = parsed.deep_dive;
@@ -253,6 +289,7 @@ async function refineCopilotPacketAsync(packet, opts = {}) {
     packet: {
       ...packet,
       suggestions: nextSuggestions,
+      smart_replies: smartReplies,
       deep_dive: deepDive,
       stage: "refined",
       refined: true,
@@ -269,5 +306,6 @@ module.exports = {
   refineCopilotPacketAsync,
   refineCounterInquiryAsync,
   extractJson,
-  copilotLlmOpts
+  copilotLlmOpts,
+  isMetaOrRepairDraft
 };

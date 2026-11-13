@@ -7,6 +7,7 @@
 const { load } = require("../knowledge/schemaStore.cjs");
 const { evaluateFrameMatch, isBannedCard } = require("./frameGate.cjs");
 const { isOpenIntelligenceLane, classifyAskLane } = require("./askLane.cjs");
+const { resolveAskLane } = require("./laneArbiter.cjs");
 
 const KEEP_REASONS = new Set(["carry", "progress", "card-switch", "chain-follow"]);
 
@@ -39,11 +40,16 @@ function evaluateCommitRelease(bayes, opts = {}) {
   if (!cfg.enabled) return { release: false, why: "" };
 
   const reason = String(bayes.reason || "");
-  const openLane = Boolean(opts.askText) && isOpenIntelligenceLane(opts.askText);
+  const laneInfo = opts.askText ? resolveAskLane(opts.askText) : null;
+  const openLane =
+    Boolean(opts.askText) &&
+    (laneInfo
+      ? laneInfo.lane === "soft" || laneInfo.lane === "strategy"
+      : isOpenIntelligenceLane(opts.askText));
 
   // soft/strategy：突破 progress/carry 等粘滞，交给 Agent 用资料重组
   if (openLane && KEEP_REASONS.has(reason)) {
-    const lane = classifyAskLane(opts.askText).lane;
+    const lane = (laneInfo && laneInfo.lane) || classifyAskLane(opts.askText).lane;
     return { release: true, why: `open_lane_${reason}:${lane}` };
   }
   if (KEEP_REASONS.has(reason)) return { release: false, why: "" };
@@ -60,7 +66,7 @@ function evaluateCommitRelease(bayes, opts = {}) {
 
   // soft/strategy 即便后验高，也优先 Agent（防邻卡假 committed）
   if (openLane) {
-    const lane = classifyAskLane(opts.askText).lane;
+    const lane = (laneInfo && laneInfo.lane) || classifyAskLane(opts.askText).lane;
     return { release: true, why: `open_lane_prefer_agent:${lane}` };
   }
 

@@ -8,6 +8,7 @@ const S = require("./consult/kit.cjs");
 const { handleGate } = require("./consult/gate.cjs");
 const { prepareAsk } = require("./consult/rewritePrepare.cjs");
 const { evaluateConsult } = require("../../intelligence/evaluate.cjs");
+const { handleDialogueMeta } = require("../../intelligence/dialogueMeta.cjs");
 
 async function handleConsult(ctx) {
   const { state, agenda } = ctx;
@@ -23,6 +24,10 @@ async function handleConsult(ctx) {
 
   const gated = handleGate(ctx);
   if (gated) return gated;
+
+  // Wave R9a：Dialogue-Meta（口令归 duplex；粘滞 gate 未命中时补会话元，拦 FAQ 越权）
+  const metaHit = await handleDialogueMeta(ctx);
+  if (metaHit) return metaHit;
 
   const prepared = await prepareAsk(ctx);
   if (prepared) return prepared;

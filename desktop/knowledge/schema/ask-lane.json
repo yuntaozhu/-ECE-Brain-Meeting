@@ -1,9 +1,10 @@
 {
-  "version": 1,
+  "version": 2,
   "lanes": ["hard", "soft", "strategy"],
   "defaultLane": "hard",
   "limits": {
-    "topicMaxLen": 18
+    "topicMaxLen": 18,
+    "arbiterMinConfidence": 0.6
   },
   "patterns": {
     "hardPrice": "(多少钱|怎么收费|收费标准|报价|总价|单价|三万九|39000|贵不贵|打折|优惠|议价)",
@@ -16,8 +17,11 @@
     "strategyOperate": "(辅助园所|园所运营|校园经营|经营得更好|如何使用|怎么用.{0,8}(课程|美语)|用.{0,6}(课|美语).{0,8}(运营|经营|招生))",
     "strategyWorth": "(值不值|值不值得|值不值得做|要不要上|能不能落地|值不值搞)",
     "strategyPush": "(怎么推|如何推进|怎么推进|如何开展|怎么开展|下一步怎么|先做什么|拍板前)",
-    "strategyTradeoff": "(边界与代价|风险与代价|落地代价|代价是什么|有什么代价|有什么风险|确认边界|成本与交付)"
+    "strategyTradeoff": "(边界与代价|风险与代价|落地代价|代价是什么|有什么代价|有什么风险|确认边界|成本与交付)",
+    "needMoreInfo": "(哪方面|哪个环节|具体是指|你是说|还是想问|还是问|能说清楚点|什么意思啊$)",
+    "softAmbiguous": "(体验感|上课感受|孩子感受|家长感受|课堂氛围|会不会太难|难不难学)",
+    "strategyAmbiguous": "(怎么推比较稳|先从哪块抓|从哪开始做|怎么说服团队|推进节奏怎么定)"
   },
-
-  "priority": ["hard", "soft", "strategy"]
+  "priority": ["hard", "soft", "strategy"],
+  "laneSystem": "【身份】你是问句车道仲裁器，不是答题模型。\n【任务】在规则无法判定时，输出 hard|soft|strategy|need_more_info。\n【约束】\n1. 只输出 JSON：lane,confidence,retrieval,reason\n2. 禁止给出业务答案\n3. 事实/配置/流程短问→hard；体验口碑→soft；多步运营推进→strategy；缺槽→need_more_info\n4. retrieval 仅建议 faq|wiki|none|both"
 }

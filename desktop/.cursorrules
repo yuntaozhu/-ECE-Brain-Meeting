@@ -41,8 +41,10 @@
 
 - **模型**管姿态、生命周期、口令、半双工（空闲 / 正在说 / 冷却）、咨询粘滞，以及 `lastDesign`、`lastOpenAsk`、`lastRealAsk`、上一句口播。静默、占麦、播报中的非放行输入不到检索。咨询中的实质问句才进知识库。
 - **知识库**只召回候选和特征分。不决定开口，会中不改文件。
-- **智能层**（`desktop/lib/intelligence/`，ADR-017 / ADR-019）：定卡闸 → `SpeakDraft` / `lastIntelligence`；`askLane` 分流 hard/soft/strategy；副驾驶同源 Draft + 顾问 refine（默认开，不因 aligned 跳过）。不重写贝叶斯公式，禁止业务字面量进引擎。
+- **智能层**（`desktop/lib/intelligence/`，ADR-017 / ADR-019 / ADR-020–022）：`dialogueMeta` → 定卡闸 → `SpeakDraft` / `lastIntelligence`；`askLane` + `laneArbiter` 分流；`oralize` 首句；Agent `toolHops`≤2；副驾驶同源 Draft + 顾问 refine（禁 Meta/repair 精炼）。不重写贝叶斯公式，禁止业务字面量进引擎。
+- **记忆槽**：`lastRealAsk` / `lastContentSpeak` / `lastMetaSpeak`；incomplete/abort 不写槽；Meta 口播不得当业务 Draft。
 - **`decideSpeak`**（入口 `desktop/lib/meetingStrategy/decideSpeak.cjs`，比较仍在 `agent/relevance.cjs`）把「没有证据」、召回卡片、意图脚本放进同一假设空间。出口只有作答、确认、复述。结果写回 `lastDesign` / `lastOpenAsk`（及 Draft）。
+- **豆包**：分 channel 专职（meta/lane/oralize/agent/copilot）；闸与路由 JSON；扩展 `llm/transport`+`resolve`，禁止平行 arkClient。
 - **渲染进程** `desktop/renderer/` 只采音、播放、画状态。禁止口令、检索和策略。
 - `desktop/lib/` 必须能被纯 Node 冒烟调用，不依赖 Electron。
 

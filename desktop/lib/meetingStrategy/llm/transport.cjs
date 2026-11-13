@@ -35,6 +35,7 @@ async function arkChatStream(system, user, opts = {}) {
   debugLog.info("Strategy", "llmChat stream request", {
     provider: cfg.provider,
     model,
+    channel: cfg.channel || opts.channel || "default",
     baseUrl: cfg.baseUrl,
     systemLen: system.length,
     userLen: user.length,
@@ -177,6 +178,7 @@ async function arkChat(system, user, opts = {}) {
     model,
     channel: cfg.channel || opts.channel || "default",
     disableThinking: Boolean(cfg.disableThinking || opts.disableThinking),
+    jsonObject: Boolean(opts._jsonObject),
     baseUrl: cfg.baseUrl,
     systemLen: system.length,
     userLen: user.length,
@@ -197,6 +199,9 @@ async function arkChat(system, user, opts = {}) {
     // 会中副驾驶：默认关深度思考，压 TTFT（方舟 Seed 系）
     if (cfg.disableThinking || opts.disableThinking === true) {
       body.thinking = { type: "disabled" };
+    }
+    if (opts._jsonObject) {
+      body.response_format = { type: "json_object" };
     }
     response = await fetch(`${cfg.baseUrl}/chat/completions`, {
       method: "POST",
@@ -219,6 +224,10 @@ async function arkChat(system, user, opts = {}) {
   if (opts.signal) opts.signal.removeEventListener("abort", onParentAbort);
   if (!response.ok) {
     const body = await response.text().catch(() => "");
+    // json_object 不被端点支持时降级重试一次（无 response_format）
+    if (opts._jsonObject && !opts._jsonFallback && (response.status === 400 || response.status === 422)) {
+      return arkChat(system, user, { ...opts, _jsonObject: false, _jsonFallback: true });
+    }
     return {
       ok: false,
       content: null,
@@ -244,11 +253,85 @@ async function arkChat(system, user, opts = {}) {
   };
 }
 
+/**
+ * 结构化 JSON 调用：API 尽量约束 + 本地 validate 双层兜底。
+ * validate 失败不硬解析进业务；返回 ok:false。
+ */
+async function llmChatJson(system, user, opts = {}) {
+  if (opts.signal?.aborted) {
+    return { ok: false, value: null, content: null, error: "aborted", incomplete: true };
+  }
+  const res = await arkChat(system, user, {
+    ...opts,
+    stream: false,
+    temperature: opts.temperature != null ? opts.temperature : 0.1,
+    _jsonObject: true
+  });
+  if (!res.ok) {
+    return {
+      ok: false,
+      value: null,
+      content: res.content,
+      error: res.error || "llm_fail",
+      incomplete: res.error === "aborted",
+      billingOverdue: Boolean(res.billingOverdue)
+    };
+  }
+  if (opts.signal?.aborted) {
+    return { ok: false, value: null, content: res.content, error: "aborted", incomplete: true };
+  }
+
+  const raw = String(res.content || "").trim();
+  if (!raw) {
+    return { ok: false, value: null, content: null, error: "empty", incomplete: false };
+  }
+
+  if (typeof opts.validate === "function") {
+    const checked = opts.validate(raw);
+    if (!checked || !checked.ok) {
+      return {
+        ok: false,
+        value: null,
+        content: raw,
+        error: (checked && checked.error) || "schema_invalid",
+        incomplete: false
+      };
+    }
+    return {
+      ok: true,
+      value: checked.value,
+      content: raw,
+      error: null,
+      incomplete: false,
+      channel: res.channel,
+      model: res.model
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(
+      raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "")
+    );
+    return {
+      ok: true,
+      value: parsed,
+      content: raw,
+      error: null,
+      incomplete: false,
+      channel: res.channel,
+      model: res.model
+    };
+  } catch (_) {
+    return { ok: false, value: null, content: raw, error: "json_parse", incomplete: false };
+  }
+}
+
 module.exports = {
   isBillingOverdue,
   resolveChatModel,
   arkChatStream,
   arkChat,
+  llmChatJson,
   /** 别名：BYOK 语义 */
   llmChat: arkChat,
   llmChatStream: arkChatStream,

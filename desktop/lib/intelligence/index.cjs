@@ -7,6 +7,9 @@ const alignFromDraft = require("./alignFromDraft.cjs");
 const observe = require("./observe.cjs");
 const frameGate = require("./frameGate.cjs");
 const askLane = require("./askLane.cjs");
+const dialogueMeta = require("./dialogueMeta.cjs");
+const memory = require("./memory.cjs");
+const laneArbiter = require("./laneArbiter.cjs");
 
 module.exports = {
   ...contract,
@@ -17,5 +20,8 @@ module.exports = {
   ...alignFromDraft,
   ...observe,
   ...frameGate,
-  ...askLane
+  ...askLane,
+  ...dialogueMeta,
+  ...memory,
+  ...laneArbiter
 };

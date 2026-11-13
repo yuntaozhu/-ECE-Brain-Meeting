@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "metaTypes": [
+    "none",
+    "recall_ask",
+    "recall_answer",
+    "memory_repair",
+    "why_silent",
+    "tone"
+  ],
+  "limits": {
+    "minConfidence": 0.55,
+    "directSpeakMax": 40,
+    "slotTtlMs": 1800000,
+    "llmTimeoutMs": 2500
+  },
+  "lines": {
+    "recallAsk": "刚才您问的是：{prev}",
+    "recallAskEmpty": "我这边还没记下您上一句实质问题。请再说一遍。",
+    "recallAnswer": "刚才我答的是：{prev}",
+    "recallAnswerEmpty": "我这边还没记下上一句业务回答。您可以把问题再说一遍。",
+    "repair": "这句我没听清。请您再说完整一点。",
+    "whySilent": "刚才那句我没把握开口。您把问题再说一遍，或换个说法。",
+    "toneAck": "抱歉。请直接说您想了解的具体问题，我按口径重答。"
+  },
+  "patterns": {
+    "recallAsk": "(刚才|刚刚|上一).{0,12}(问了|问的|什么问题|问题是什么)|我(刚才|刚刚)?问了(你|大智)?什么|还记不记得.{0,16}问|上一问|上一个问题|问的什么问题",
+    "recallAnswer": "(你是?怎么|你刚才|你刚刚|上句|上一句).{0,8}(回复|回答|说的|答的)|怎么回复的|怎么回答的|你刚才说了什么|刚才你说了什么|你答的是什么|上回你怎么说",
+    "memoryRepair": "(没听清|听不清|没听懂|听不懂).{0,16}$|(再说一遍|重新说|再说一次)(你的|刚才的)?(答案|回复|回答)[？?。.!！\\s]*$|^(大智[，,\\s]*)?(再说一遍|再说一次)[？?。.!！\\s]*$|没听清你说什么",
+    "whySilent": "(为什么|为啥).{0,8}(不回答|不说话|不开口|不回)|你怎么不说话|你怎么不回答",
+    "tone": "(回答不正确|答错了|说错了|不对吧|你答错)",
+    "notMetaIdentity": "(你是谁|你是什么|你叫什么)([？?。.!！\\s]*)$",
+    "notMetaBusiness": "(多少钱|怎么收费|全园美语|落地|招生|三万九|学费)"
+  },
+  "metaSystem": "【身份】你是会议语音助手的会话元控制器，不是业务顾问。\n【任务】判断当前用户句属于哪类会话控制意图，只输出 JSON。\n【约束】\n1. 只允许 metaType: none|recall_ask|recall_answer|memory_repair|why_silent|tone\n2. 禁止回答产品/价格/政策；禁止检索；禁止编造记忆内容\n3. confidence∈[0,1]；拿不准则 needsRepair=true 或 metaType=none\n4. shouldSpeak=true 仅当可安全回放或短 repair；directSpeak≤40字且非业务事实\n5. memoryRead 只声明要读哪些槽，不要编槽内容\n【示例】\n用户「我刚才问的是什么」→ {\"metaType\":\"recall_ask\",\"confidence\":0.92,\"needsRepair\":false,\"shouldSpeak\":true,\"directSpeak\":null,\"memoryRead\":{\"lastRealAsk\":true}}\n用户「你是怎么回复的」→ {\"metaType\":\"recall_answer\",\"confidence\":0.9,\"needsRepair\":false,\"shouldSpeak\":true,\"directSpeak\":null,\"memoryRead\":{\"lastContentSpeak\":true}}\n用户「学费多少」→ {\"metaType\":\"none\",\"confidence\":0.95,\"needsRepair\":false,\"shouldSpeak\":false,\"directSpeak\":null,\"memoryRead\":{}}",
+  "llmEnabledEnv": "DIALOGUE_META_LLM"
+}

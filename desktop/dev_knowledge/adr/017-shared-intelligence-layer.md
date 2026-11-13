@@ -44,6 +44,9 @@
 - Phase 8b：soft/strategy 定卡放行 Agent + composeSoft/StrategyRule（已完成）
 - Phase 8c：副驾驶顾问 refine 默认开 + thinking + 取消 aligned 跳过（已完成）
 - Phase 8d：冒烟收口 + ADR-019 关键文件表（已完成）
+- Phase 9a：Dialogue-Meta + 记忆三槽 + meta/`llmChatJson` → ADR-020（已完成）
+- Phase 9b：oralize 首句 + laneArbiter → ADR-021（已完成）
+- Phase 9c：Agent 两跳 + Copilot Meta 隔离 → ADR-022（已完成）
 
 ## 验收
 

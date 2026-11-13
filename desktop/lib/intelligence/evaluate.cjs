@@ -50,6 +50,16 @@ function ensureIntelligence(state, speakResult, path) {
  * @returns {Promise<{ speakResult: object, intelligence: object|null, path: string }>}
  */
 async function evaluateConsult(ctx) {
+  // Wave R9b：挂车道快照（规则+模糊补判；可选 LLM）
+  try {
+    const { resolveAskLaneAsync } = require("./laneArbiter.cjs");
+    ctx.askLaneInfo = await resolveAskLaneAsync(ctx.askText || ctx.lastFloor || "", {
+      signal: ctx.opts?.signal
+    });
+  } catch (_) {
+    ctx.askLaneInfo = null;
+  }
+
   const local = tryLocalAnswer(ctx);
   let speakResult;
   let path = "local";

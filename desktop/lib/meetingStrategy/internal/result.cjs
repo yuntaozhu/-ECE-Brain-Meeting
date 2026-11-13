@@ -216,13 +216,27 @@ function baseResult(extra) {
 function playAnswer(text, reason, state, a2aTrace, kbStatus, qFp, arkMode, meta = {}) {
   const answer = stripIntroBoilerplate(clipUtterance(text, 160));
   a2aTrace.push(newEvent("HostAgent", "AudioBridge", "PLAY_ANSWER", { ttsText: answer, reason }));
-  if (meta.cacheQuestion && answer && state?.meetingId) {
+  const speakKind = String(meta.speakKind || "content");
+  const draftState = String(meta.draftState || "committed");
+  const mem = require("../../intelligence/memory.cjs");
+  if (meta.cacheQuestion && answer && state?.meetingId && speakKind !== "meta") {
     rememberAnswer(state.meetingId, {
       question: meta.cacheQuestion,
       tts: answer,
       arkMode: arkMode || "template"
     });
-    rememberRealAsk(state, meta.cacheQuestion);
+    mem.rememberRealAskSafe(state, meta.cacheQuestion, {
+      draftState,
+      rememberRealAsk
+    });
+  }
+  // 分槽：Meta 只写 lastMetaSpeak；业务口播写 lastContentSpeak；incomplete 不写
+  if (answer && state) {
+    if (speakKind === "meta") {
+      mem.commitMetaSpeak(state, answer, { draftState });
+    } else if (draftState === "committed") {
+      mem.commitContentSpeak(state, answer, { draftState });
+    }
   }
   return {
     shouldIntervene: true,
@@ -231,6 +245,8 @@ function playAnswer(text, reason, state, a2aTrace, kbStatus, qFp, arkMode, meta 
     reason,
     speakReason: meta.speakReason || "",
     speakTitle: meta.speakTitle || "",
+    speakKind,
+    draftState,
     latestToDos: [],
     nextStageRecommendation: "MainDiscussion",
     a2aTrace,

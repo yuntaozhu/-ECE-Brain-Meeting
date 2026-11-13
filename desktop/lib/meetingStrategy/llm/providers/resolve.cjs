@@ -23,6 +23,9 @@ function normalizeProvider(raw) {
 function thinkingDisabledFor(opts = {}) {
   if (opts.disableThinking === true) return true;
   if (opts.disableThinking === false) return false;
+  // Meta / oralize / lane 闸类默认关思考，压延迟
+  const ch = String(opts.channel || "");
+  if (ch === "meta" || ch === "oralize" || ch === "lane" || ch === "frame") return true;
   if (opts.channel !== "copilot") return false;
   const v = String(process.env.COPILOT_LLM_THINKING || "enabled")
     .trim()
@@ -80,10 +83,26 @@ function resolveLlmConfig(opts = {}) {
     ""
   ).trim();
 
+  const channel = String(opts.channel || "default");
+  const useFastChannel =
+    opts.fast === true ||
+    channel === "meta" ||
+    channel === "oralize" ||
+    channel === "lane" ||
+    channel === "frame";
+
   let model = "";
-  if (opts.channel === "copilot") {
+  if (channel === "copilot") {
     model = (
       copilotModel ||
+      fastModel ||
+      process.env.LLM_MODEL ||
+      process.env.DOUBAO_CHAT_MODEL ||
+      process.env.DOUBAO_MODEL_ENDPOINT ||
+      ""
+    ).trim();
+  } else if (useFastChannel) {
+    model = (
       fastModel ||
       process.env.LLM_MODEL ||
       process.env.DOUBAO_CHAT_MODEL ||
@@ -113,7 +132,7 @@ function resolveLlmConfig(opts = {}) {
       model,
       fastModel,
       copilotModel,
-      channel: opts.channel || "default",
+      channel,
       disableThinking
     };
   }
@@ -127,7 +146,7 @@ function resolveLlmConfig(opts = {}) {
       model: "",
       fastModel,
       copilotModel,
-      channel: opts.channel || "default",
+      channel,
       disableThinking
     };
   }
@@ -140,7 +159,7 @@ function resolveLlmConfig(opts = {}) {
     model,
     fastModel,
     copilotModel,
-    channel: opts.channel || "default",
+    channel,
     disableThinking,
     /** 方舟兼容鉴权头 */
     headers: {

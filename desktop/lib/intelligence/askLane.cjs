@@ -72,6 +72,15 @@ function classifyAskLane(text) {
 }
 
 /**
+ * Wave R9b：规则分类 + 模糊补判（委托 laneArbiter，避免本文件直接塞业务模式分支）。
+ * @param {string} text
+ */
+function resolveAskLane(text) {
+  const { resolveAskLane: resolve } = require("./laneArbiter.cjs");
+  return resolve(text);
+}
+
+/**
  * 是否应走软/策略智能通道（口播放行 Agent、副驾驶顾问精炼）。
  * @param {string|"hard"|"soft"|"strategy"} laneOrText
  */
@@ -81,7 +90,7 @@ function isOpenIntelligenceLane(laneOrText) {
     laneOrText === LANES.STRATEGY ||
     laneOrText === LANES.HARD
       ? laneOrText
-      : classifyAskLane(laneOrText).lane;
+      : resolveAskLane(laneOrText).lane;
   return lane === LANES.SOFT || lane === LANES.STRATEGY;
 }
 
@@ -108,6 +117,7 @@ function shortAskTopic(text, fallback) {
 module.exports = {
   LANES,
   classifyAskLane,
+  resolveAskLane,
   isOpenIntelligenceLane,
   shortAskTopic,
   laneCfg

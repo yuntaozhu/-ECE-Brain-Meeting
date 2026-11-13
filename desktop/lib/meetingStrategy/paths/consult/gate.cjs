@@ -136,7 +136,7 @@ function handleGate(ctx) {
     const speech = S.formatAskRecap(rows);
     S.debugLog.info("Strategy", "本场提问回顾", { chars: speech.length });
     return S.playAnswer(speech, "WAKE_ANSWER", state, a2aTrace, kbStatus, qFp, "recall-list", {
-      cacheQuestion: lastFloor
+      speakKind: "meta"
     });
   }
 
@@ -170,7 +170,8 @@ function handleGate(ctx) {
         a2aTrace,
         kbStatus,
         qFp,
-        "recall"
+        "recall",
+        { speakKind: "meta", speakReason: "recall_ask" }
       );
     }
     const priorFloor = [...floors]
@@ -192,7 +193,8 @@ function handleGate(ctx) {
         a2aTrace,
         kbStatus,
         qFp,
-        "recall"
+        "recall",
+        { speakKind: "meta", speakReason: "recall_ask" }
       );
     }
     return S.playAnswer(
@@ -202,7 +204,8 @@ function handleGate(ctx) {
       a2aTrace,
       kbStatus,
       qFp,
-      "template"
+      "template",
+      { speakKind: "meta", speakReason: "recall_ask_empty" }
     );
   }
 
@@ -213,7 +216,10 @@ function handleGate(ctx) {
     const tip = prev
       ? S.speakFill("memoryPrevLong", { prev: S.clipUtterance(prev, 60) })
       : S.speakLine("memoryEmptyLong");
-    return S.playAnswer(tip, "WAKE_ANSWER", state, a2aTrace, kbStatus, qFp, "template");
+    return S.playAnswer(tip, "WAKE_ANSWER", state, a2aTrace, kbStatus, qFp, "template", {
+      speakKind: "meta",
+      speakReason: "session_memory"
+    });
   }
 
   const lvl = S.bumpObjectionLevel(state, lastFloor);

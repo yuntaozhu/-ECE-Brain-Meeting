@@ -38,6 +38,13 @@ function load() {
           return { defaultLane: "hard", patterns: {}, limits: {} };
         }
       })(),
+      dialogueMeta: (() => {
+        try {
+          return readJson("dialogue-meta.json");
+        } catch (_) {
+          return { metaTypes: ["none"], patterns: {}, lines: {}, limits: {} };
+        }
+      })(),
       distillChains: readJson("distill-chains.json"),
       // 副驾驶门控（旁路 UI 建议卡）；缺文件时不影响主口播链路
       copilot: (() => {
