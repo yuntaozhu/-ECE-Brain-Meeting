@@ -1,9 +1,6 @@
 ---
-description: desktop 会场口播引擎的机制与策略分离。改 desktop 时必须遵守。
-globs: desktop/**/*
 alwaysApply: true
 ---
-
 # desktop 架构宪法
 
 完整条文在 `desktop/.cursorrules`。改 `desktop/` 时按该文件执行。
