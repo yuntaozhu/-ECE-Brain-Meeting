@@ -1,5 +1,5 @@
 /**
- * 开发态：desktop/ 下各知识目录
+ * 开发态：desktop/ 下业务知识；研发知识在仓库根 dev_knowledge/
  * 安装包：resources/ 只读种子 + userData/ 可写运行态
  */
 const fs = require("fs");
@@ -7,6 +7,8 @@ const path = require("path");
 
 /** desktop/ 根目录（本文件在 lib/platform/） */
 const DESKTOP_ROOT = path.join(__dirname, "..", "..");
+/** 仓库根（与 desktop 同级） */
+const REPO_ROOT = path.join(DESKTOP_ROOT, "..");
 
 function electronApp() {
   if (!process.versions?.electron) return null;
@@ -65,15 +67,10 @@ function wiki2BundledRoot() {
   return path.join(DESKTOP_ROOT, "knowledge_wiki");
 }
 
-/** 只读 Wiki2 种子（安装包 resources） */
 function wiki2ReadRoot() {
   return wiki2BundledRoot();
 }
 
-/**
- * 可写 Wiki2（episodes / changelog / .graph_index）。
- * 安装包：userData/knowledge_wiki，首次从 resources 拷贝 wiki/ 种子。
- */
 function wiki2WriteRoot() {
   if (isPackagedApp()) {
     const app = electronApp();
@@ -90,30 +87,42 @@ function wiki2WriteRoot() {
   return wiki2BundledRoot();
 }
 
+/** 根目录全局研发知识库（只读查阅 / 打包种子） */
 function devKnowledgeReadRoot() {
   if (isPackagedApp() && process.resourcesPath) {
     const bundled = path.join(process.resourcesPath, "dev_knowledge");
     if (fs.existsSync(bundled)) return bundled;
   }
-  return path.join(DESKTOP_ROOT, "dev_knowledge");
+  return path.join(REPO_ROOT, "dev_knowledge");
 }
 
+/** 大智专属热词（优先）；兼容旧打包路径 glossary/project_terms.json */
 function glossaryPath() {
   const fromEnv = (process.env.ASR_GLOSSARY_PATH || "").trim();
   if (fromEnv) return path.resolve(fromEnv);
-  return path.join(devKnowledgeReadRoot(), "glossary", "project_terms.json");
+  const root = devKnowledgeReadRoot();
+  const project = path.join(root, "projects", "desktop", "glossary", "project_terms.json");
+  if (fs.existsSync(project)) return project;
+  const legacy = path.join(root, "glossary", "project_terms.json");
+  if (fs.existsSync(legacy)) return legacy;
+  return project;
 }
 
+/** 跨项目通用技术热词 */
+function sharedGlossaryPath() {
+  return path.join(devKnowledgeReadRoot(), "shared", "glossary", "common_tech_terms.json");
+}
+
+/**
+ * 会中速记 / bridge 等运行态日志（不在全局 dev_knowledge）
+ * 开发态：desktop/knowledge/sessions；安装包：userData/knowledge/sessions
+ */
 function sessionLogsWriteDir() {
-  if (isPackagedApp()) {
-    const app = electronApp();
-    const dir = path.join(app.getPath("userData"), "dev_knowledge", "session_logs");
-    try {
-      fs.mkdirSync(dir, { recursive: true });
-    } catch (_) {}
-    return dir;
-  }
-  return path.join(DESKTOP_ROOT, "dev_knowledge", "session_logs");
+  const dir = path.join(knowledgeWriteRoot(), "sessions");
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+  } catch (_) {}
+  return dir;
 }
 
 function envFileCandidates() {
@@ -121,7 +130,7 @@ function envFileCandidates() {
   if (isPackagedApp() && process.resourcesPath) {
     list.push(path.join(process.resourcesPath, ".env"));
   }
-  list.push(path.join(DESKTOP_ROOT, "..", ".env"));
+  list.push(path.join(REPO_ROOT, ".env"));
   list.push(path.join(DESKTOP_ROOT, ".env"));
   return list;
 }
@@ -135,7 +144,9 @@ module.exports = {
   wiki2BundledRoot,
   devKnowledgeReadRoot,
   glossaryPath,
+  sharedGlossaryPath,
   sessionLogsWriteDir,
   envFileCandidates,
-  DESKTOP_ROOT
+  DESKTOP_ROOT,
+  REPO_ROOT
 };

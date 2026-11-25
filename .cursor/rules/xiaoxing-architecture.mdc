@@ -1,0 +1,11 @@
+---
+globs:
+  - xiaoxing/**/*
+---
+# xiaoxing（小星）架构要点
+
+- **独立产品**：与 `desktop/` 同级；禁止 `require`/`import` `desktop` 内部源码。
+- **能力**：农业领域口径 + **AI 会议**（听写 / 唤醒「小星」/ 口播 / 半双工等）。会议模式对照 `dev_knowledge/shared/playbook/meeting-assistant.md` 独立落地。
+- **知识**：仅 `xiaoxing/knowledge/`；会中不改库；答后 inbox → 会后升格。
+- **研发档案**：`dev_knowledge/projects/xiaoxing/`；通用坑升格 `dev_knowledge/shared/`。
+- 临时共用 Electron 二进制可过渡；业务 FAQ/会话不得与大智共用。

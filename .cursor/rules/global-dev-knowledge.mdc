@@ -1,0 +1,11 @@
+---
+alwaysApply: true
+---
+# 全局研发知识飞轮
+
+- 仓库多产品同级：`desktop/`（大智）、`xiaoxing/`（小星，含 AI 会议）、未来 `<new>/`。完整宪法见根 `.cursorrules`。
+- 研发知识中枢：根目录 `dev_knowledge/`（`INDEX.md` → `shared/` → `projects/<name>/`）。
+- **Pre**：重大改动前先查 `dev_knowledge/INDEX.md` 与相关 ADR。
+- **Post**：完成后向 `dev_knowledge/session_logs/dev_sessions.jsonl` 追加带 `"project"` 的记录；独有经验进 `projects/<name>/`，通用脱敏进 `shared/`。
+- 业务话术 / 会中 jots **禁止**写入 `dev_knowledge/`；运行态留在各产品 `knowledge/`。
+- 禁止跨产品 `require`/`import` 内部源码；复用只走 shared 模式或未来 `packages/`。

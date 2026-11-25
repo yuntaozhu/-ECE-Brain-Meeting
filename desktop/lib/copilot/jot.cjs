@@ -84,9 +84,9 @@ function expandJots(meetingId, transcript = "") {
     ...(lines.length ? lines.map((l) => `- ${l}`) : ["- （无转写）"]),
     ``,
     `## 建议沉淀`,
-    `- [ ] 更新 \`dev_knowledge/adr/\`（若有架构决策）`,
+    `- [ ] 更新 \`dev_knowledge/projects/desktop/adr/\` 或 \`dev_knowledge/shared/adr/\`（若有架构决策）`,
     `- [ ] 更新 \`knowledge/faq-meeting.txt\`（若有业务口径）`,
-    `- [ ] 追加 \`session_logs/dev_sessions.jsonl\``
+    `- [ ] 追加仓库根 \`dev_knowledge/session_logs/dev_sessions.jsonl\``
   ].join("\n");
   return { ok: true, markdown: md, jotCount: jots.length, lineCount: lines.length };
 }

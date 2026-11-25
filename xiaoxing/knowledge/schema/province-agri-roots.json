@@ -1,0 +1,46 @@
+{
+  "note": "省厅首页根域；Phase C 试点先鲁粤川陕，可扩至 31 省",
+  "pilots": ["shandong", "guangdong", "sichuan", "shaanxi"],
+  "provinces": [
+    {
+      "id": "shandong",
+      "name": "山东省",
+      "home": "http://nync.shandong.gov.cn",
+      "aliases": ["山东", "鲁"]
+    },
+    {
+      "id": "guangdong",
+      "name": "广东省",
+      "home": "https://dara.gd.gov.cn",
+      "aliases": ["广东", "粤"]
+    },
+    {
+      "id": "sichuan",
+      "name": "四川省",
+      "home": "http://nynct.sc.gov.cn",
+      "aliases": ["四川", "川"]
+    },
+    {
+      "id": "shaanxi",
+      "name": "陕西省",
+      "home": "http://nynct.shaanxi.gov.cn",
+      "aliases": ["陕西", "陕"]
+    },
+    {
+      "id": "yunnan",
+      "name": "云南省",
+      "home": "http://nynct.yn.gov.cn",
+      "aliases": ["云南", "滇"],
+      "pilot": false
+    },
+    {
+      "id": "guangxi",
+      "name": "广西壮族自治区",
+      "home": "http://nynct.gx.gov.cn",
+      "aliases": ["广西", "桂"],
+      "pilot": false
+    }
+  ],
+  "priceKeywords": ["价格行情", "市场行情", "市场信息", "菜篮子", "批发价格", "价格监测", "农产品价格"],
+  "pestKeywords": ["病虫情报", "病虫害", "测报", "预警", "植保", "农技推广"]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "ing_1795423670896",
+  "at": "2026-11-23T08:47:50.896Z",
+  "meeting_id": "mtg_1795423670801",
+  "query": "关于草莓，看一下还要再补充柑橘",
+  "gap_kind": "crop_bootstrap",
+  "product": "柑橘",
+  "region": null,
+  "suggested_source_ids": [
+    "sh-nyncw-nyjs",
+    "dfcxb",
+    "saas"
+  ],
+  "status": "todo",
+  "note": "启动「柑橘」公开入口与 FAQ 骨架",
+  "followup_id": "fu_1795423670896"
+}

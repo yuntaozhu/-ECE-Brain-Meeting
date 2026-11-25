@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "routes": {
+    "shandong": {
+      "province_id": "shandong",
+      "province_name": "山东省",
+      "home": "http://nync.shandong.gov.cn",
+      "price_url": "http://nync.shandong.gov.cn/scxx/jghq/",
+      "price_label": "价格行情",
+      "price_score": 14,
+      "pest_url": "http://nync.shandong.gov.cn/ntj/bchqb/",
+      "pest_label": "病虫情报",
+      "pest_score": 11,
+      "method": "keyword",
+      "candidates": 6,
+      "empty_streak": 0,
+      "updated_at": "2026-11-23T06:56:46.737Z"
+    },
+    "guangdong": {
+      "province_id": "guangdong",
+      "province_name": "广东省",
+      "home": "https://dara.gd.gov.cn",
+      "price_url": "https://dara.gd.gov.cn/scxx/ncpjg/",
+      "price_label": "农产品价格",
+      "price_score": 13,
+      "pest_url": "https://dara.gd.gov.cn/zyjsthzt/bchyj/",
+      "pest_label": "病虫害预警",
+      "pest_score": 21,
+      "method": "keyword",
+      "candidates": 6,
+      "empty_streak": 0,
+      "updated_at": "2026-11-23T06:56:46.741Z"
+    },
+    "sichuan": {
+      "province_id": "sichuan",
+      "province_name": "四川省",
+      "home": "http://nynct.sc.gov.cn",
+      "price_url": "http://nynct.sc.gov.cn/scxx/jghq/",
+      "price_label": "价格监测",
+      "price_score": 13,
+      "pest_url": "http://nynct.sc.gov.cn/njtj/bch/",
+      "pest_label": "病虫害测报",
+      "pest_score": 21,
+      "method": "keyword",
+      "candidates": 4,
+      "empty_streak": 0,
+      "updated_at": "2026-11-18T03:52:22.053Z"
+    },
+    "shaanxi": {
+      "province_id": "shaanxi",
+      "province_name": "陕西省",
+      "home": "http://nynct.shaanxi.gov.cn",
+      "price_url": "http://nynct.shaanxi.gov.cn/scxx/ncpjg/",
+      "price_label": "农产品价格",
+      "price_score": 13,
+      "pest_url": "http://nynct.shaanxi.gov.cn/ntj/zb/",
+      "pest_label": "植保预警",
+      "pest_score": 20,
+      "method": "keyword",
+      "candidates": 4,
+      "empty_streak": 0,
+      "updated_at": "2026-11-18T03:52:22.054Z"
+    }
+  }
+}

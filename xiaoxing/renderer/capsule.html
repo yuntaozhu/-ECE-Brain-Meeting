@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>小星胶囊</title>
+  <style>
+    html, body { margin: 0; background: transparent; overflow: hidden; font-family: "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+    .bar {
+      margin: 6px;
+      height: 44px;
+      border-radius: 14px;
+      background: rgba(15,28,20,.92);
+      border: 1px solid #2a5238;
+      color: #e8f5e9;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 10px;
+      -webkit-app-region: drag;
+      box-shadow: 0 8px 24px rgba(0,0,0,.35);
+    }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #7cb342; }
+    .dot.listening { background: #66bb6a; box-shadow: 0 0 8px #66bb6a; }
+    .dot.meeting { background: #4fc3f7; box-shadow: 0 0 8px #4fc3f7; }
+    .dot.armed { background: #ffd54f; }
+    .dot.thinking { background: #ffb74d; }
+    .dot.speaking { background: #64b5f6; }
+    .title { font-weight: 700; font-size: 13px; letter-spacing: .04em; }
+    .st { flex: 1; font-size: 12px; color: #9ccc9c; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    button {
+      -webkit-app-region: no-drag;
+      border: 0; border-radius: 8px; padding: 6px 10px; cursor: pointer;
+      background: #7cb342; color: #08210f; font-weight: 700; font-size: 12px;
+    }
+    button.ghost { background: transparent; color: #9ccc9c; border: 1px solid #2a5238; }
+    .panel {
+      margin: 0 6px 6px; padding: 10px; border-radius: 12px;
+      background: rgba(15,28,20,.94); border: 1px solid #2a5238; color: #e8f5e9;
+      display: none; max-height: 290px; overflow: auto;
+    }
+    .panel.open { display: block; }
+    .line { font-size: 12px; line-height: 1.45; margin-bottom: 8px; }
+    .muted { color: #9ccc9c; font-size: 11px; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <span class="dot" id="dot"></span>
+    <span class="title">XIAOXING</span>
+    <span class="st" id="st">待命</span>
+    <button id="btnAsk" title="Alt+Z">问AI</button>
+    <button class="ghost" id="btnExpand">展开</button>
+    <button class="ghost" id="btnMain">主窗</button>
+  </div>
+  <div class="panel" id="panel">
+    <div class="muted">最近一轮</div>
+    <div class="line" id="lastQ">—</div>
+    <div class="line" id="lastA">—</div>
+  </div>
+  <script>
+    const api = window.xiaoxing;
+    const st = document.getElementById('st');
+    const dot = document.getElementById('dot');
+    const panel = document.getElementById('panel');
+    let collapsed = true;
+    function setStatus(text, cls) {
+      st.textContent = text || '待命';
+      dot.className = 'dot' + (cls ? ' ' + cls : '');
+    }
+    document.getElementById('btnAsk').onclick = () => {
+      api.broadcastStatus({ phase: 'push-ask-request' });
+    };
+    document.getElementById('btnExpand').onclick = async () => {
+      collapsed = !collapsed;
+      await api.capsuleSetCollapsed(collapsed);
+      panel.classList.toggle('open', !collapsed);
+      document.getElementById('btnExpand').textContent = collapsed ? '展开' : '收起';
+    };
+    document.getElementById('btnMain').onclick = () => api.showMain();
+    api.onEvent((msg) => {
+      if (msg.type === 'status') setStatus(msg.text, msg.cls);
+      if (msg.type === 'turn-done') {
+        document.getElementById('lastQ').textContent = '你：' + (msg.query || '');
+        document.getElementById('lastA').textContent = '小星：' + (msg.reply || '');
+      }
+      if (msg.type === 'meeting') {
+        if (msg.event === 'start') setStatus('听会中', 'meeting');
+        if (msg.event === 'stop') setStatus('待命', '');
+        if (msg.event === 'me-final' && msg.meeting?.armed) setStatus('听会·已唤醒', 'armed');
+        if (msg.event === 'me-consult' && msg.turn) {
+          document.getElementById('lastQ').textContent = '你：' + (msg.query || msg.text || '');
+          document.getElementById('lastA').textContent = '小星：' + (msg.turn.reply || '');
+        }
+        if (msg.focus?.query) {
+          document.getElementById('lastQ').textContent = 'Focus：' + msg.focus.query;
+        }
+        if (msg.event === 'ingest' && (msg.action === 'focus_recall' || msg.action === 'focus_gap')) {
+          document.getElementById('lastA').textContent = '小星：' + (msg.reply || '');
+        }
+        if (msg.event === 'others-final' && msg.text) {
+          document.getElementById('lastQ').textContent = '会场：' + msg.text;
+          if (msg.suggest?.reply) {
+            document.getElementById('lastA').textContent = '建议：' + msg.suggest.reply;
+            setStatus('有建议卡', 'meeting');
+          }
+        }
+      }
+      if (msg.type === 'hotkey-push-ask') {
+        api.broadcastStatus({ phase: 'push-ask-request' });
+      }
+    });
+  </script>
+</body>
+</html>

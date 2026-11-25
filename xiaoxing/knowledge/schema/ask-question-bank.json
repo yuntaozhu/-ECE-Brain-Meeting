@@ -1,0 +1,3333 @@
+{
+  "description": "小星 Ask/会议 250 题自动冒烟题库（含综合探针 T001–T100 → Q151–Q250）",
+  "version": "1.5.0",
+  "cases": [
+    {
+      "id": "Q001",
+      "q": "新发地草莓多少钱",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "草莓"
+      ],
+      "replyMustNot": [
+        "黄瓜"
+      ],
+      "noUrl": true
+    },
+    {
+      "id": "Q002",
+      "q": "今天草莓批发价多少",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "草莓"
+      ],
+      "noUrl": true
+    },
+    {
+      "id": "Q003",
+      "q": "寿光黄瓜均价多少",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "黄瓜"
+      ],
+      "noUrl": true
+    },
+    {
+      "id": "Q004",
+      "q": "寿光西红柿多少钱一斤",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "西红柿",
+        "番茄"
+      ],
+      "replyMustAny": true,
+      "noUrl": true
+    },
+    {
+      "id": "Q005",
+      "q": "大白菜在寿光什么价",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "大白菜",
+        "白菜"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q006",
+      "q": "一亩田草莓产地价多少",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "草莓"
+      ],
+      "replyMustNot": [
+        "黄瓜"
+      ]
+    },
+    {
+      "id": "Q007",
+      "q": "黄瓜地头价多少",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "黄瓜"
+      ]
+    },
+    {
+      "id": "Q008",
+      "q": "黄瓜一亩田产地价多少",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "黄瓜"
+      ]
+    },
+    {
+      "id": "Q009",
+      "q": "草莓近7日价格趋势怎么样",
+      "expect": [
+        "market",
+        "market_miss",
+        "faq",
+        "wiki",
+        "wiki2",
+        "gap"
+      ],
+      "soft": true
+    },
+    {
+      "id": "Q010",
+      "q": "惠农网寿光黄瓜产地价多少",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "黄瓜"
+      ]
+    },
+    {
+      "id": "Q011",
+      "q": "寿光的鸡蛋多少钱",
+      "expect": [
+        "market_miss"
+      ],
+      "replyMust": [
+        "鸡蛋"
+      ],
+      "replyMustNot": [
+        "黄瓜"
+      ]
+    },
+    {
+      "id": "Q012",
+      "q": "寿光的大豆多少钱一斤",
+      "expect": [
+        "market_miss"
+      ],
+      "replyMust": [
+        "大豆"
+      ],
+      "replyMustNot": [
+        "黄瓜"
+      ]
+    },
+    {
+      "id": "Q013",
+      "q": "现在哪里的鸡蛋最便宜",
+      "expect": [
+        "market_miss"
+      ],
+      "replyMust": [
+        "鸡蛋"
+      ],
+      "replyMustNot": [
+        "黄瓜"
+      ]
+    },
+    {
+      "id": "Q014",
+      "q": "新发地西瓜多少钱",
+      "expect": [
+        "market_miss"
+      ],
+      "replyMust": [
+        "西瓜"
+      ],
+      "replyMustNot": [
+        "草莓",
+        "黄瓜"
+      ]
+    },
+    {
+      "id": "Q015",
+      "q": "江南市场香蕉均价多少",
+      "expect": [
+        "market_miss"
+      ],
+      "replyMust": [
+        "香蕉"
+      ],
+      "replyMustNot": [
+        "草莓"
+      ]
+    },
+    {
+      "id": "Q016",
+      "q": "大蒜今天批发价多少",
+      "expect": [
+        "market_miss"
+      ],
+      "replyMust": [
+        "大蒜"
+      ],
+      "replyMustNot": [
+        "黄瓜"
+      ]
+    },
+    {
+      "id": "Q017",
+      "q": "生姜在新发地什么价",
+      "expect": [
+        "market_miss"
+      ],
+      "replyMust": [
+        "生姜",
+        "姜"
+      ],
+      "replyMustAny": true,
+      "replyMustNot": [
+        "草莓"
+      ]
+    },
+    {
+      "id": "Q018",
+      "q": "我问的是鸡蛋",
+      "expect": [
+        "market_miss",
+        "gap",
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "soft": true,
+      "replyMustNot": [
+        "黄瓜均价",
+        "黄瓜（"
+      ]
+    },
+    {
+      "id": "Q019",
+      "q": "河南番茄晚疫病预警",
+      "expect": [
+        "pest"
+      ],
+      "noUrl": true
+    },
+    {
+      "id": "Q020",
+      "q": "山东草莓灰霉病有没有预警",
+      "expect": [
+        "pest",
+        "gap",
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "soft": true
+    },
+    {
+      "id": "Q021",
+      "q": "哪些地方的疫病有预警",
+      "expect": [
+        "pest",
+        "gap",
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "soft": true
+    },
+    {
+      "id": "Q022",
+      "q": "全国农技中心最近病虫情报说什么",
+      "expect": [
+        "pest",
+        "gap",
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "soft": true
+    },
+    {
+      "id": "Q023",
+      "q": "宁玉有什么特点",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "宁玉"
+      ]
+    },
+    {
+      "id": "Q024",
+      "q": "宁丰和宁玉有什么区别",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ]
+    },
+    {
+      "id": "Q025",
+      "q": "什么是脱毒苗",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "脱毒"
+      ]
+    },
+    {
+      "id": "Q026",
+      "q": "上海哪里种草莓",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ]
+    },
+    {
+      "id": "Q027",
+      "q": "上海草莓什么时候定植",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ]
+    },
+    {
+      "id": "Q028",
+      "q": "草莓资料哪里查",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMustNotLayer": [
+        "market"
+      ]
+    },
+    {
+      "id": "Q029",
+      "q": "久香草莓怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ]
+    },
+    {
+      "id": "Q030",
+      "q": "苏莓66有什么特点",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ]
+    },
+    {
+      "id": "Q031",
+      "q": "嘉定草莓怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ]
+    },
+    {
+      "id": "Q032",
+      "q": "你是谁",
+      "expect": [
+        "identity",
+        "faq"
+      ],
+      "replyMust": [
+        "小星"
+      ]
+    },
+    {
+      "id": "Q033",
+      "q": "草莓打什么药治灰霉病剂量多少",
+      "expect": [
+        "refuse"
+      ]
+    },
+    {
+      "id": "Q034",
+      "q": "火星种草莓要施多少氮肥保证亩产八吨",
+      "expect": [
+        "refuse",
+        "gap"
+      ]
+    },
+    {
+      "id": "Q035",
+      "q": "现在补贴一亩给多少钱",
+      "expect": [
+        "refuse"
+      ]
+    },
+    {
+      "id": "Q036",
+      "mode": "meeting",
+      "q": "寿光黄瓜多少钱",
+      "track": "me",
+      "expectAction": [
+        "consult"
+      ],
+      "expectLayer": [
+        "market"
+      ],
+      "replyMust": [
+        "黄瓜"
+      ]
+    },
+    {
+      "id": "Q037",
+      "mode": "meeting",
+      "q": "谢谢小星",
+      "track": "me",
+      "expectAction": [
+        "sleep"
+      ],
+      "setup": "start"
+    },
+    {
+      "id": "Q038",
+      "mode": "meeting",
+      "q": "小星你好，宁玉有什么特点",
+      "track": "me",
+      "expectAction": [
+        "consult"
+      ],
+      "expectLayer": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ]
+    },
+    {
+      "id": "Q039",
+      "mode": "meeting",
+      "q": "宁玉草莓有什么特点",
+      "track": "others",
+      "expectAction": [
+        "log_others"
+      ]
+    },
+    {
+      "id": "Q040",
+      "mode": "meeting",
+      "q": "请回答",
+      "track": "me",
+      "expectAction": [
+        "consult",
+        "focus_gap"
+      ],
+      "soft": true
+    },
+    {
+      "id": "Q041",
+      "q": "北京新发地草莓精品多少钱",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "草莓"
+      ]
+    },
+    {
+      "id": "Q042",
+      "q": "新发地普通草莓什么价",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "草莓"
+      ]
+    },
+    {
+      "id": "Q043",
+      "q": "寿光一级黄瓜批发均价",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "黄瓜"
+      ]
+    },
+    {
+      "id": "Q044",
+      "q": "寿光大粉西红柿多少钱",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "西红柿",
+        "番茄"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q045",
+      "q": "寿光农产品物流园大白菜多少钱",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "大白菜",
+        "白菜"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q046",
+      "q": "一亩田山东临沂草莓产地价",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "草莓"
+      ]
+    },
+    {
+      "id": "Q047",
+      "q": "西红柿地头价多少",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "西红柿",
+        "番茄"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q048",
+      "q": "今天黄瓜批发价多少",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "黄瓜"
+      ]
+    },
+    {
+      "id": "Q049",
+      "q": "今天西红柿行情怎么样",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "西红柿",
+        "番茄"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q050",
+      "q": "草莓在新发地和江南哪个贵",
+      "expect": [
+        "market",
+        "market_miss",
+        "faq",
+        "wiki",
+        "wiki2",
+        "gap"
+      ],
+      "soft": true
+    },
+    {
+      "id": "Q051",
+      "q": "寿光黄瓜行情怎么样",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "黄瓜"
+      ]
+    },
+    {
+      "id": "Q052",
+      "q": "新发地草莓区间价是多少",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "草莓"
+      ]
+    },
+    {
+      "id": "Q053",
+      "q": "草莓批发均价大概多少一斤",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "草莓"
+      ]
+    },
+    {
+      "id": "Q054",
+      "q": "黄瓜在江南多少钱",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "黄瓜"
+      ]
+    },
+    {
+      "id": "Q055",
+      "q": "新发地西红柿多少钱",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "西红柿",
+        "番茄"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q056",
+      "q": "新发地猪肉多少钱一斤",
+      "expect": [
+        "market_miss"
+      ],
+      "replyMustNot": [
+        "草莓",
+        "黄瓜"
+      ]
+    },
+    {
+      "id": "Q057",
+      "q": "寿光土豆多少钱",
+      "expect": [
+        "market_miss"
+      ],
+      "replyMust": [
+        "土豆"
+      ],
+      "replyMustNot": [
+        "黄瓜"
+      ]
+    },
+    {
+      "id": "Q058",
+      "q": "洋葱今天什么价",
+      "expect": [
+        "market_miss"
+      ],
+      "replyMust": [
+        "洋葱"
+      ]
+    },
+    {
+      "id": "Q059",
+      "q": "海吉星香蕉多少钱",
+      "expect": [
+        "market_miss"
+      ],
+      "replyMust": [
+        "香蕉"
+      ]
+    },
+    {
+      "id": "Q060",
+      "q": "苹果在新发地均价多少",
+      "expect": [
+        "market_miss"
+      ],
+      "replyMust": [
+        "苹果"
+      ],
+      "replyMustNot": [
+        "草莓"
+      ]
+    },
+    {
+      "id": "Q061",
+      "q": "哪里的大蒜最便宜",
+      "expect": [
+        "market_miss"
+      ],
+      "replyMust": [
+        "大蒜"
+      ]
+    },
+    {
+      "id": "Q062",
+      "q": "玉米多少钱一斤",
+      "expect": [
+        "market_miss"
+      ],
+      "replyMustNot": [
+        "黄瓜",
+        "草莓"
+      ]
+    },
+    {
+      "id": "Q063",
+      "q": "大米批发价多少",
+      "expect": [
+        "market_miss"
+      ],
+      "replyMustNot": [
+        "黄瓜"
+      ]
+    },
+    {
+      "id": "Q064",
+      "q": "花生米什么价",
+      "expect": [
+        "market_miss"
+      ],
+      "replyMustNot": [
+        "黄瓜"
+      ]
+    },
+    {
+      "id": "Q065",
+      "q": "活鸡多少钱一斤",
+      "expect": [
+        "market_miss"
+      ],
+      "replyMustNot": [
+        "黄瓜",
+        "草莓"
+      ]
+    },
+    {
+      "id": "Q066",
+      "q": "牛奶行情怎么样",
+      "expect": [
+        "market_miss",
+        "gap",
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "soft": true
+    },
+    {
+      "id": "Q067",
+      "q": "棉花价格多少",
+      "expect": [
+        "market_miss"
+      ],
+      "replyMustNot": [
+        "黄瓜"
+      ]
+    },
+    {
+      "id": "Q068",
+      "q": "我问的是西瓜不是黄瓜",
+      "expect": [
+        "market_miss",
+        "gap",
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "soft": true,
+      "replyMustNot": [
+        "黄瓜均价约"
+      ]
+    },
+    {
+      "id": "Q069",
+      "q": "有没有鸡蛋的报价",
+      "expect": [
+        "market_miss",
+        "gap",
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "soft": true,
+      "replyMustNot": [
+        "黄瓜（"
+      ]
+    },
+    {
+      "id": "Q070",
+      "q": "查一下大豆产地价",
+      "expect": [
+        "market_miss"
+      ],
+      "replyMust": [
+        "大豆"
+      ],
+      "replyMustNot": [
+        "黄瓜"
+      ]
+    },
+    {
+      "id": "Q071",
+      "q": "草莓灰霉病有预警吗",
+      "expect": [
+        "pest",
+        "gap",
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "soft": true
+    },
+    {
+      "id": "Q072",
+      "q": "番茄晚疫病河南情况",
+      "expect": [
+        "pest",
+        "gap",
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "soft": true
+    },
+    {
+      "id": "Q073",
+      "q": "山东病虫情报最近说什么",
+      "expect": [
+        "pest",
+        "gap",
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "soft": true
+    },
+    {
+      "id": "Q074",
+      "q": "广东省有没有蔬菜病虫预警",
+      "expect": [
+        "pest",
+        "gap",
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "soft": true
+    },
+    {
+      "id": "Q075",
+      "q": "四川这边疫病预警查一下",
+      "expect": [
+        "pest",
+        "gap",
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "soft": true
+    },
+    {
+      "id": "Q076",
+      "q": "陕西病虫测报有没有草莓相关",
+      "expect": [
+        "pest",
+        "gap",
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "soft": true
+    },
+    {
+      "id": "Q077",
+      "q": "全国农技中心病虫情报入口说什么",
+      "expect": [
+        "pest",
+        "gap",
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "soft": true
+    },
+    {
+      "id": "Q078",
+      "q": "晚疫病和灰霉病哪里风险高",
+      "expect": [
+        "pest",
+        "gap",
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "soft": true
+    },
+    {
+      "id": "Q079",
+      "q": "京香草莓怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ]
+    },
+    {
+      "id": "Q080",
+      "q": "静红有什么特点",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ]
+    },
+    {
+      "id": "Q081",
+      "q": "京泉香适不适合大棚",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "京泉香"
+      ],
+      "replyMustNot": [
+        "章姬"
+      ]
+    },
+    {
+      "id": "Q082",
+      "q": "红颜草莓怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "红颜"
+      ]
+    },
+    {
+      "id": "Q083",
+      "q": "上海金山草莓繁育有什么标准",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ]
+    },
+    {
+      "id": "Q084",
+      "q": "青浦白鹤种草莓吗",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ]
+    },
+    {
+      "id": "Q085",
+      "q": "松江草莓什么时候采收",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2",
+        "gap"
+      ],
+      "soft": true
+    },
+    {
+      "id": "Q086",
+      "q": "浦东草莓管理历怎么安排",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2",
+        "gap"
+      ],
+      "soft": true
+    },
+    {
+      "id": "Q087",
+      "q": "越冬草莓怎么保温",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ]
+    },
+    {
+      "id": "Q088",
+      "q": "草莓什么时候育苗",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ]
+    },
+    {
+      "id": "Q089",
+      "q": "设施促成栽培注意什么",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2",
+        "gap"
+      ],
+      "soft": true
+    },
+    {
+      "id": "Q090",
+      "q": "脱毒苗哪里买比较靠谱",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2",
+        "gap"
+      ],
+      "soft": true
+    },
+    {
+      "id": "Q091",
+      "q": "宁玉适不适合大棚",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ]
+    },
+    {
+      "id": "Q092",
+      "q": "申莓系列有哪些",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "申莓"
+      ]
+    },
+    {
+      "id": "Q093",
+      "q": "中国园艺学会草莓分会是做什么的",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ]
+    },
+    {
+      "id": "Q094",
+      "q": "品种真实性去哪鉴定",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ]
+    },
+    {
+      "id": "Q095",
+      "q": "打药治白粉病用哪一种、剂量多少",
+      "expect": [
+        "refuse"
+      ]
+    },
+    {
+      "id": "Q096",
+      "q": "保证亩产两吨怎么施肥",
+      "expect": [
+        "refuse",
+        "gap"
+      ]
+    },
+    {
+      "id": "Q097",
+      "q": "申请草莓补贴能拿多少钱",
+      "expect": [
+        "refuse"
+      ]
+    },
+    {
+      "id": "Q098",
+      "q": "新发地草莓多少钱",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "草莓"
+      ],
+      "noUrl": true,
+      "note": "出处短名"
+    },
+    {
+      "id": "Q099",
+      "mode": "meeting",
+      "q": "寿光黄瓜今天多少钱",
+      "track": "others",
+      "expectAction": [
+        "log_others"
+      ],
+      "suggestLayer": [
+        "market",
+        "faq",
+        "wiki",
+        "wiki2"
+      ]
+    },
+    {
+      "id": "Q100",
+      "mode": "meeting_flow",
+      "steps": [
+        {
+          "q": "寿光黄瓜多少钱",
+          "track": "me",
+          "expectAction": [
+            "consult"
+          ]
+        },
+        {
+          "q": "谢谢小星",
+          "track": "me",
+          "expectAction": [
+            "sleep"
+          ]
+        },
+        {
+          "q": "鸡蛋多少钱",
+          "track": "me",
+          "expectAction": [
+            "listen_only",
+            "consult"
+          ],
+          "soft": true
+        }
+      ]
+    },
+    {
+      "id": "Q101",
+      "q": "紫金香雪怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "紫金香雪"
+      ]
+    },
+    {
+      "id": "Q102",
+      "q": "隋珠有什么特点",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "隋珠"
+      ]
+    },
+    {
+      "id": "Q103",
+      "q": "棚室湿度太高怎么办",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "湿"
+      ]
+    },
+    {
+      "id": "Q104",
+      "q": "草莓要不要疏花",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "疏"
+      ]
+    },
+    {
+      "id": "Q105",
+      "q": "滴灌有什么好处",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "滴灌"
+      ]
+    },
+    {
+      "id": "Q106",
+      "q": "江苏哪里种草莓",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "江苏"
+      ]
+    },
+    {
+      "id": "Q107",
+      "q": "建德草莓怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "建德"
+      ]
+    },
+    {
+      "id": "Q108",
+      "q": "一亩栽多少株草莓",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "密度",
+        "株"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q109",
+      "q": "越秀有什么特点",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "越秀"
+      ]
+    },
+    {
+      "id": "Q110",
+      "q": "娇美一号有什么特点",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "娇美"
+      ]
+    },
+    {
+      "id": "Q111",
+      "q": "甜查理怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "甜查理"
+      ]
+    },
+    {
+      "id": "Q112",
+      "q": "草莓炭疽病是什么",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "炭疽"
+      ]
+    },
+    {
+      "id": "Q113",
+      "q": "草莓怎么保鲜",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "保鲜",
+        "预冷",
+        "贮"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q114",
+      "q": "山东哪里种草莓",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "山东"
+      ]
+    },
+    {
+      "id": "Q115",
+      "q": "草莓病毒病怎么防",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "脱毒",
+        "病毒"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q116",
+      "q": "章姬怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "章姬"
+      ]
+    },
+    {
+      "id": "Q117",
+      "q": "红颜和宁玉哪个好",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ]
+    },
+    {
+      "id": "Q118",
+      "q": "草莓蚜虫怎么办",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2",
+        "refuse"
+      ],
+      "replyMustNot": [
+        "每亩喷",
+        "毫升/亩"
+      ]
+    },
+    {
+      "id": "Q119",
+      "q": "草莓怎么浇水施肥",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2",
+        "refuse"
+      ],
+      "replyMustNot": [
+        "氮肥配方"
+      ]
+    },
+    {
+      "id": "Q120",
+      "mode": "meeting",
+      "q": "紫金香雪有什么特点",
+      "track": "me",
+      "expectAction": [
+        "consult"
+      ],
+      "expectLayer": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ]
+    },
+    {
+      "id": "Q121",
+      "q": "水稻资料去哪查",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "水稻"
+      ]
+    },
+    {
+      "id": "Q122",
+      "q": "上海水稻资料去哪查",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "上海"
+      ]
+    },
+    {
+      "id": "Q123",
+      "q": "花优14怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "花优"
+      ]
+    },
+    {
+      "id": "Q124",
+      "q": "申优28有什么特点",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "申优"
+      ]
+    },
+    {
+      "id": "Q125",
+      "q": "优糖稻是什么",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "优糖",
+        "功能",
+        "GI"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q126",
+      "q": "稻谷行情去哪查",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "粮",
+        "行情"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q127",
+      "q": "惠农网上的米价准吗",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "挂牌",
+        "参考"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q128",
+      "q": "上海水稻有哪些品种",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "花优",
+        "申优",
+        "沪软"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q129",
+      "q": "你能答水稻吗",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2",
+        "identity"
+      ],
+      "replyMust": [
+        "水稻"
+      ]
+    },
+    {
+      "id": "Q130",
+      "q": "上海三农公众号是什么",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "上海三农"
+      ]
+    },
+    {
+      "id": "Q131",
+      "q": "沪软1212怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "沪软"
+      ]
+    },
+    {
+      "id": "Q132",
+      "q": "南粳46有什么特点",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "南粳"
+      ]
+    },
+    {
+      "id": "Q133",
+      "q": "太安1号怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "太安"
+      ]
+    },
+    {
+      "id": "Q134",
+      "q": "松香粳1018怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "松香粳"
+      ]
+    },
+    {
+      "id": "Q135",
+      "q": "上海水稻怎么种",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "农委",
+        "技术意见"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q136",
+      "q": "机插稻怎么育秧",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "机插"
+      ]
+    },
+    {
+      "id": "Q137",
+      "q": "侧深施肥是什么",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "侧深",
+        "机"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q138",
+      "q": "水稻绿色防控",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "防控",
+        "农技"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q139",
+      "q": "数字稻田是什么",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "数字",
+        "遥感",
+        "大数据",
+        "主推"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q140",
+      "q": "沪早粳193怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "沪早粳"
+      ]
+    },
+    {
+      "id": "Q141",
+      "q": "水稻补贴怎么查",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2",
+        "refuse"
+      ],
+      "replyMust": [
+        "农",
+        "政务",
+        "补贴"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q142",
+      "q": "中国水稻研究所官网",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "水稻所",
+        "cnrri",
+        "研究所"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q143",
+      "q": "优质稻食味鉴评",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "鉴评",
+        "农技"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q144",
+      "q": "杂交粳稻是什么",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "杂交"
+      ]
+    },
+    {
+      "id": "Q145",
+      "q": "崇明水稻怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "崇明",
+        "区"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q146",
+      "q": "上海大米品牌",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "上海",
+        "品牌",
+        "三农"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q147",
+      "q": "托市收购是什么",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "收购",
+        "粮"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q148",
+      "q": "籼稻和粳稻有什么区别",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "籼",
+        "粳"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q149",
+      "q": "水稻分子育种",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "育种",
+        "农科院",
+        "水稻所"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q150",
+      "q": "中国农技推广有什么用",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "农技",
+        "培训"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q151",
+      "q": "你是谁",
+      "expect": [
+        "identity",
+        "faq"
+      ],
+      "replyMust": [
+        "小星"
+      ]
+    },
+    {
+      "id": "Q152",
+      "q": "小星是什么",
+      "expect": [
+        "identity",
+        "faq"
+      ],
+      "replyMust": [
+        "小星"
+      ]
+    },
+    {
+      "id": "Q153",
+      "q": "你能做什么",
+      "expect": [
+        "identity",
+        "faq"
+      ],
+      "replyMust": [
+        "小星",
+        "草莓",
+        "水稻"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q154",
+      "q": "你能答水稻吗",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2",
+        "identity"
+      ],
+      "replyMust": [
+        "水稻"
+      ]
+    },
+    {
+      "id": "Q155",
+      "q": "你不能答什么",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2",
+        "refuse"
+      ],
+      "replyMust": [
+        "用药",
+        "补贴",
+        "剂量",
+        "产量"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q156",
+      "q": "宁玉有什么特点",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "宁玉"
+      ]
+    },
+    {
+      "id": "Q157",
+      "q": "宁丰草莓怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "宁丰"
+      ]
+    },
+    {
+      "id": "Q158",
+      "q": "京香草莓怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "京香"
+      ]
+    },
+    {
+      "id": "Q159",
+      "q": "静红有什么特点",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "静红"
+      ]
+    },
+    {
+      "id": "Q160",
+      "q": "京泉香有什么特点",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "京泉香"
+      ]
+    },
+    {
+      "id": "Q161",
+      "q": "久香草莓怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "久香"
+      ]
+    },
+    {
+      "id": "Q162",
+      "q": "苏莓66有什么特点",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "苏莓"
+      ]
+    },
+    {
+      "id": "Q163",
+      "q": "红颜草莓怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "红颜"
+      ]
+    },
+    {
+      "id": "Q164",
+      "q": "章姬有什么特点",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "章姬"
+      ]
+    },
+    {
+      "id": "Q165",
+      "q": "越秀有什么特点",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "越秀"
+      ]
+    },
+    {
+      "id": "Q166",
+      "q": "娇美一号有什么特点",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "娇美"
+      ]
+    },
+    {
+      "id": "Q167",
+      "q": "甜查理还种吗",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "甜查理"
+      ]
+    },
+    {
+      "id": "Q168",
+      "q": "隋珠有什么特点",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "隋珠"
+      ]
+    },
+    {
+      "id": "Q169",
+      "q": "什么是脱毒苗",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "脱毒"
+      ]
+    },
+    {
+      "id": "Q170",
+      "q": "草莓什么时候定植",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "定植",
+        "上海",
+        "栽培"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q171",
+      "q": "冬天大棚怎么管",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "保温",
+        "通风",
+        "冬"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q172",
+      "q": "棚室湿度太高怎么办",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "湿"
+      ]
+    },
+    {
+      "id": "Q173",
+      "q": "草莓要不要疏花",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "疏"
+      ]
+    },
+    {
+      "id": "Q174",
+      "q": "滴灌有什么好处",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "滴灌"
+      ]
+    },
+    {
+      "id": "Q175",
+      "q": "一亩栽多少株草莓",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "密度",
+        "株"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q176",
+      "q": "草莓基质栽培怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "基质",
+        "无土",
+        "槽"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q177",
+      "q": "草莓要不要放蜜蜂",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "蜂",
+        "授粉"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q178",
+      "q": "草莓灰霉病怎么预防",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2",
+        "pest"
+      ],
+      "replyMust": [
+        "灰霉",
+        "通风"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q179",
+      "q": "草莓白粉病是什么",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "白粉"
+      ]
+    },
+    {
+      "id": "Q180",
+      "q": "草莓炭疽病是什么",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "炭疽"
+      ]
+    },
+    {
+      "id": "Q181",
+      "q": "草莓病毒病怎么防",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "脱毒",
+        "病毒"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q182",
+      "q": "草莓怎么保鲜",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "保鲜",
+        "预冷",
+        "贮"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q183",
+      "q": "上海哪里种草莓",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "上海",
+        "白鹤",
+        "金山"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q184",
+      "q": "嘉定草莓怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "嘉定"
+      ]
+    },
+    {
+      "id": "Q185",
+      "q": "青浦白鹤种草莓吗",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "白鹤",
+        "青浦"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q186",
+      "q": "江苏哪里种草莓",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "江苏"
+      ]
+    },
+    {
+      "id": "Q187",
+      "q": "建德草莓怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "建德"
+      ]
+    },
+    {
+      "id": "Q188",
+      "q": "山东哪里种草莓",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "山东"
+      ]
+    },
+    {
+      "id": "Q189",
+      "q": "草莓资料去哪查",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ]
+    },
+    {
+      "id": "Q190",
+      "q": "品种真实性去哪鉴定",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "鉴定",
+        "DUS",
+        "标准"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q191",
+      "q": "水稻资料去哪查",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "水稻"
+      ]
+    },
+    {
+      "id": "Q192",
+      "q": "上海水稻资料去哪查",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "上海"
+      ]
+    },
+    {
+      "id": "Q193",
+      "q": "中国水稻研究所官网",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "水稻所",
+        "cnrri",
+        "研究所"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q194",
+      "q": "中国水稻信息网是什么",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "信息网",
+        "门户",
+        "资讯"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q195",
+      "q": "水稻政策去哪看",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "农业农村部",
+        "政策",
+        "农委"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q196",
+      "q": "水稻补贴怎么查",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2",
+        "refuse"
+      ],
+      "replyMust": [
+        "农",
+        "政务",
+        "补贴"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q197",
+      "q": "托市收购是什么",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "收购",
+        "粮"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q198",
+      "q": "上海三农公众号是什么",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "上海三农"
+      ]
+    },
+    {
+      "id": "Q199",
+      "q": "魔都乡遇是什么",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "魔都乡遇",
+        "农旅",
+        "地产"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q200",
+      "q": "中国稻米杂志",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "中国稻米",
+        "稻米"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q201",
+      "q": "中国农技推广有什么用",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "农技",
+        "培训"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q202",
+      "q": "水稻知识库怎么分层",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "政策",
+        "技术",
+        "市场",
+        "分层"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q203",
+      "q": "上海水稻有哪些品种",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "花优",
+        "申优",
+        "沪软"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q204",
+      "q": "花优14怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "花优"
+      ]
+    },
+    {
+      "id": "Q205",
+      "q": "申优28有什么特点",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "申优"
+      ]
+    },
+    {
+      "id": "Q206",
+      "q": "优糖稻是什么",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "优糖",
+        "功能",
+        "GI"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q207",
+      "q": "沪软1212怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "沪软"
+      ]
+    },
+    {
+      "id": "Q208",
+      "q": "沪早粳193怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "沪早粳"
+      ]
+    },
+    {
+      "id": "Q209",
+      "q": "太安1号怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "太安"
+      ]
+    },
+    {
+      "id": "Q210",
+      "q": "南粳46有什么特点",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "南粳"
+      ]
+    },
+    {
+      "id": "Q211",
+      "q": "松香粳1018怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "松香粳"
+      ]
+    },
+    {
+      "id": "Q212",
+      "q": "杂交粳稻是什么",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "杂交"
+      ]
+    },
+    {
+      "id": "Q213",
+      "q": "上海大米品牌",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "上海",
+        "品牌",
+        "三农"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q214",
+      "q": "籼稻和粳稻有什么区别",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "籼",
+        "粳"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q215",
+      "q": "上海水稻怎么种",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "农委",
+        "技术意见"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q216",
+      "q": "一种就管是什么",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "一种就管",
+        "技术意见",
+        "农委"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q217",
+      "q": "机插稻怎么育秧",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "机插"
+      ]
+    },
+    {
+      "id": "Q218",
+      "q": "侧深施肥是什么",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "侧深",
+        "机"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q219",
+      "q": "机穴播是什么",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "机穴播",
+        "机械化",
+        "机"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q220",
+      "q": "水稻飞防要注意什么",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "飞防",
+        "农技",
+        "药"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q221",
+      "q": "水稻绿色防控",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "防控",
+        "农技"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q222",
+      "q": "数字稻田是什么",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "数字",
+        "遥感",
+        "大数据",
+        "主推"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q223",
+      "q": "崇明水稻怎么样",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "崇明",
+        "区"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q224",
+      "q": "水稻分子育种",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "育种",
+        "农科院",
+        "水稻所"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q225",
+      "q": "寿光黄瓜均价多少",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "黄瓜"
+      ],
+      "noUrl": true
+    },
+    {
+      "id": "Q226",
+      "q": "新发地草莓多少钱",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "草莓"
+      ],
+      "replyMustNot": [
+        "黄瓜"
+      ],
+      "noUrl": true
+    },
+    {
+      "id": "Q227",
+      "q": "一亩田草莓产地价多少",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "草莓"
+      ],
+      "replyMustNot": [
+        "黄瓜"
+      ]
+    },
+    {
+      "id": "Q228",
+      "q": "今天西红柿行情怎么样",
+      "expect": [
+        "market"
+      ],
+      "replyMust": [
+        "西红柿",
+        "番茄"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q229",
+      "q": "寿光的大豆多少钱一斤",
+      "expect": [
+        "market_miss"
+      ],
+      "replyMust": [
+        "大豆"
+      ],
+      "replyMustNot": [
+        "黄瓜"
+      ]
+    },
+    {
+      "id": "Q230",
+      "q": "寿光的鸡蛋多少钱",
+      "expect": [
+        "market_miss"
+      ],
+      "replyMust": [
+        "鸡蛋"
+      ],
+      "replyMustNot": [
+        "黄瓜"
+      ]
+    },
+    {
+      "id": "Q231",
+      "q": "新发地西瓜多少钱",
+      "expect": [
+        "market_miss"
+      ],
+      "replyMust": [
+        "西瓜"
+      ],
+      "replyMustNot": [
+        "草莓",
+        "黄瓜"
+      ]
+    },
+    {
+      "id": "Q232",
+      "q": "怎么问草莓多少钱",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ]
+    },
+    {
+      "id": "Q233",
+      "q": "稻谷行情去哪查",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "粮",
+        "行情",
+        "收购"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q234",
+      "q": "大米出厂价哪里看",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "出厂",
+        "粮",
+        "交易"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q235",
+      "q": "惠农网上的米价准吗",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "挂牌",
+        "参考"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q236",
+      "q": "五常大米品牌怎么核验",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "地理标志",
+        "商标",
+        "核验"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q237",
+      "q": "草莓打什么药治灰霉病剂量多少",
+      "expect": [
+        "refuse"
+      ]
+    },
+    {
+      "id": "Q238",
+      "q": "打药治白粉病用哪一种、剂量多少",
+      "expect": [
+        "refuse"
+      ]
+    },
+    {
+      "id": "Q239",
+      "q": "现在补贴一亩给多少钱",
+      "expect": [
+        "refuse"
+      ]
+    },
+    {
+      "id": "Q240",
+      "q": "申请草莓补贴能拿多少钱",
+      "expect": [
+        "refuse"
+      ]
+    },
+    {
+      "id": "Q241",
+      "q": "保证亩产两吨怎么施肥",
+      "expect": [
+        "refuse",
+        "gap"
+      ]
+    },
+    {
+      "id": "Q242",
+      "q": "火星种草莓要施多少氮肥保证亩产八吨",
+      "expect": [
+        "refuse",
+        "gap"
+      ]
+    },
+    {
+      "id": "Q243",
+      "q": "草莓蚜虫每亩喷多少毫升",
+      "expect": [
+        "refuse",
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMustNot": [
+        "毫升/亩"
+      ],
+      "soft": true
+    },
+    {
+      "id": "Q244",
+      "q": "优糖稻能治糖尿病吗",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2",
+        "refuse",
+        "gap"
+      ],
+      "replyMust": [
+        "医疗",
+        "承诺",
+        "标签",
+        "功能",
+        "GI",
+        "优糖"
+      ],
+      "replyMustAny": true,
+      "soft": true
+    },
+    {
+      "id": "Q245",
+      "q": "河南番茄晚疫病预警",
+      "expect": [
+        "pest"
+      ],
+      "noUrl": true
+    },
+    {
+      "id": "Q246",
+      "q": "优质稻食味鉴评",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "鉴评",
+        "农技"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q247",
+      "q": "机械化制种是什么",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "制种",
+        "杂交",
+        "机械化"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q248",
+      "q": "奉贤有没有水稻示范",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "奉贤",
+        "区",
+        "示范"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q249",
+      "q": "红颜和宁玉哪个好",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ]
+    },
+    {
+      "id": "Q250",
+      "q": "申莓系列有哪些",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "申莓"
+      ]
+    },
+    {
+      "id": "Q251",
+      "q": "柑橘资料去哪查",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "柑橘",
+        "农委",
+        "柑桔",
+        "入口",
+        "摘录"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q252",
+      "q": "上海种柑橘吗",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "上海",
+        "柑橘",
+        "骨架",
+        "农委",
+        "郊区"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q253",
+      "q": "柑橘和橘子是一回事吗",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "统称",
+        "宽皮",
+        "柑橘"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q254",
+      "q": "长三角草莓行情去哪查",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "长三角",
+        "市场",
+        "统价",
+        "上海",
+        "江苏",
+        "浙江"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q255",
+      "q": "长三角草莓多少钱",
+      "expect": [
+        "market",
+        "market_miss"
+      ],
+      "replyMust": [
+        "草莓",
+        "长三角",
+        "江杨",
+        "元",
+        "斤",
+        "没有",
+        "顶替"
+      ],
+      "replyMustAny": true,
+      "noUrl": true
+    },
+    {
+      "id": "Q256",
+      "q": "小星有柑橘吗",
+      "expect": [
+        "faq",
+        "wiki",
+        "wiki2"
+      ],
+      "replyMust": [
+        "柑橘",
+        "骨架",
+        "入口"
+      ],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q257",
+      "q": "什么是再生稻",
+      "expect": ["faq", "wiki", "wiki2"],
+      "replyMust": ["再生稻", "稻桩", "双季"],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q258",
+      "q": "水稻品种名怎么读",
+      "expect": ["faq", "wiki", "wiki2"],
+      "replyMust": ["优", "两优", "审定", "粳"],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q259",
+      "q": "稻瘟病是什么",
+      "expect": ["faq", "wiki", "wiki2"],
+      "replyMust": ["稻瘟", "穗颈", "植保", "标签"],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q260",
+      "q": "食味值是什么",
+      "expect": ["faq", "wiki", "wiki2"],
+      "replyMust": ["食味", "口感", "分级", "强制"],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q261",
+      "q": "上海秸秆怎么利用",
+      "expect": ["faq", "wiki", "wiki2"],
+      "replyMust": ["秸秆", "还田", "上海"],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q262",
+      "q": "太安1号怎么样",
+      "expect": ["faq", "wiki", "wiki2"],
+      "replyMust": ["太安", "审定", "香软", "产量"],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q263",
+      "q": "白叶枯病是什么",
+      "expect": ["faq", "wiki", "wiki2"],
+      "replyMust": ["白叶枯", "细菌", "菌脓", "植保"],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q264",
+      "q": "一季稻怎么管",
+      "expect": ["faq", "wiki", "wiki2"],
+      "replyMust": ["分蘖", "抽穗", "建苗", "意见"],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q265",
+      "q": "旺泾村无人机",
+      "expect": ["faq", "wiki", "wiki2"],
+      "replyMust": ["旺泾", "无人机", "嘉定", "巡检"],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q266",
+      "q": "上海大米区块链溯源",
+      "expect": ["faq", "wiki", "wiki2"],
+      "replyMust": ["溯源", "上海", "区块链", "品牌"],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q267",
+      "q": "黑龙江水稻历史",
+      "expect": ["faq", "wiki", "wiki2"],
+      "replyMust": ["黑龙江", "稻", "文化", "规程"],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q268",
+      "q": "台风后水稻病害",
+      "expect": ["faq", "wiki", "wiki2"],
+      "replyMust": ["台风", "细菌", "白叶枯", "细条", "查"],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q269",
+      "q": "草莓丛书能不能爬",
+      "expect": ["faq", "wiki", "wiki2"],
+      "replyMust": ["禁止", "爬", "摘录", "丛书", "授权"],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q270",
+      "q": "丛书摘录了吗",
+      "expect": ["faq", "wiki", "wiki2"],
+      "replyMust": ["摘录", "待", "公开", "书目"],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q271",
+      "q": "稻米深加工有哪些",
+      "expect": ["faq", "wiki", "wiki2"],
+      "replyMust": ["深加工", "米糠", "稻壳", "核实", "科普"],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q272",
+      "q": "苏莓66在姜堰怎么样",
+      "expect": ["faq", "wiki", "wiki2"],
+      "replyMust": ["苏莓", "极早熟", "姜堰", "花果"],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q273",
+      "q": "水稻检测测什么",
+      "expect": ["faq", "wiki", "wiki2"],
+      "replyMust": ["苗", "检测", "国标", "实验室", "通识"],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q274",
+      "q": "瑞典有机农场怎么样",
+      "expect": ["faq", "wiki", "wiki2"],
+      "replyMust": ["有机", "瑞典", "认证", "照搬", "通识"],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q275",
+      "q": "纹枯病是什么",
+      "expect": ["faq", "wiki", "wiki2"],
+      "replyMust": ["纹枯", "叶鞘", "植保", "处方"],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q276",
+      "q": "稻水象甲是什么",
+      "expect": ["faq", "wiki", "wiki2"],
+      "replyMust": ["检疫", "植保", "盲打", "象甲"],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q277",
+      "q": "崇尚217怎么样",
+      "expect": ["faq", "wiki", "wiki2"],
+      "replyMust": ["崇明", "崇尚", "主导", "审定"],
+      "replyMustAny": true
+    },
+    {
+      "id": "Q278",
+      "q": "水稻远古创新是什么",
+      "expect": ["faq", "wiki", "wiki2"],
+      "replyMust": ["禾本", "代谢", "科普", "规程", "Science"],
+      "replyMustAny": true
+    }
+  ]
+}

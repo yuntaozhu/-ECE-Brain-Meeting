@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "description": "跨项目通用 ASR/Whisper 技术热词（from → to）",
+  "replacements": [
+    { "from": "ECE Brain", "to": "ECE-Brain" },
+    { "from": "ECEBrain", "to": "ECE-Brain" },
+    { "from": "E C E", "to": "ECE" },
+    { "from": "腾讯会议", "to": "腾讯会议" },
+    { "from": "VB Cable", "to": "VB-Cable" },
+    { "from": "VBCable", "to": "VB-Cable" },
+    { "from": "豆包", "to": "豆包" },
+    { "from": "whisper", "to": "Whisper" },
+    { "from": "Whisper", "to": "Whisper" },
+    { "from": "VAD", "to": "VAD" },
+    { "from": "副驾驶", "to": "副驾驶" },
+    { "from": "口播", "to": "口播" }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "enabled": true,
+  "minScore": 16,
+  "othersOnlyQuestions": true,
+  "questionCue": "[？?]|什么|怎么|是否|多少|哪|有没有|能不能",
+  "maxSpeakChars": 120,
+  "speakOnDemandOnly": true
+}

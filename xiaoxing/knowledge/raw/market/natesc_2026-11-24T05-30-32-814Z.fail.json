@@ -1,0 +1,12 @@
+{
+  "id": "natesc",
+  "title": "全国农技中心·病虫情报入口",
+  "url": "https://www.natesc.org.cn",
+  "bucket": "market",
+  "ok": false,
+  "code": "upstream",
+  "hint": "Firecrawl 上游异常，可稍后重试",
+  "status": 500,
+  "error": "Firecrawl scrape 500: An SSL/TLS certificate error occurred while trying to establish a secure connection to this website. This usually happens when a website has an expired, self-signed, or misconfigured SSL certificate. If you trust this website and are not submitting sensitive data, you can bypass this error by setting `skipTlsVerification: true` in your scrape request. Note: Only do this for trusted sites as it disables certificate validation. （Firecrawl 上游异常，可稍后重试）",
+  "fetchedAt": "2026-11-24T05:30:32.814Z"
+}

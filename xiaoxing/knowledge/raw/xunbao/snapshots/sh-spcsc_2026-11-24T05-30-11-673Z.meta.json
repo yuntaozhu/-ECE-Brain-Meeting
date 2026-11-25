@@ -1,0 +1,31 @@
+{
+  "id": "sh-spcsc",
+  "title": "上海市人大常委会",
+  "url": "https://www.spcsc.sh.cn",
+  "tags": [
+    "地方性法规",
+    "核验",
+    "上海"
+  ],
+  "bucket": "xunbao",
+  "district": null,
+  "validUntil": null,
+  "fetchedAt": "2026-11-24T05:30:11.674Z",
+  "metadata": {
+    "title": "403 Forbidden",
+    "scrapeId": "01a20c08-442f-721a-9cc4-98a90a420d6a",
+    "sourceURL": "https://www.spcsc.sh.cn",
+    "url": "https://www.spcsc.sh.cn/",
+    "statusCode": 403,
+    "error": "Forbidden",
+    "contentType": "text/html",
+    "timezone": "America/New_York",
+    "proxyUsed": "stealth",
+    "cacheState": "miss",
+    "indexId": "619f19f5-fac7-49fb-afed-fa05d6c2d31f",
+    "creditsUsed": 1,
+    "concurrencyLimited": false
+  },
+  "ok": true,
+  "chars": 179
+}

@@ -1,0 +1,27 @@
+{
+  "enabled": true,
+  "columns": ["todo", "doing", "review", "done"],
+  "labels": {
+    "todo": "待办",
+    "doing": "进行中",
+    "review": "待验收",
+    "done": "完成"
+  },
+  "autoFromMeetingGaps": true,
+  "kinds": [
+    "meeting_gap",
+    "manual",
+    "wechat_fragment",
+    "market_watch",
+    "b2b_spread",
+    "ingest_task"
+  ],
+  "kindLabels": {
+    "meeting_gap": "会场缺口",
+    "manual": "手建",
+    "wechat_fragment": "微信碎片",
+    "market_watch": "跨市价差",
+    "b2b_spread": "地头价差",
+    "ingest_task": "补库任务"
+  }
+}

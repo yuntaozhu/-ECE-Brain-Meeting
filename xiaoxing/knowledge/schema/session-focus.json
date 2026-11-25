@@ -1,0 +1,22 @@
+{
+  "enabled": true,
+  "focusGlueMs": 8000,
+  "shortFollowMaxChars": 12,
+  "urgePatterns": [
+    "请回答",
+    "请回答我",
+    "回答一下",
+    "再说一遍",
+    "重说一遍",
+    "你再说一下"
+  ],
+  "recallPatterns": [
+    "我刚刚问了什么",
+    "刚才问了什么",
+    "我刚问什么",
+    "上一个问题",
+    "刚才那个问题"
+  ],
+  "softCommitOthersSuggest": true,
+  "honestNoFocus": "这轮还没有记下具体问题，请再说一遍要问的内容。"
+}

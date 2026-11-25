@@ -1,0 +1,61 @@
+# -ECE-Brain-Meeting 仓库全局架构宪法
+
+本文件为仓库根目录总控规则，适用于仓库内所有子项目与研发活动。  
+产品内细则以各目录 `.cursorrules` 为准（如 `desktop/.cursorrules`）。
+
+完整开发方案见 `multi_project_monorepo_and_dev_knowledge_plan.md`。
+
+---
+
+## 1. 仓库目录拓扑与项目隔离（Multi-Project Isolation）
+
+本仓库采用「同级独立项目 + 根目录共享研发知识库」结构，各应用**物理隔离、功能独立、独立构建打包**：
+
+| 目录 | 定位与职责 | 隔离红线 |
+| :--- | :--- | :--- |
+| `desktop/` | **大智 AI 会议助手**（Electron + CommonJS；腾讯会议虚拟音频网桥、策略控场与副驾驶） | 遵守 `desktop/.cursorrules`；独立依赖与打包；运行态仅读写自身 `knowledge/` 与 `knowledge_wiki/`。 |
+| `xiaoxing/` | **小星**（与 `desktop/` 同级的独立 AI 助理：**具备 AI 会议能力** + 农业领域口径） | **严禁**与 `desktop/` 互相 `require`/`import` 内部源码；**严禁**共用运行态会话或业务 FAQ。会议能力按 `dev_knowledge/shared/` 独立落地。 |
+| `<new_project>/` | **未来新增同类项目** | 必须与 `desktop/`、`xiaoxing/` **同级**创建根目录文件夹；自带独立 `package.json`、`.cursorrules` 与运行态知识库。 |
+| `src/`、`server/`、`server.ts` 等 | **根目录原有 React + Express/WebSocket + VolcRTC/TRTC 示例** | 保留既有功能；桌面端项目**禁止**修改或直接引用此 React 示例代码。 |
+| `dev_knowledge/` | **全仓库共享研发知识库** | 提供开发指南、ADR、避坑、论文 Wiki、开发会话；**严禁**写入某款产品的业务话术或用户会议录音。 |
+
+### 跨项目复用铁律
+
+- **经验共享，代码解耦**：禁止通过相对路径跨目录调用另一产品源码（例如 `../desktop/lib/...`）。
+- 复用方式仅限：① 在 `dev_knowledge/shared/` 沉淀模式后于本项目独立落地；② ≥3 个项目稳定后显式抽 `packages/<pkg>/`。
+- 临时共用 Electron 二进制可过渡，不视为架构依赖。
+
+---
+
+## 2. 原有根目录 Web/RTC 示例保留规范
+
+- 根目录 `package.json`、`server.ts`、`src/`、`server/` 构成原有 Web 端多模态会议演示（含 KaibanJS、TRTC、Volcengine RTC、Doubao Duplex Bridge）。
+- 修改 `desktop/`、`xiaoxing/` 或 `dev_knowledge/` 时，**不得破坏**根目录 Web 示例的依赖、构建脚本（`vite.config.ts`、`tsconfig.json`）及部署配置（`vercel.json`、`railway.json`）。
+
+---
+
+## 3. 全局 `dev_knowledge/` 知识飞轮协议（Pre / During / Post）
+
+1. **开发前先查库（Pre-Flight）**  
+   阅读 `dev_knowledge/INDEX.md` 与 `dev_knowledge/shared/`，确认已验证方案与已淘汰坑点（双轨音频、VAD、Whisper ABI、Wiki2、会议半双工等）。改某产品时再读 `dev_knowledge/projects/<project>/`。
+
+2. **开发中守红线（During）**  
+   遵守 `dev_knowledge/shared/rules/` 与对应 `projects/<project>/` 规范。  
+   核心原则：**机制与策略分离**；业务词进产品 `knowledge/` / `schema/`；**AI-First 文档**；**失败路径保留（Never Silently Delete）**。
+
+3. **开发后必沉淀（Post-Task）**  
+   - 向 `dev_knowledge/session_logs/dev_sessions.jsonl` 追加一条带 `"project": "<name>"` 的记录。  
+   - 项目独有踩坑 → `dev_knowledge/projects/<project>/adr/`。  
+   - 跨项目通用（音频、ASR/TTS、Electron 打包、会议能力模式、Prompt）→ 脱敏写入 `shared/adr/` 或 `shared/patterns/`，并更新 `INDEX.md`。  
+   - 详见 `dev_knowledge/shared/playbook/experience-ingest.md`。
+
+4. **运行态隔离（Runtime Boundary）**  
+   会中速记、桥接态、业务 FAQ、业务 `knowledge_wiki/` **必须留在各自项目目录**，不得写入根 `dev_knowledge/`。
+
+---
+
+## 4. AI 会议能力（大智与小星）
+
+- **大智**：会议助理参考实现（已完善）。  
+- **小星**：必须具备 AI 会议能力（听写、唤醒、口播、半双工等），领域知识为农业；实现时对照 `shared` 会议相关 ADR，在 `xiaoxing/` 内独立编码，禁止直接依赖 `desktop/lib`。  
+- 新项目默认评估是否需要会议能力栈；需要则从 `shared/playbook/meeting-assistant.md` 与 `_template/` 装配。

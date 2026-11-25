@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>小星 · 农业会议顾问</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1>小星 · 农业会议顾问</h1>
+      <p class="sub">AI 会议听写 · 唤醒口播 · 农服口径 · 复盘补库</p>
+    </div>
+    <div class="top-actions">
+      <span class="pill" id="statusPill">待命</span>
+      <label class="chk"><input type="checkbox" id="chkTop" /> 置顶</label>
+      <button type="button" id="btnCapsule" class="ghost">胶囊</button>
+      <button type="button" id="btnSessions" class="ghost">本场目录</button>
+      <button type="button" id="btnLogDir" class="ghost">系统日志</button>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <button type="button" id="btnMeeting" class="go">开始听会</button>
+    <button type="button" id="btnMeetingStop" class="stop" disabled>结束听会</button>
+    <button type="button" id="btnStart" class="ghost">仅连续听（问答）</button>
+    <button type="button" id="btnStop" class="stop" disabled>停止</button>
+    <button type="button" id="btnPush" class="accent">Push-to-Ask（Alt+Z）</button>
+    <label class="chk"><input type="checkbox" id="chkWake" checked /> 需唤醒「小星」</label>
+    <span class="hint-inline" id="modeHint">听会：Me 唤醒提问；Others 豆包云转写（非本地 Whisper）</span>
+  </div>
+
+  <main class="grid">
+    <section class="panel">
+      <h2>双轨设备</h2>
+      <label class="lbl">Me · 本机麦（唤醒 / 提问）</label>
+      <select id="micSelect"></select>
+      <div class="meter"><div id="levelBar"></div></div>
+
+      <label class="lbl">Others · 会场轨（CABLE / 系统声）</label>
+      <select id="othersSelect"></select>
+      <div class="meter"><div id="othersLevelBar"></div></div>
+      <div class="row gap">
+        <button type="button" id="btnRefreshDevices" class="ghost">刷新设备</button>
+        <button type="button" id="btnOthersMic" class="ghost">开会场麦</button>
+        <button type="button" id="btnOthersShare" class="ghost">系统内录</button>
+        <button type="button" id="btnOthersStop" class="stop" disabled>停 Others</button>
+      </div>
+      <p class="hint" id="deviceHint">先点「刷新设备」选 Me 麦 / Others（VB-Cable）。听会中也可按住说话（临时提问）。云 ASR 需 DOUBAO_SPEECH_API_KEY。</p>
+
+      <label class="lbl">会场转写（Others 手动）</label>
+      <div class="row">
+        <input id="othersText" placeholder="粘贴会场一句转写" />
+        <button type="button" id="btnOthersIngest">记入</button>
+      </div>
+
+      <button type="button" class="mic" id="btnMic">按住说话（Me）</button>
+      <div class="row">
+        <input id="q" placeholder="输入：宁玉有什么特点" />
+        <button type="button" id="btnAsk">提问并播报</button>
+      </div>
+      <p class="meta" id="ttsMeta">TTS：检测中…</p>
+      <p class="meta" id="meetingMeta">会议：未开始</p>
+    </section>
+
+    <section class="panel grow">
+      <h2>对话 / 会场速记</h2>
+      <div id="log" class="log"></div>
+      <h2 class="subh">系统日志</h2>
+      <p class="hint" id="logPathHint">开发辅助：主进程/渲染写入 UTF-8 文件，与对话气泡分离。</p>
+      <div class="row gap">
+        <button type="button" id="btnSysLogClear" class="ghost">清空界面</button>
+        <button type="button" id="btnSysLogCopy" class="ghost">复制</button>
+        <button type="button" id="btnSysLogOpen" class="ghost">打开目录</button>
+      </div>
+      <div id="sysLog" class="sys-log"></div>
+    </section>
+
+    <section class="panel">
+      <h2>旁路建议 · 本场</h2>
+      <p class="hint">会场问到口径内问题时出卡，不自动抢麦；可点「口播」。</p>
+      <div id="suggestList" class="suggest-list"></div>
+      <ul class="stats">
+        <li>轮次 <strong id="statTurns">0</strong></li>
+        <li>缺口 <strong id="statGaps">0</strong></li>
+        <li>拒答 <strong id="statRefuse">0</strong></li>
+      </ul>
+      <button type="button" id="btnBoard" class="ghost block">刷新补库看板</button>
+      <div id="boardList" class="board-list"></div>
+      <h2 class="subh">会前补充</h2>
+      <p class="hint">白名单公开页标题摘要；不作规程。可离线生成或 live 刷新。</p>
+      <div class="row gap">
+        <button type="button" id="btnBriefing" class="ghost">刷新会前卡</button>
+        <button type="button" id="btnBriefingLive" class="ghost">在线抓取</button>
+      </div>
+      <div id="briefingCard" class="board-list"></div>
+      <h2 class="subh">今日行情</h2>
+      <p class="hint">批发 / 地头只读；近 7 日均价条；价差进农服跟进。</p>
+      <div class="row gap">
+        <button type="button" id="btnMarket" class="ghost">刷新行情</button>
+        <button type="button" id="btnMarketSeed" class="ghost">装载种子价</button>
+      </div>
+      <div id="marketSpark" class="spark-wrap"></div>
+      <div id="marketAlerts" class="market-alerts"></div>
+      <div id="marketList" class="board-list"></div>
+      <h2 class="subh">农服跟进</h2>
+      <p class="hint">散会未答进待办；可手建。列语义对齐 Kaiban，本地 JSON。</p>
+      <div class="row">
+        <input id="followupTitle" placeholder="新建跟进：如 回访脱毒苗渠道" />
+        <button type="button" id="btnFollowupAdd">添加</button>
+      </div>
+      <button type="button" id="btnFollowup" class="ghost block">刷新跟进</button>
+      <div id="followupList" class="board-list"></div>
+    </section>
+  </main>
+
+  <script src="./log.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

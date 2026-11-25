@@ -120,8 +120,15 @@
         ]
       },
       {
-        "from": "dev_knowledge/glossary",
-        "to": "dev_knowledge/glossary",
+        "from": "../dev_knowledge/projects/desktop/glossary",
+        "to": "dev_knowledge/projects/desktop/glossary",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../dev_knowledge/shared/glossary",
+        "to": "dev_knowledge/shared/glossary",
         "filter": [
           "**/*"
         ]

@@ -1,0 +1,57 @@
+{
+  "description": "东方城乡报 / 市农委等公开稿定向关键词（草莓·柑橘·水稻）",
+  "version": "1.0.0",
+  "crops": ["草莓", "柑橘", "桔", "橘", "水稻", "粳稻", "籼稻", "机插稻", "稻米", "果树", "再生稻", "秸秆", "太安1号", "稻瘟", "稻飞虱", "食味值", "绿色防控"],
+  "channels": {
+    "dfcxb": {
+      "name": "东方城乡报数字报",
+      "home": "https://www.dfcxb.com",
+      "also": ["上农APP", "上海三农"],
+      "note": "仅公开网页；App登录墙后不爬"
+    },
+    "nyncw_nyjs": {
+      "name": "市农委农业技术",
+      "home": "https://nyncw.sh.gov.cn/nyjs/index.html",
+      "search_tips": ["上海市水稻栽培技术意见", "一种就管", "机插稻育秧"]
+    }
+  },
+  "clusters": [
+    {
+      "id": "policy_news",
+      "layer": "policy",
+      "labels": ["要闻", "政策"],
+      "keywords": ["沪郊动态", "区域发展", "涉农政策", "三农参考", "政策解读"]
+    },
+    {
+      "id": "industry_tech",
+      "layer": "tech",
+      "labels": ["产业与农技"],
+      "keywords": [
+        "新主体",
+        "新农人",
+        "龙头企业",
+        "合作社",
+        "农技指导",
+        "品种",
+        "种植",
+        "养殖",
+        "栽培技术",
+        "一种就管",
+        "机插稻"
+      ]
+    },
+    {
+      "id": "rural_life",
+      "layer": "culture_lite",
+      "labels": ["乡村文化与生活"],
+      "keywords": ["阡陌", "绿野", "科普", "生活"]
+    },
+    {
+      "id": "practical",
+      "layer": "tech",
+      "labels": ["三农实用"],
+      "keywords": ["生产实践", "经营案例", "实用技术", "田间管理"]
+    }
+  ],
+  "matchHint": "标题或正文命中 crops∩clusters 再入候选；文化旁路压短不进规程 FAQ"
+}

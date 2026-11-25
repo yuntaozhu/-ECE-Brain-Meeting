@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "XiaoxingIngestTask",
+  "description": "会后补库任务：缺什么 → 建议源 → 待办状态",
+  "type": "object",
+  "required": ["id", "meeting_id", "query", "gap_kind", "status"],
+  "properties": {
+    "id": { "type": "string" },
+    "at": { "type": "string", "format": "date-time" },
+    "meeting_id": { "type": ["string", "null"] },
+    "query": { "type": "string" },
+    "gap_kind": {
+      "type": "string",
+      "enum": [
+        "market_price",
+        "crop_bootstrap",
+        "industry_briefing",
+        "tech_doc",
+        "policy_doc",
+        "media_clip",
+        "catalog_book",
+        "unknown"
+      ]
+    },
+    "product": { "type": ["string", "null"] },
+    "region": { "type": ["string", "null"] },
+    "suggested_source_ids": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["todo", "doing", "review", "done", "skipped"]
+    },
+    "note": { "type": "string" },
+    "followup_id": { "type": ["string", "null"] }
+  }
+}

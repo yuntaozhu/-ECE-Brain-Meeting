@@ -1,0 +1,67 @@
+[
+  {
+    "province": "河南省",
+    "publish_date": "2026-11-17",
+    "alert_level": "偏重发生",
+    "crop_affected": ["冬小麦", "大棚番茄"],
+    "pest_or_disease": "条锈病、晚疫病",
+    "affected_cities": ["南阳", "驻马店", "周口"],
+    "impact_window": "未来7-14天",
+    "supply_risk_summary": "持续阴雨导致大棚番茄晚疫病偏重发生，预计下周豫南产区精品果出货量下降15%-20%。",
+    "source_url": "https://www.natesc.org.cn",
+    "source_id": "natesc-seed",
+    "needs_review": false
+  },
+  {
+    "province": "山东省",
+    "publish_date": "2026-11-16",
+    "alert_level": "中等偏重",
+    "crop_affected": ["设施草莓", "番茄"],
+    "pest_or_disease": "灰霉病",
+    "affected_cities": ["潍坊", "临沂", "烟台"],
+    "impact_window": "未来7天",
+    "supply_risk_summary": "棚室湿度偏高，草莓灰霉病有扩展风险，注意通风降湿，可能影响精品果率。",
+    "source_url": "http://nync.shandong.gov.cn",
+    "source_id": "shandong-seed",
+    "needs_review": false
+  },
+  {
+    "province": "四川省",
+    "publish_date": "2026-11-15",
+    "alert_level": "中等发生",
+    "crop_affected": ["设施草莓"],
+    "pest_or_disease": "白粉病",
+    "affected_cities": ["双流", "郫都", "邛崃"],
+    "impact_window": "未来7-10天",
+    "supply_risk_summary": "川西设施草莓白粉病呈点片发生，密植棚室需加强通风，可能影响果面商品率。",
+    "source_url": "http://nynct.sc.gov.cn",
+    "source_id": "sichuan-seed",
+    "needs_review": false
+  },
+  {
+    "province": "广东省",
+    "publish_date": "2026-11-14",
+    "alert_level": "中等",
+    "crop_affected": ["蔬菜", "番茄"],
+    "pest_or_disease": "晚疫病、霜霉病",
+    "affected_cities": ["湛江", "茂名", "惠州"],
+    "impact_window": "未来7天",
+    "supply_risk_summary": "粤西多雨时段大棚番茄晚疫病与叶菜霜霉风险上升，注意排湿与清园。",
+    "source_url": "http://dara.gd.gov.cn",
+    "source_id": "guangdong-seed",
+    "needs_review": false
+  },
+  {
+    "province": "陕西省",
+    "publish_date": "2026-11-13",
+    "alert_level": "中等偏轻",
+    "crop_affected": ["设施草莓", "黄瓜"],
+    "pest_or_disease": "灰霉病、蚜虫",
+    "affected_cities": ["西安", "渭南", "宝鸡"],
+    "impact_window": "未来10天",
+    "supply_risk_summary": "关中设施草莓灰霉与蚜虫并存，花期注意通风与虫情监测，避免与放蜂冲突的盲目用药。",
+    "source_url": "http://nynct.shaanxi.gov.cn",
+    "source_id": "shaanxi-seed",
+    "needs_review": false
+  }
+]

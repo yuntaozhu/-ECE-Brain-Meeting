@@ -1,0 +1,103 @@
+# 小星 Wiki 索引（草莓 + 水稻 + 柑橘骨架）
+
+- boundary-rules | 小星边界与拒答规则 | type=process | aliases=边界,不能答什么,用药,补贴
+- xiaoxing-intro | 小星是谁 | type=concept | aliases=你是谁,小星是什么
+- citrus-overview | 柑橘知识骨架（入口） | type=concept | aliases=柑橘,橘子,桔子,小星有柑橘吗
+- citrus-source-portals | 柑橘公开资料入口 | type=concept | aliases=柑橘资料,柑橘去哪查,柑橘书怎么入库
+- citrus-shanghai | 上海柑橘实践入口 | type=concept | aliases=上海柑橘,上海种柑橘吗
+- yangtze-delta-strawberry-market | 长三角草莓行情入口 | type=process | aliases=长三角草莓行情,长三角草莓多少钱,上海草莓批发价
+- rice-source-portals | 水稻公开资料入口（全国） | type=concept | aliases=水稻资料,中国水稻研究所,中国水稻信息网
+- rice-shanghai-portals | 上海水稻公开资料入口 | type=concept | aliases=上海水稻,上海三农,魔都乡遇,机插稻
+- sh-nyncw-tech | 市农委农业技术栏目入口 | type=concept | aliases=农业技术栏目,水稻栽培技术意见在哪看
+- dfcxb-portals | 东方城乡报与上海三农媒体入口 | type=concept | aliases=东方城乡报,上农APP,沪郊动态
+- book-ingest-policy | 正版书目与摘录政策 | type=process | aliases=书籍能不能爬,草莓研究进展,品种志
+- shanghai-fruit-series-strawberry | 上海果树丛书草莓分册入口 | type=concept | aliases=上海果树丛书草莓,草莓丛书能不能爬,丛书摘录了吗
+- rice-market-portals | 水稻行情与品牌信息入口 | type=concept | aliases=稻谷行情,大米出厂价,粮食交易中心,中华粮网
+- rice-shanghai-cultivars | 上海水稻品种公开名录入口 | type=concept | aliases=上海水稻品种,沪软,南粳46,松香粳
+- cultivar-huayou14 | 花优14 水稻 | type=concept | aliases=花优14,花优十四
+- cultivar-shenyou28 | 申优28 水稻 | type=concept | aliases=申优28,申优二十八
+- cultivar-youtangdao | 优糖稻（功能稻）概述 | type=concept | aliases=优糖稻,崇尚优糖,低GI水稻,功能稻
+- cultivar-huruan1212 | 沪软1212 水稻 | type=concept | aliases=沪软1212,沪软
+- cultivar-huzaojing193 | 沪早粳193 水稻 | type=concept | aliases=沪早粳193,沪早粳
+- cultivar-taian1 | 太安1号 水稻 | type=concept | aliases=太安1号,太安一号
+- cultivar-chongshang217 | 崇尚217 水稻 | type=concept | aliases=崇尚217,崇明崇尚217
+- cultivar-nanjing46 | 南粳46 水稻 | type=concept | aliases=南粳46,南粳四六
+- cultivar-songxiangjing1018 | 松香粳1018 水稻 | type=concept | aliases=松香粳1018,松香粳
+- rice-shanghai-cultivation | 上海水稻栽培技术意见入口 | type=process | aliases=上海水稻怎么种,一种就管,栽培技术意见
+- rice-machine-transplant | 机插稻育秧与栽培入口 | type=process | aliases=机插稻,机插育秧
+- rice-mechanization | 水稻农机农艺与装备入口 | type=process | aliases=全程机械化,侧深施肥,机穴播,飞防
+- rice-pest-overview | 水稻病虫防控概述 | type=process | aliases=水稻病虫害,绿色防控,病虫预报,三虫两病
+- agri-tech-kb-digest | 农业科技知识汇编索引 | type=concept | aliases=农业科技知识汇编,知识库有哪些水稻资料
+- rice-cultivar-naming | 水稻品种命名通识 | type=process | aliases=品种命名,两优,汕优,A系B系
+- rice-ratoon | 再生稻通识入口 | type=process | aliases=再生稻,割完再收一季
+- rice-green-control-shanghai | 上海水稻绿色防控入口 | type=process | aliases=上海水稻绿色防控,赤眼蜂,性信息素
+- rice-blast-overview | 稻瘟病识别概述 | type=process | aliases=稻瘟病,穗颈瘟,怎么认稻瘟
+- rice-sheath-blight | 水稻纹枯病识别概述 | type=process | aliases=纹枯病,水稻纹枯,三虫两病纹枯
+- rice-bacterial-blight | 水稻细菌性病害识别 | type=process | aliases=白叶枯病,细条病,细菌性条斑病
+- rice-planthopper-overview | 稻飞虱概述 | type=process | aliases=稻飞虱,褐飞虱,白背飞虱
+- rice-water-weevil | 稻水象甲与检疫对象入口 | type=process | aliases=稻水象甲,水稻检疫害虫,福寿螺
+- rice-ancient-innovation | 禾本科远古代谢创新入口 | type=concept | aliases=水稻远古创新,禾本科主粮,三次创新
+- rice-growth-stages | 一季稻生育进程通识 | type=process | aliases=一季稻怎么管,分蘖期,抽穗后怎么管
+- rice-yield-measure | 水稻测产与产量构成 | type=process | aliases=水稻测产,理论测产,产量四要素
+- rice-taste-score | 大米食味值通识 | type=concept | aliases=食味值,食味值靠谱吗
+- rice-deep-processing | 稻米深加工通识入口 | type=concept | aliases=稻米深加工,大米还能做什么,米糠,稻壳
+- rice-lab-testing | 水稻检测指标通识入口 | type=concept | aliases=水稻检测,水稻实验室指标,稻谷安全检测
+- organic-farm-sweden | 瑞典有机生态农场案例入口 | type=concept | aliases=瑞典有机农场,国外有机农业,KRAV
+- rice-straw-shanghai | 上海水稻秸秆综合利用 | type=process | aliases=上海秸秆,闵行发酵仓,秸秆饲料
+- rice-shanghai-value-chain | 上海稻米全链产业升级 | type=concept | aliases=遇稻上海,上海大米区块链,产业升级
+- rice-agri-culture | 稻作食农文化入口 | type=concept | aliases=水稻起源,草鞋山,黑龙江水稻历史
+- sh-rural-governance-std | 上海乡村善治标准入口 | type=concept | aliases=乡村善治,DB31/T 1653
+- sh-wangjing-drone-governance | 旺泾村无人机治理入口 | type=concept | aliases=旺泾村无人机,智慧飞治,嘉定无人机巡检
+- sh-urban-agri-law | 上海都市现代农业规定入口 | type=concept | aliases=都市现代农业规定,上海农业立法
+- rice-digital-smart | 水稻智慧农业与数字化入口 | type=concept | aliases=数字稻田,智能育秧,水稻大数据
+- rice-policy-portals | 水稻政策与宏观产业入口 | type=concept | aliases=水稻政策,一号文件,最低收购价政策
+- rice-cnrri | 中国水稻研究所入口 | type=concept | aliases=中国水稻研究所,水稻所
+- rice-quality-taste | 优质稻食味鉴评入口 | type=process | aliases=食味鉴评,优质食味稻
+- rice-hybrid-seed | 杂交粳稻与机械化制种入口 | type=process | aliases=杂交粳稻,机械化制种
+- rice-shanghai-districts | 上海水稻区级实践入口 | type=concept | aliases=崇明水稻,金山水稻,松江水稻
+- rice-brand-shanghai | 上海稻米品牌与地产品入口 | type=concept | aliases=上海大米品牌,崇尚优糖,地产大米
+- rice-media-journals | 水稻期刊与涉农媒体入口 | type=concept | aliases=中国稻米杂志,农民日报,中国农技推广
+- rice-purchase-support | 稻谷托市收购与交易信息入口 | type=process | aliases=托市收购,收购价拍卖
+- rice-indica-japonica | 籼稻粳稻通识与问价口径 | type=process | aliases=籼稻,粳稻,籼米粳米,糯米
+- rice-research-progress | 水稻研究进展入口 | type=concept | aliases=分子育种,水稻研究进展
+- rice-knowledge-layers | 水稻知识库分层说明 | type=process | aliases=水稻知识分层,挂牌价区别
+- cultivar-ningyu | 宁玉草莓 | type=concept | aliases=宁玉,宁玉品种
+- cultivar-ningfeng | 宁丰草莓 | type=concept | aliases=宁丰,宁丰品种
+- cultivar-jingxiang | 京香草莓 | type=concept | aliases=京香
+- cultivar-jinghong | 静红草莓 | type=concept | aliases=静红
+- cultivar-jingquanxiang | 京泉香草莓 | type=concept | aliases=京泉香
+- cultivar-jiuxiang | 久香草莓 | type=concept | aliases=久香,上海久香
+- cultivar-sumei66 | 苏莓66草莓 | type=concept | aliases=苏莓66,苏莓
+- cultivar-hongyan | 红颜草莓 | type=concept | aliases=红颜,红颜品种
+- cultivar-zhangji | 章姬草莓 | type=concept | aliases=章姬,章姬品种
+- cultivar-yuexiu | 越秀草莓 | type=concept | aliases=越秀,嘉定越秀
+- cultivar-jiaomei | 娇美一号草莓 | type=concept | aliases=娇美一号,娇美
+- cultivar-sweet-charlie | 甜查理草莓 | type=concept | aliases=甜查理,甜查丽
+- cultivar-shenmei | 申莓系列草莓 | type=concept | aliases=申莓,申莓系列
+- cultivar-zijinxiangxue | 紫金香雪草莓 | type=concept | aliases=紫金香雪
+- cultivar-suizhu | 隋珠草莓 | type=concept | aliases=隋珠
+- cultivar-comparison | 草莓品种怎么选 | type=process | aliases=品种怎么选,大棚种什么草莓,国产和日系
+- disease-botrytis | 草莓灰霉病概述 | type=process | aliases=灰霉病,灰霉,预防灰霉
+- disease-powdery-mildew | 草莓白粉病概述 | type=process | aliases=白粉病,白粉
+- disease-anthracnose | 草莓炭疽病概述 | type=process | aliases=炭疽病,炭疽
+- virus-disease-overview | 草莓病毒病概述 | type=process | aliases=病毒病,为什么要脱毒苗
+- pest-aphid-mite | 蚜虫与红蜘蛛概述 | type=process | aliases=蚜虫,红蜘蛛,叶螨
+- pollination-bee | 草莓蜜蜂授粉概述 | type=process | aliases=放蜂,授粉,蜜蜂
+- soilless-substrate | 草莓基质栽培概述 | type=process | aliases=基质栽培,无土栽培,槽式栽培
+- water-fertilizer-overview | 草莓水肥管理概述 | type=process | aliases=怎么浇水,怎么施肥,花期水肥
+- greenhouse-climate | 棚室温湿度概述 | type=process | aliases=棚室温度,湿度太高,保温通风
+- flower-fruit-thinning | 疏花疏果概述 | type=process | aliases=疏花,疏果
+- mulch-drip | 地膜与滴灌概述 | type=process | aliases=地膜,滴灌
+- planting-density-overview | 定植密度概述 | type=process | aliases=定植密度,一亩栽多少株
+- harvest-grading | 草莓采收与分级 | type=process | aliases=怎么分级,采收注意
+- postharvest-coldchain | 草莓采后保鲜 | type=process | aliases=怎么保鲜,采后存放,怕压
+- market-ask-guide | 怎么问行情 | type=process | aliases=怎么问多少钱,批发价和产地价,为什么不答价
+- nursery-detox | 草莓脱毒苗与育苗要点 | type=process | aliases=脱毒苗,育苗,繁育
+- facility-calendar | 设施草莓栽培历概要 | type=process | aliases=定植,越冬,采收,栽培历
+- shanghai-practice | 上海草莓产区实践入口 | type=concept | aliases=上海草莓,白鹤,金山,青浦
+- shanghai-season-guide | 上海草莓四季管理骨架 | type=process | aliases=四季管理,育苗期,定植期,采收期,冬天大棚
+- shandong-facility | 山东设施草莓产区入口 | type=concept | aliases=山东草莓,潍坊草莓,临沂草莓
+- jiangsu-facility | 江苏草莓产区入口 | type=concept | aliases=江苏草莓,苏莓
+- zhejiang-facility | 浙江草莓产区入口 | type=concept | aliases=浙江草莓,建德草莓
+- standards-entry | 标准与品种鉴定入口 | type=process | aliases=地方标准,DUS,品种鉴定
+- source-portals | 草莓公开资料入口 | type=concept | aliases=资料去哪查,学会官网,农科院入口

@@ -8,4 +8,4 @@ alwaysApply: false
 
 - Others = CABLE Output 或 displayMedia 系统内录；Me = 本机麦。禁止混成单轨再送策略 ASR。
 - 策略/巡检只消费 Others；Me 仅口令与转写标定。
-- 详见 `desktop/dev_knowledge/adr/001-dual-channel-audio.md` 与 `rules/desktop-audio-capture.md`。
+- 详见 `dev_knowledge/shared/adr/001-dual-channel-audio.md` 与 `dev_knowledge/projects/desktop/rules/desktop-audio-capture.md`。

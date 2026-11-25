@@ -1,0 +1,35 @@
+{
+  "description": "跨会主题记忆：按作物/议题索引历史会议，开场可播报前情与待办",
+  "version": "1.0.0",
+  "defaultTopic": "通用",
+  "maxMeetingsInIndex": 80,
+  "briefingMaxTodos": 5,
+  "briefingMaxGaps": 4,
+  "topics": [
+    {
+      "id": "草莓",
+      "keywords": ["草莓", "红颜", "宁玉", "章姬", "白鹤", "嘉定草莓"]
+    },
+    {
+      "id": "水稻",
+      "keywords": ["水稻", "稻", "粳", "籼", "太安", "沪软", "机插", "稻瘟", "秸秆", "食味"]
+    },
+    {
+      "id": "柑橘",
+      "keywords": ["柑橘", "橘子", "桔子", "蜜橘"]
+    },
+    {
+      "id": "行情",
+      "keywords": ["行情", "多少钱", "批发", "新发地", "长三角"]
+    },
+    {
+      "id": "政策治理",
+      "keywords": ["善治", "DB31", "都市现代农业", "旺泾", "无人机"]
+    }
+  ],
+  "assistantModes": {
+    "content": "内容助手：优先答知识与补库，少打断控场",
+    "host": "主持控场：口令/节奏优先，内容答疑为辅"
+  },
+  "defaultAssistantMode": "content"
+}

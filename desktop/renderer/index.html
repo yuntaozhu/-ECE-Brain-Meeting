@@ -439,12 +439,12 @@
               <span id="chipMeetingAudio" class="chip">会场声</span>
               <details class="chips-more">
                 <summary>更多状态</summary>
-                <div class="chips">
-                  <span id="chipArk" class="chip">Ark 控场</span>
-                  <span id="chipSpeech" class="chip">语音 ASR/TTS</span>
-                  <span id="chipVirtual" class="chip">虚拟设备</span>
-                  <span id="chipPatrol" class="chip">自动巡检</span>
-                  <span id="chipReconnect" class="chip">Duplex</span>
+        <div class="chips">
+          <span id="chipArk" class="chip">Ark 控场</span>
+          <span id="chipSpeech" class="chip">语音 ASR/TTS</span>
+          <span id="chipVirtual" class="chip">虚拟设备</span>
+          <span id="chipPatrol" class="chip">自动巡检</span>
+          <span id="chipReconnect" class="chip">Duplex</span>
                 </div>
               </details>
             </div>
@@ -497,42 +497,42 @@
             <div id="keyStatus" class="status warn">检查密钥…</div>
             <p id="kbStatus" class="status warn" style="margin:6px 0;font-size:11px">知识库加载中…</p>
             <div id="status" class="status warn">待命</div>
-            <label class="check"><input id="virtualOnly" type="checkbox" checked /> 列表只显示虚拟设备（推荐）</label>
+        <label class="check"><input id="virtualOnly" type="checkbox" checked /> 列表只显示虚拟设备（推荐）</label>
             <label class="check"><input id="allowPhysical" type="checkbox" /> 允许绑定物理设备（调试用）</label>
             <label>① Others 会场环路采集 <span class="badge-virtual">CABLE Output / 系统内录</span></label>
             <select id="othersSource">
               <option value="cable" selected>VB-Cable / 虚拟环路（推荐）</option>
               <option value="display">系统内录 displayMedia（实验）</option>
             </select>
-            <select id="inputDevice"></select>
+        <select id="inputDevice"></select>
             <label class="check"><input id="dualTrackMe" type="checkbox" checked /> 启用双通道 Me（本机麦）</label>
             <label>①b Me 本机麦 <span class="badge-phys">可用物理麦</span></label>
             <select id="meDevice"></select>
             <label>② EXE 播放 → 虚拟麦克风 <span class="badge-virtual">CABLE-B Input</span></label>
-            <select id="outputDevice"></select>
-            <div id="routeHint"></div>
+        <select id="outputDevice"></select>
+        <div id="routeHint"></div>
             <label class="check"><input id="localMonitor" type="checkbox" checked /> 本机同时听测试音/Host</label>
-            <div class="row">
-              <button id="refresh" class="ghost" type="button">刷新设备</button>
+        <div class="row">
+          <button id="refresh" class="ghost" type="button">刷新设备</button>
               <button id="beep" class="ghost" type="button">测虚拟麦</button>
               <button id="selfTest" class="accent" type="button">一键自检</button>
-              <button id="loop" class="ghost" type="button">测环路</button>
-              <button id="loopStop" class="danger" type="button" disabled>停环路</button>
-            </div>
-          </section>
+          <button id="loop" class="ghost" type="button">测环路</button>
+          <button id="loopStop" class="danger" type="button" disabled>停环路</button>
+        </div>
+      </section>
 
           <section class="preflight-card">
-            <h2>腾讯会议双账号核对</h2>
+        <h2>腾讯会议双账号核对</h2>
             <p class="check">主持人：物理麦克风 + 物理音箱</p>
-            <label class="check"><input id="chkHost" type="checkbox" /> 主持人已用真麦真箱</label>
+        <label class="check"><input id="chkHost" type="checkbox" /> 主持人已用真麦真箱</label>
             <label class="check"><input id="chkAiSpk" type="checkbox" /> AI 扬声器 = 虚拟音频输出</label>
             <label class="check"><input id="chkAiMic" type="checkbox" /> AI 麦克风 = 虚拟麦克风</label>
-            <p id="meetingGate" class="status warn" style="margin-top:10px">勾选以上三项并绑定虚拟设备后，才能启动控场。</p>
+        <p id="meetingGate" class="status warn" style="margin-top:10px">勾选以上三项并绑定虚拟设备后，才能启动控场。</p>
             <label class="check"><input id="autoPatrol" type="checkbox" checked /> 自动运行（旁听纠偏 / 呼叫大智）</label>
-            <div class="row">
-              <button id="btnSessions" class="ghost" type="button">打开本场记录</button>
-            </div>
-          </section>
+        <div class="row">
+          <button id="btnSessions" class="ghost" type="button">打开本场记录</button>
+        </div>
+      </section>
 
           <section class="preflight-card">
             <h2>环路拓扑 · 说明</h2>
@@ -552,7 +552,7 @@
       <main class="cockpit-main">
         <section class="panel panel-transcript">
           <div class="panel-head">
-            <h2>会场转写</h2>
+        <h2>会场转写</h2>
             <p id="asrStats" class="status warn" style="margin:0;font-size:11px">启动听会后显示实时转写</p>
             <p id="duplexStats" class="status warn" style="margin:0;font-size:11px">听写：IDLE</p>
             <div class="role-filter">
@@ -563,7 +563,7 @@
           </div>
           <div class="panel-body">
             <div class="transcript-wrap">
-              <div id="transcript"></div>
+        <div id="transcript"></div>
               <button type="button" id="scrollBottomBtn" class="accent">↓ 最新发言</button>
             </div>
           </div>
@@ -573,7 +573,7 @@
               <button id="forceSpeak" class="ghost" type="button" disabled>试播 Host</button>
             </div>
           </div>
-        </section>
+      </section>
 
         <section class="panel panel-copilot">
           <div class="panel-head">
@@ -591,7 +591,7 @@
               </div>
             </div>
           </div>
-        </section>
+      </section>
 
         <section class="panel panel-aid-tabs">
           <div class="aid-tabs" role="tablist">
@@ -624,15 +624,15 @@
 
           <div class="tab-pane" data-aid-pane="log">
             <div class="row" style="margin:0 0 6px">
-              <button id="btnCopyLog" class="ghost" type="button">复制日志</button>
+          <button id="btnCopyLog" class="ghost" type="button">复制日志</button>
               <button id="btnClearLog" class="ghost" type="button">清空</button>
               <button id="btnOpenLogDir" class="ghost" type="button">打开目录</button>
             </div>
             <div id="logPath" style="font-size:11px;color:#64748b;margin-bottom:4px"></div>
             <div id="log"></div>
-          </div>
-        </section>
-      </main>
+        </div>
+      </section>
+    </main>
     </div>
     <script type="module" src="app.js"></script>
   </body>

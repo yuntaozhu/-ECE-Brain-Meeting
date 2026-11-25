@@ -1,0 +1,18 @@
+{
+  "id": "ing_1795423670795",
+  "at": "2026-11-23T08:47:50.797Z",
+  "meeting_id": "mtg_smoke_ingest",
+  "query": "长三角的草莓销售市场行情库里没有",
+  "gap_kind": "market_price",
+  "product": "草莓",
+  "region": "长三角",
+  "suggested_source_ids": [
+    "xinfadi-price",
+    "jnmarket",
+    "pfsc-agri",
+    "sh-nyncw-nyjs"
+  ],
+  "status": "todo",
+  "note": "补「草莓」公开行情；B2B 仅参考",
+  "followup_id": "fu_1795423670795"
+}

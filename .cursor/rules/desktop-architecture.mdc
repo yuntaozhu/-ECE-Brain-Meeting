@@ -1,7 +1,8 @@
 ---
-alwaysApply: true
+globs:
+  - desktop/**/*
 ---
-# desktop 架构宪法
+# desktop（大智）架构宪法
 
 完整条文在 `desktop/.cursorrules`。改 `desktop/` 时按该文件执行。
 
@@ -9,34 +10,25 @@ alwaysApply: true
 - 口令、否定窗口、元词、Dialogue-Meta、催答、副驾驶骨架、超参进 `desktop/knowledge/schema/`。业务说法进 FAQ / Wiki。会中不改知识库文件。
 - 流水线：转写 → `meetingSession` → **gate → dialogueMeta → prepareAsk → evaluateConsult** → 定卡/`SpeakDraft` → `decideSpeak` → 写回 Focus/记忆 → 合成。知识库不决定开口。`desktop/renderer/` 不做策略。不要改仓库根目录的 React 示例。
 - **Focus SSOT**（ADR-023）：完整问受理即 `commitFocusAsk`；回放/催答用 `pickLatestFocus`（按 At）；hard 无证据可坦诚但禁止纯 skip 不写槽；ask_repair 写回；纯 recall 只回放不问错卡。
-- 智能层见 `adr/017`～`023` 与 `lib/intelligence/`；`askLane` 分流；副驾驶同源 Draft + 顾问 refine + `skeletonBan`，不占麦；Meta 不得当业务 Draft。
+- 智能层见 `dev_knowledge/projects/desktop/adr/017`～`023` 与 `lib/intelligence/`；`askLane` 分流；副驾驶同源 Draft + 顾问 refine + `skeletonBan`，不占麦；Meta 不得当业务 Draft。
 - 现存 `slotOk`、`DROP`、口令正则、意图覆盖是迁移债。对应算子落地且 `smoke:wave-r` / `r9*` / `r10` 与场景冒烟仍全绿之前，禁止整段重写 `decideSpeak`，也禁止为了零字面量先删这些分支。
 - 主进程或 `faq-meeting.txt` / schema 改完后，会场要重新执行 `npm run desktop` 才生效。
 
-## 研发知识导航（Wave A，Cursor 优先）
+## 研发知识导航
 
-本项目 **以 `.cursor/rules/*.mdc` + `desktop/dev_knowledge/` 为 AI 总控**，不依赖根目录 `CLAUDE.md`。
+本产品 **以根 `.cursorrules` + `dev_knowledge/` + 本规则** 为 AI 总控。
 
 | 主题 | 打开 |
 |------|------|
-| 导航索引 | `desktop/dev_knowledge/INDEX.md` |
-| 双通道音频 | `adr/001-dual-channel-audio.md` · `rules/desktop-audio-capture.md` |
-| VAD / 门控 | `adr/002-intent-gating-vad.md` |
-| Whisper 外挂 | `adr/003-local-whisper-abi.md` |
-| 悬浮胶囊 | `rules/desktop-stealth-window.md` |
-| 术语纠错 | `glossary/project_terms.json` |
-| Wave B 预检索/手动触发 | `adr/004-speculative-rag-manual-trigger.md` |
-| Wave C 速览/速记/MCP | `adr/005-wave-c-meeting-aid-mcp.md` |
-| Wave D Mermaid/OCR/DeepDive | `adr/006-wave-d-mermaid-ocr-deepdive.md` |
-| Wave E Wiki2 Fast Read | `adr/007-wiki2-fast-read.md` · `desktop/knowledge_wiki/` |
-| Wave F 豆包编译/主题 | `adr/008-wiki2-llm-themes.md` |
+| 全局索引 | `dev_knowledge/INDEX.md` |
+| 大智档案 | `dev_knowledge/projects/desktop/INDEX.md` |
+| 双通道音频 | `dev_knowledge/shared/adr/001-dual-channel-audio.md` |
+| VAD / 门控 | `dev_knowledge/shared/adr/002-intent-gating-vad.md` |
+| Whisper 外挂 | `dev_knowledge/shared/adr/003-local-whisper-abi.md` |
+| 悬浮胶囊 | `dev_knowledge/projects/desktop/rules/desktop-stealth-window.md` |
+| 术语纠错 | `dev_knowledge/projects/desktop/glossary/project_terms.json` |
+| Wiki2 Fast Read | `dev_knowledge/shared/adr/007-wiki2-fast-read.md` · `desktop/knowledge_wiki/` |
 | 会中 FAQ | `desktop/knowledge/faq-meeting.txt` |
-| Wave R / 智能层 | `adr/017-shared-intelligence-layer.md` · `lib/intelligence/contract.cjs` |
-| 受众帧 / 纠偏 | `adr/018-audience-frame-correction.md` · `lib/intelligence/frameGate.cjs` |
-| Wave R8 双通道/顾问 | `adr/019-wave-r8-dual-lane-advisor.md` · `lib/intelligence/askLane.cjs` |
-| Wave R9a Dialogue-Meta | `adr/020-wave-r9a-dialogue-meta.md` · `lib/intelligence/dialogueMeta.cjs` |
-| Wave R9b oralize/lane | `adr/021-wave-r9b-oralize-lane.md` · `paths/consult/oralize.cjs` · `laneArbiter.cjs` |
-| Wave R9c Agent/Copilot | `adr/022-wave-r9c-agent-copilot.md` · `agent/toolHops.cjs` · `copilot/refine.cjs` |
-| Wave R10 Focus/Recovery | `adr/023-wave-r10-session-focus.md` · `lib/intelligence/memory.cjs` · `paths/consult/gate.cjs` |
+| Wave R / Focus | `dev_knowledge/projects/desktop/adr/017`～`023` |
 
 红线摘要：`[Me]`/`[Others]` 禁混轨；本地 Whisper 不绑 Electron native addon；静音须 VAD；BYOK 当前仅 `doubao`。

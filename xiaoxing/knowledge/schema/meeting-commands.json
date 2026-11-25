@@ -1,0 +1,20 @@
+{
+  "wakePatterns": ["小星你好", "小星小星", "嗨小星", "喂小星"],
+  "wakeAliases": ["小星", "晓星", "小行"],
+  "sleepPatterns": ["谢谢小星", "小星谢谢", "先这样", "继续旁听"],
+  "meetingStartPatterns": ["开始会议", "开始听会", "开会了"],
+  "meetingStopPatterns": ["结束会议", "停止听会", "散会"],
+  "identityFallback": "你是谁",
+  "urgePatterns": ["请回答", "请回答我", "回答一下", "再说一遍", "重说一遍"],
+  "recallPatterns": ["我刚刚问了什么", "刚才问了什么", "我刚问什么", "上一个问题"],
+  "halfDuplex": {
+    "ignoreConsultWhileSpeaking": true,
+    "keepListeningTranscript": true
+  },
+  "defaultArmed": true,
+  "comment_defaultArmed": "听会默认 Me 说完即问；「谢谢小星」解除武装旁听，再叫小星可恢复",
+  "assistantMode": "content",
+  "comment_assistantMode": "content=内容助手优先答知识；host=主持控场优先口令节奏；不做专家人设包",
+  "promptIngestOnNewFact": true,
+  "comment_promptIngestOnNewFact": "会中出现可沉淀新数据时提示可一键进 inbox（D4）"
+}

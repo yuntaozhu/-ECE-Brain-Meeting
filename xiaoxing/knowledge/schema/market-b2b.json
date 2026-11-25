@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Xiaoxing B2B farmgate quote",
+  "type": "object",
+  "required": ["product_name", "publish_date", "source_url", "quote_kind"],
+  "properties": {
+    "product_name": { "type": "string" },
+    "publish_date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "market_or_region": { "type": "string" },
+    "price_avg": { "type": ["number", "null"] },
+    "unit": { "const": "元/斤" },
+    "source_tier": { "const": "T3" },
+    "quote_kind": { "const": "farmgate" },
+    "seller_hint": { "type": ["string", "null"] },
+    "contact_masked": {
+      "type": ["string", "null"],
+      "description": "仅脱敏号；完整号码需登录态，禁止写入明文"
+    },
+    "source_url": { "type": "string" }
+  }
+}

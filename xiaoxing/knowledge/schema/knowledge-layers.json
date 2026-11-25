@@ -1,0 +1,41 @@
+{
+  "description": "小星知识分层：政策 / 技术 / 市场 × 全国 / 上海；不定人设，按层入库",
+  "version": "1.0.0",
+  "layers": [
+    {
+      "id": "policy",
+      "name": "政策层",
+      "scope": ["national", "shanghai"],
+      "accept": ["部委/市农委正式发文", "涉农政策解读公开稿", "托市与收购价公开信息"],
+      "reject": ["补贴金额口头编造", "过期文件当现行"],
+      "sources_hint": ["moa.gov.cn", "nyncw.sh.gov.cn", "dfcxb.com"]
+    },
+    {
+      "id": "tech",
+      "name": "技术层",
+      "scope": ["national", "shanghai"],
+      "subdirs": ["品种", "栽培", "植保", "装备", "智慧系统", "研究进展"],
+      "accept": ["市农委技术意见网页版", "农技中心/农科院公开动态", "三农实用案例（标注产地）"],
+      "reject": ["用药亩用量现场开方", "未审定材料当推广"],
+      "sources_hint": ["nyncw.sh.gov.cn/nyjs", "saas.sh.cn", "cnrri.caas.cn", "dfcxb.com"]
+    },
+    {
+      "id": "market",
+      "name": "市场层",
+      "scope": ["national", "shanghai", "yangtze_delta"],
+      "accept": ["官方收购价/出厂价", "一级批发公开行情", "品牌资质核验入口"],
+      "reject": ["B2B挂牌当权威", "礼盒营销价当出厂价"],
+      "sources_hint": ["grainmarket.com.cn", "xinfadi", "pfsc.agri.cn"]
+    },
+    {
+      "id": "culture_lite",
+      "name": "乡村文化旁路",
+      "scope": ["shanghai"],
+      "accept": ["阡陌/绿野/科普短入口"],
+      "reject": ["替代技术规程"],
+      "sources_hint": ["dfcxb.com"]
+    }
+  ],
+  "crops_focus": ["草莓", "水稻", "柑橘"],
+  "role_policy": "近期不定科普/产业/市场人设；角色包后置"
+}

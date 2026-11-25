@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "XiaoxingMarketPriceQuote",
+  "type": "object",
+  "required": ["product_name", "publish_date", "source_url", "unit"],
+  "properties": {
+    "province": { "type": "string" },
+    "publish_date": { "type": "string", "description": "YYYY-MM-DD" },
+    "market_or_region": { "type": "string" },
+    "category": { "type": "string" },
+    "product_name": { "type": "string" },
+    "specification": { "type": "string" },
+    "price_min": { "type": ["number", "null"] },
+    "price_max": { "type": ["number", "null"] },
+    "price_avg": { "type": ["number", "null"] },
+    "unit": { "type": "string", "const": "元/斤" },
+    "unit_raw": { "type": "string" },
+    "source_url": { "type": "string" },
+    "source_tier": { "type": "string", "enum": ["T0", "T1", "T2", "T3", "seed"] },
+    "source_id": { "type": "string" },
+    "fetched_at": { "type": "string" },
+    "confidence": { "type": "number" },
+    "needs_review": { "type": "boolean" }
+  }
+}

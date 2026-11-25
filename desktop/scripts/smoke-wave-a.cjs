@@ -86,7 +86,14 @@ function main() {
         flushWhy: flushed.why || flushed.flush,
         pcmSamples: flushed.pcm.length,
         prerollPcm: flush2.pcm.length,
-        glossaryPath: path.join("dev_knowledge", "glossary", "project_terms.json")
+        glossaryPath: path.join(
+          "..",
+          "dev_knowledge",
+          "projects",
+          "desktop",
+          "glossary",
+          "project_terms.json"
+        )
       },
       null,
       2

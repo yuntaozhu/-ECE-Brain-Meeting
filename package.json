@@ -9,7 +9,14 @@
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist dist-server",
     "lint": "tsc --noEmit",
-    "desktop": "npm --prefix desktop start"
+    "desktop": "npm --prefix desktop start",
+    "xiaoxing": "npm --prefix xiaoxing start",
+    "xiaoxing:serve": "npm --prefix xiaoxing run serve",
+    "xiaoxing:smoke": "npm --prefix xiaoxing run smoke:all",
+    "xiaoxing:ask": "npm --prefix xiaoxing run ask --",
+    "xiaoxing:voice": "npm --prefix xiaoxing run voice --",
+    "chat:obsidian": "node scripts/export-chat-obsidian.cjs",
+    "chat:obsidian:full": "node scripts/export-chat-obsidian.cjs --full"
   },
   "engines": {
     "node": ">=20"

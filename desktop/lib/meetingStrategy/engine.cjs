@@ -40,7 +40,7 @@ async function runMeetingAnalysis(recentTranscript, currentAgenda, opts = {}) {
     if (result) return result;
   }
 
-  return baseResult({
+    return baseResult({
     reason: "OK",
     a2aTrace: ctx.a2aTrace,
     agentMode: ctx.state.mode,

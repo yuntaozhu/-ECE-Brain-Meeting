@@ -1,0 +1,12 @@
+{
+  "id": "dfcxb",
+  "title": "东方城乡报·数字报",
+  "url": "https://www.dfcxb.com",
+  "bucket": "xunbao",
+  "ok": false,
+  "code": "upstream",
+  "hint": "Firecrawl 上游异常，可稍后重试",
+  "status": 500,
+  "error": "Firecrawl scrape 500: The URL failed to load in the browser with error code \"ERR_TUNNEL_CONNECTION_FAILED\". Firecrawl encountered an internal proxy error while establishing the tunnel. This is an internal Firecrawl proxy error. Please retry or contact support. （Firecrawl 上游异常，可稍后重试）",
+  "fetchedAt": "2026-11-24T05:41:54.229Z"
+}

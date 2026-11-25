@@ -503,4 +503,4 @@ bootApp()
   })
   .catch((e) => {
     console.error("[App] 启动失败", e);
-  });
+});

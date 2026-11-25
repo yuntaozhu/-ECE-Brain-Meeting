@@ -1,0 +1,312 @@
+{
+  "note": "仅抓公开页作 raw 索引；全文版权材料需授权后手工放入 raw/manual",
+  "sources": [
+    {
+      "id": "cshs",
+      "title": "中国园艺学会",
+      "url": "https://www.cshs.org.cn",
+      "tags": ["学会", "草莓分会入口"]
+    },
+    {
+      "id": "cshs-branches",
+      "title": "中国园艺学会·分支机构",
+      "url": "https://www.cshs.org.cn/articlemenu/2/23?mark=2",
+      "tags": ["分会", "草莓分会"],
+      "note": "共4页；草莓分会可能在后续页，可用 --only=cshs-branches-p2 等继续抓"
+    },
+    {
+      "id": "cshs-branches-p2",
+      "title": "中国园艺学会·分支机构第2页",
+      "url": "https://www.cshs.org.cn/articlemenu/2/23?mark=2&id=2&thatId=23&articleId=&type=&page=2",
+      "tags": ["分会"]
+    },
+    {
+      "id": "cshs-branches-p3",
+      "title": "中国园艺学会·分支机构第3页",
+      "url": "https://www.cshs.org.cn/articlemenu/2/23?mark=2&id=2&thatId=23&articleId=&type=&page=3",
+      "tags": ["分会"]
+    },
+    {
+      "id": "cshs-branches-p4",
+      "title": "中国园艺学会·分支机构第4页",
+      "url": "https://www.cshs.org.cn/articlemenu/2/23?mark=2&id=2&thatId=23&articleId=&type=&page=4",
+      "tags": ["分会", "草莓分会"]
+    },
+    {
+      "id": "cshs-standards",
+      "title": "中国园艺学会·团体标准",
+      "url": "https://www.cshs.org.cn/articlemenu/5/35?mark=5",
+      "tags": ["团体标准"]
+    },
+    {
+      "id": "baafs",
+      "title": "北京市农林科学院",
+      "url": "https://www.baafs.net.cn",
+      "tags": ["品种", "脱毒", "张运涛团队"],
+      "note": "易出现 Firecrawl 隧道失败，可单独重试"
+    },
+    {
+      "id": "jaas",
+      "title": "江苏省农业科学院",
+      "url": "https://jaas.ac.cn",
+      "tags": ["宁玉", "宁丰", "种质"]
+    },
+    {
+      "id": "jaas-strawberry-service",
+      "title": "江苏农科院·草莓花果管理服务动态",
+      "url": "https://jaas.ac.cn/xww/kjfw/art/2026/art_948a4267fc4f47c2a2c4d19cbc65d215.html",
+      "tags": ["花果管理", "亚夫", "江苏"]
+    },
+    {
+      "id": "saas",
+      "title": "上海市农业科学院",
+      "url": "https://www.saas.sh.cn",
+      "tags": ["上海", "林果所", "DUS"]
+    },
+    {
+      "id": "saas-strawberry-cultivar",
+      "title": "上海农科院·草莓品种成果页",
+      "url": "https://www.saas.sh.cn/kxyj/kycg/content_5109",
+      "tags": ["上海", "草莓品种"]
+    },
+    {
+      "id": "sh-nyncw-jiading-strawberry",
+      "title": "市农委媒体报道·嘉定草莓",
+      "url": "https://nyncw.sh.gov.cn/mtbd/20250224/7ba86766c97344b2b8df0f487041169c.html",
+      "tags": ["上海", "嘉定", "季节"],
+      "bucket": "xunbao",
+      "district": "嘉定",
+      "valid_until": "2026-05-31"
+    },
+    {
+      "id": "sh-jiading-gov-strawberry-map",
+      "title": "嘉定区政府·草莓采摘相关民生稿",
+      "url": "https://www.jiading.gov.cn/xinwen/jddt1/msxw/content_878381",
+      "tags": ["上海", "嘉定", "采摘"],
+      "bucket": "xunbao",
+      "district": "嘉定",
+      "valid_until": "2025-05-31"
+    },
+    {
+      "id": "sh-shanghai-gov-jiading-promo-2026",
+      "title": "上海市政府网·嘉定草莓推介2026",
+      "url": "https://www.shanghai.gov.cn/nw15343/20260206/bcc40138f14c41678e10f960c1f52cf7.html",
+      "tags": ["上海", "嘉定", "推介"],
+      "bucket": "xunbao",
+      "district": "嘉定",
+      "valid_until": "2026-05-31"
+    },
+    {
+      "id": "sh-nyncw-nyjs",
+      "title": "上海市农委·农业技术栏目",
+      "url": "https://nyncw.sh.gov.cn/nyjs/index.html",
+      "tags": ["上海", "农业技术", "水稻意见", "一种就管", "机插", "草莓", "柑橘"],
+      "bucket": "xunbao",
+      "note": "检索「上海市水稻栽培技术意见」定位历年网页版；配套一种就管、机插育秧要点"
+    },
+    {
+      "id": "dfcxb",
+      "title": "东方城乡报·数字报",
+      "url": "https://www.dfcxb.com",
+      "tags": ["上海", "数字报", "三农", "草莓", "柑橘", "水稻"],
+      "bucket": "xunbao",
+      "note": "关联上农APP/上海三农；仅公开页；关键词见 ingest-keywords.json；App登录墙不爬"
+    },
+    {
+      "id": "moa-home",
+      "title": "农业农村部官网",
+      "url": "https://www.moa.gov.cn",
+      "tags": ["政策", "技术方案", "病虫", "核验", "T0"],
+      "bucket": "rice",
+      "note": "汇编缺口核验：三虫两病技术方案、政策公报；仅公开首页/栏目"
+    },
+    {
+      "id": "std-samr",
+      "title": "全国标准信息公共服务平台",
+      "url": "https://std.samr.gov.cn",
+      "tags": ["标准", "DB31", "核验", "T0"],
+      "bucket": "rice",
+      "note": "核验 DB31/T 1653 等地方标准发布/实施信息"
+    },
+    {
+      "id": "sh-gov",
+      "title": "上海市政府门户",
+      "url": "https://www.shanghai.gov.cn",
+      "tags": ["法规", "都市农业", "核验", "上海"],
+      "bucket": "xunbao",
+      "note": "核验都市现代农业地方性法规等官方发布"
+    },
+    {
+      "id": "sh-spcsc",
+      "title": "上海市人大常委会",
+      "url": "https://www.spcsc.sh.cn",
+      "tags": ["地方性法规", "核验", "上海"],
+      "bucket": "xunbao",
+      "note": "人大公报/法规文本核验入口"
+    },
+    {
+      "id": "cnrri",
+      "title": "中国水稻研究所",
+      "url": "https://cnrri.caas.cn",
+      "tags": ["水稻", "育种", "主推技术", "T0"],
+      "bucket": "rice"
+    },
+    {
+      "id": "chinariceinfo",
+      "title": "中国水稻信息网",
+      "url": "https://www.chinariceinfo.com",
+      "tags": ["水稻", "产业资讯", "T0"],
+      "bucket": "rice"
+    },
+    {
+      "id": "grainmarket",
+      "title": "国家粮食交易中心/粮油信息",
+      "url": "https://www.grainmarket.com.cn",
+      "tags": ["稻谷", "收购价", "出厂价", "T0"],
+      "bucket": "market",
+      "tier": "T0"
+    },
+    {
+      "id": "pfsc-agri",
+      "title": "全国农产品批发市场价格信息系统",
+      "url": "https://pfsc.agri.cn",
+      "tags": ["行情", "批发均价", "T0"],
+      "bucket": "market",
+      "tier": "T0",
+      "note": "部分明细需登录；Phase A 先抓公开首页/频道"
+    },
+    {
+      "id": "agri-cn",
+      "title": "中国农业信息网",
+      "url": "http://www.agri.cn",
+      "tags": ["行情", "供需", "T0"],
+      "bucket": "market",
+      "tier": "T0"
+    },
+    {
+      "id": "natesc",
+      "title": "全国农技中心·病虫情报入口",
+      "url": "https://www.natesc.org.cn",
+      "tags": ["病虫害", "预警", "T0"],
+      "bucket": "market",
+      "tier": "T0",
+      "skipTlsVerification": true,
+      "note": "站点证书偶发异常；仅该受信源允许 Firecrawl skipTlsVerification"
+    },
+    {
+      "id": "xinfadi-price",
+      "title": "北京新发地·价格行情",
+      "url": "http://www.xinfadi.com.cn/priceDetail.html",
+      "tags": ["批发", "新发地", "T1"],
+      "bucket": "market",
+      "tier": "T1",
+      "note": "结构清晰，Phase B 可上规则解析器"
+    },
+    {
+      "id": "jnmarket",
+      "title": "广州江南果菜批发市场",
+      "url": "http://www.jnmarket.net",
+      "tags": ["批发", "华南", "T1"],
+      "bucket": "market",
+      "tier": "T1"
+    },
+    {
+      "id": "szap",
+      "title": "深圳海吉星/深农",
+      "url": "http://www.szap.com",
+      "tags": ["批发", "华南", "T1"],
+      "bucket": "market",
+      "tier": "T1"
+    },
+    {
+      "id": "sgvindex",
+      "title": "中国·寿光蔬菜价格指数",
+      "url": "http://www.sgvindex.com",
+      "tags": ["指数", "寿光", "设施菜", "T1"],
+      "bucket": "market",
+      "tier": "T1"
+    },
+    {
+      "id": "ymt-gongying",
+      "title": "一亩田·供应大厅",
+      "url": "https://www.ymt.com/gongying/",
+      "tags": ["B2B", "产地", "T3"],
+      "bucket": "market",
+      "tier": "T3",
+      "note": "登录态 Persistent Profile；Phase D 默认 fixture/seed，禁盲爬"
+    },
+    {
+      "id": "ymt-hangqing",
+      "title": "一亩田·行情中心",
+      "url": "https://www.ymt.com/hangqing/",
+      "tags": ["B2B", "行情", "T3"],
+      "bucket": "market",
+      "tier": "T3"
+    },
+    {
+      "id": "cnhnb-supply",
+      "title": "惠农网·供应大厅",
+      "url": "https://www.cnhnb.com/supply/",
+      "tags": ["B2B", "产地", "T3"],
+      "bucket": "market",
+      "tier": "T3",
+      "note": "完整手机号需登录；仅存脱敏 contact_masked"
+    },
+    {
+      "id": "cnhnb-hangqing",
+      "title": "惠农网·行情中心",
+      "url": "https://www.cnhnb.com/hangqing/",
+      "tags": ["B2B", "行情", "T3"],
+      "bucket": "market",
+      "tier": "T3"
+    },
+    {
+      "id": "brief-cshs",
+      "title": "会前动态·中国园艺学会",
+      "url": "https://www.cshs.org.cn",
+      "tags": ["briefing", "学会", "草莓"],
+      "bucket": "briefing",
+      "note": "仅公开首页标题/摘要，不作规程全文"
+    },
+    {
+      "id": "brief-saas",
+      "title": "会前动态·上海农科院",
+      "url": "https://www.saas.sh.cn",
+      "tags": ["briefing", "上海", "品种"],
+      "bucket": "briefing",
+      "note": "仅公开首页/要闻摘要"
+    },
+    {
+      "id": "brief-moa",
+      "title": "会前动态·农业农村部",
+      "url": "https://www.moa.gov.cn",
+      "tags": ["briefing", "政策", "T0"],
+      "bucket": "briefing",
+      "note": "仅公开首页要闻标题"
+    },
+    {
+      "id": "brief-cnrri",
+      "title": "会前动态·中国水稻研究所",
+      "url": "https://cnrri.caas.cn",
+      "tags": ["briefing", "水稻"],
+      "bucket": "briefing",
+      "note": "仅公开首页摘要"
+    },
+    {
+      "id": "brief-sh-nyncw",
+      "title": "会前动态·市农委农业技术",
+      "url": "https://nyncw.sh.gov.cn/nyjs/index.html",
+      "tags": ["briefing", "上海", "农技"],
+      "bucket": "briefing",
+      "note": "仅栏目列表标题，不作当年意见全文替代"
+    },
+    {
+      "id": "brief-jaas",
+      "title": "会前动态·江苏农科院",
+      "url": "https://jaas.ac.cn",
+      "tags": ["briefing", "江苏", "草莓"],
+      "bucket": "briefing",
+      "note": "仅公开首页摘要"
+    }
+  ]
+}

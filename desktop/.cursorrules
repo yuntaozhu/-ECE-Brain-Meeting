@@ -110,19 +110,25 @@
 
 ## 5. 开发知识库（与会中库隔离）
 
-算法论文与引擎取舍在 `desktop/dev_knowledge/`（INDEX + `adr/` + wiki）。会中召回与口播 **禁止** 读该目录；该目录句子 **禁止** 写入 `faq-meeting.txt`。
+算法论文与引擎取舍在仓库根 **`dev_knowledge/`**（原 `desktop/dev_knowledge` 已提升）。  
+- 会场底座 ADR：`dev_knowledge/shared/adr/`  
+- 大智专属：`dev_knowledge/projects/desktop/`  
+- 论文 Wiki：`dev_knowledge/wiki/`  
+
+会中召回与口播 **禁止** 读该目录；该目录句子 **禁止** 写入 `faq-meeting.txt`。
 
 改对齐、后验、豆包、记忆、副驾驶、评测前先查：
 
 | 主题 | 打开 |
 | --- | --- |
-| 导航 | `dev_knowledge/INDEX.md` |
-| 智能层总览 | `adr/017` · `lib/intelligence/contract.cjs` |
-| 受众帧 | `adr/018` · `frameGate.cjs` |
-| 双通道 / 顾问 | `adr/019` · `askLane.cjs` |
-| Dialogue-Meta | `adr/020` · `dialogueMeta.cjs` · `schema/dialogue-meta.json` |
-| oralize / lane | `adr/021` |
-| Agent / Copilot | `adr/022` · `toolHops.cjs` · `copilot/refine.cjs` · `skeleton.cjs` |
-| Focus / 催答 / 纠偏 | `adr/023` · `memory.cjs` · `paths/consult/gate.cjs` |
+| 导航 | `dev_knowledge/INDEX.md` · `projects/desktop/INDEX.md` |
+| 智能层总览 | `projects/desktop/adr/017` · `lib/intelligence/contract.cjs` |
+| 受众帧 | `projects/desktop/adr/018` · `frameGate.cjs` |
+| 双通道 / 顾问 | `projects/desktop/adr/019` · `askLane.cjs` |
+| Dialogue-Meta | `projects/desktop/adr/020` · `dialogueMeta.cjs` · `schema/dialogue-meta.json` |
+| oralize / lane | `projects/desktop/adr/021` |
+| Agent / Copilot | `projects/desktop/adr/022` · `toolHops.cjs` · `copilot/refine.cjs` · `skeleton.cjs` |
+| Focus / 催答 / 纠偏 | `projects/desktop/adr/023` · `memory.cjs` · `paths/consult/gate.cjs` |
+| 双轨 / VAD / Whisper | `shared/adr/001`～`003` |
 
-以代码与本文件为现状；新决策先进 `adr/`，再回写本宪法与 `.cursor/rules/desktop-architecture.mdc`。
+以代码与本文件为现状；新决策先进 `dev_knowledge/projects/desktop/adr/`（通用则升格 `shared/`），再回写本宪法与 `.cursor/rules/desktop-architecture.mdc`。

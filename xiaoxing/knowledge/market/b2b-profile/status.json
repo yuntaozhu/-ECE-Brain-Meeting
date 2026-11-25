@@ -1,0 +1,16 @@
+{
+  "platforms": {
+    "ymt": {
+      "logged_in": false,
+      "last_keepalive": null,
+      "note": "人工扫码登录后将 logged_in 置 true；需 XIAOXING_B2B_LIVE=1 才允许抽取"
+    },
+    "cnhnb": {
+      "logged_in": false,
+      "last_keepalive": null,
+      "note": "同上"
+    }
+  },
+  "outbound_call_enabled": false,
+  "updated_at": null
+}

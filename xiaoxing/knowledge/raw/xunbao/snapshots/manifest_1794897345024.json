@@ -1,0 +1,22 @@
+[
+  {
+    "id": "sh-nyncw-jiading-strawberry",
+    "bucket": "xunbao",
+    "file": "sh-nyncw-jiading-strawberry_2026-11-17T06-34-48-968Z.md",
+    "chars": 7593,
+    "ok": true
+  },
+  {
+    "id": "sh-jiading-gov-strawberry-map",
+    "bucket": "xunbao",
+    "ok": false,
+    "error": "Firecrawl scrape 500: The URL failed to load in the browser with error code \"ERR_TUNNEL_CONNECTION_FAILED\". Firecrawl encountered an internal proxy error while establishing the tunnel. This is an internal Firecrawl proxy error. Please retry or contact support."
+  },
+  {
+    "id": "sh-shanghai-gov-jiading-promo-2026",
+    "bucket": "xunbao",
+    "file": "sh-shanghai-gov-jiading-promo-2026_2026-11-17T06-35-45-021Z.md",
+    "chars": 1739,
+    "ok": true
+  }
+]
