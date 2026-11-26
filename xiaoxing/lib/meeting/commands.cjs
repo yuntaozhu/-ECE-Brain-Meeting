@@ -45,7 +45,7 @@ function stripWake(text) {
 }
 
 /**
- * @returns {{ kind: 'wake'|'sleep'|'meeting_start'|'meeting_stop'|'urge'|'recall'|'ask'|'ignore', body: string }}
+ * @returns {{ kind: 'wake'|'sleep'|'meeting_start'|'meeting_stop'|'urge'|'recall'|'interrupt'|'next_agenda'|'host_wrap'|'ask'|'ignore', body: string }}
  */
 function classifyUtterance(text) {
   const raw = String(text || "").trim();
@@ -53,6 +53,9 @@ function classifyUtterance(text) {
   const cfg = loadCommands();
   if (includesAny(raw, cfg.meetingStartPatterns)) return { kind: "meeting_start", body: raw };
   if (includesAny(raw, cfg.meetingStopPatterns)) return { kind: "meeting_stop", body: raw };
+  if (includesAny(raw, cfg.interruptPatterns)) return { kind: "interrupt", body: raw };
+  if (includesAny(raw, cfg.nextAgendaPatterns)) return { kind: "next_agenda", body: raw };
+  if (includesAny(raw, cfg.hostWrapPatterns)) return { kind: "host_wrap", body: raw };
   if (includesAny(raw, cfg.sleepPatterns)) return { kind: "sleep", body: raw };
   if (includesAny(raw, cfg.recallPatterns)) return { kind: "recall", body: raw };
   if (includesAny(raw, cfg.urgePatterns)) return { kind: "urge", body: raw };

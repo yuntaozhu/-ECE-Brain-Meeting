@@ -5,15 +5,23 @@
 
 密钥只放本地 `.env` 或部署环境变量。`.env` 已在 `.gitignore`。`.env.example` 里 `ARK_API_KEY` / AK/SK 必须留空。
 
+## 产品接线（2026-11-26）
+
+- 桌面驾驶舱「RTC AI 成员」卡 → `desktop/lib/rtc/voiceChatClient.cjs`（HTTP，不持 AK/SK）。
+- 默认后端：`DAZHI_SERVER_URL` 或 `http://127.0.0.1:3000`（先 `npm run dev`）。
+- 回调与 join/kick/interrupt 写入统一 `MeetingEvent`（`server/lib/meetingEvents.ts`）；可 `GET /api/dazhi/voicechat/events`。
+- 方案：`docs/meeting-control-mvp.md`。
+
 ## 已实现接口
 
 | 方法 | 路径 | 作用 |
 |------|------|------|
 | GET | `/api/dazhi/voicechat/status` | 环境变量、AppId 一致性、当前任务数 |
+| GET | `/api/dazhi/voicechat/events` | 近期 MeetingEvent（可 `meeting_id` / `limit`） |
 | POST | `/api/dazhi/voicechat/join` | `joinDazhiToRoom`，同一 `roomId` 幂等 |
 | POST | `/api/dazhi/voicechat/kick` | `kickDazhiFromRoom`，用户离房必须调用 |
 | POST | `/api/dazhi/voicechat/interrupt` | `UpdateVoiceChat` + `Command: "Interrupt"` |
-| POST | `/rtc/voicechat/callback` | 控制台 VoiceChat 事件回调 |
+| POST | `/rtc/voicechat/callback` | 控制台 VoiceChat 事件回调 → MeetingEvent |
 | GET/POST | `/rtc/callback` | 预留回调入口（先回 200 `{}`，公网地址联调后再完善验签） |
 
 真人加房 Token（已有，勿新建平行接口）：

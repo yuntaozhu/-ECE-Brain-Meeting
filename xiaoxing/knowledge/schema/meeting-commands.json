@@ -7,6 +7,9 @@
   "identityFallback": "你是谁",
   "urgePatterns": ["请回答", "请回答我", "回答一下", "再说一遍", "重说一遍"],
   "recallPatterns": ["我刚刚问了什么", "刚才问了什么", "我刚问什么", "上一个问题"],
+  "interruptPatterns": ["小星停一下", "先别说了", "打断一下", "暂停播报"],
+  "nextAgendaPatterns": ["下一议程", "下一项", "下一个议题", "进入下一项"],
+  "hostWrapPatterns": ["总结一下议程", "今天议程到哪了", "提醒一下进度"],
   "halfDuplex": {
     "ignoreConsultWhileSpeaking": true,
     "keepListeningTranscript": true
@@ -15,6 +18,11 @@
   "comment_defaultArmed": "听会默认 Me 说完即问；「谢谢小星」解除武装旁听，再叫小星可恢复",
   "assistantMode": "content",
   "comment_assistantMode": "content=内容助手优先答知识；host=主持控场优先口令节奏；不做专家人设包",
+  "hostReplies": {
+    "interrupt": "好的，我先停下。需要时再叫小星。",
+    "nextAgenda": "请进入下一项议程；需要我念提纲或答知识，直接叫小星。",
+    "wrap": "当前以听会与口令控场为主；详细摘要可会后生成。需要我答某一议题请点名提问。"
+  },
   "promptIngestOnNewFact": true,
   "comment_promptIngestOnNewFact": "会中出现可沉淀新数据时提示可一键进 inbox（D4）"
 }

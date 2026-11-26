@@ -16,7 +16,12 @@
     "xiaoxing:ask": "npm --prefix xiaoxing run ask --",
     "xiaoxing:voice": "npm --prefix xiaoxing run voice --",
     "chat:obsidian": "node scripts/export-chat-obsidian.cjs",
-    "chat:obsidian:full": "node scripts/export-chat-obsidian.cjs --full"
+    "chat:obsidian:full": "node scripts/export-chat-obsidian.cjs --full",
+    "smoke:meeting-events": "node scripts/smoke-meeting-events.cjs",
+    "smoke:meeting-bot": "node scripts/smoke-meeting-bot.cjs",
+    "smoke:meeting-control": "node scripts/smoke-meeting-control.cjs",
+    "smoke:meeting-ops": "node scripts/smoke-meeting-ops.cjs",
+    "smoke:meeting-admin": "node scripts/smoke-meeting-admin.cjs"
   },
   "engines": {
     "node": ">=20"

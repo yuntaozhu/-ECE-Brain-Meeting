@@ -225,6 +225,32 @@ ipcMain.handle("xiaoxing:meAsrForceAsk", async (_e, on) => {
   return { ok: true, forceAsk: meForceAskFlag };
 });
 
+const meetingAdminClient = require("./lib/meeting/adminClient.cjs");
+ipcMain.handle("xiaoxing:adminHealth", async () => meetingAdminClient.health());
+ipcMain.handle("xiaoxing:adminExperts", async () => meetingAdminClient.experts());
+ipcMain.handle("xiaoxing:adminUpsertExpert", async (_e, payload) =>
+  meetingAdminClient.upsertExpert(payload || {})
+);
+ipcMain.handle("xiaoxing:adminSetExpertEnabled", async (_e, payload) =>
+  meetingAdminClient.setExpertEnabled(payload?.id, payload?.enabled !== false)
+);
+ipcMain.handle("xiaoxing:adminTopics", async (_e, payload) =>
+  meetingAdminClient.topics(payload || {})
+);
+ipcMain.handle("xiaoxing:adminUpsertTopic", async (_e, payload) =>
+  meetingAdminClient.upsertTopic(payload || {})
+);
+ipcMain.handle("xiaoxing:adminDeleteTopic", async (_e, payload) =>
+  meetingAdminClient.deleteTopic(payload?.id)
+);
+ipcMain.handle("xiaoxing:adminSessions", async () => meetingAdminClient.sessions());
+ipcMain.handle("xiaoxing:adminCreateSession", async (_e, payload) =>
+  meetingAdminClient.createSession(payload || {})
+);
+ipcMain.handle("xiaoxing:adminPatchSession", async (_e, payload) =>
+  meetingAdminClient.patchSession(payload?.id, payload || {})
+);
+
 ipcMain.handle("xiaoxing:meetingStart", async (_e, payload = {}) => {
   const r = meeting.startMeeting(payload || {});
   let industryBriefing = null;

@@ -422,6 +422,70 @@
       .aid-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
       .jot-row { display: flex; gap: 6px; margin: 0 0 8px; }
       .hint-muted { font-size: 11px; color: #64748b; }
+
+      /* —— 会议管理台 —— */
+      .hidden { display: none !important; }
+      #adminConsole {
+        position: fixed; inset: 0; z-index: 80;
+        display: grid; grid-template-columns: 200px 1fr;
+        background: #f4f7fb; color: #0f172a; font-family: var(--font);
+      }
+      #adminConsole.hidden { display: none !important; }
+      .admin-side {
+        background: #fff; border-right: 1px solid #e2e8f0;
+        display: flex; flex-direction: column; padding: 16px 12px;
+      }
+      .admin-side .brand { font-weight: 700; color: #0ea5e9; margin-bottom: 18px; font-size: 14px; }
+      .admin-side button[data-admin-nav] {
+        text-align: left; background: transparent; color: #334155; border: 0;
+        padding: 10px 12px; border-radius: 10px; margin-bottom: 4px; width: 100%;
+      }
+      .admin-side button[data-admin-nav].active { background: #e0f2fe; color: #0369a1; font-weight: 700; }
+      .admin-main { padding: 16px 20px; overflow: auto; }
+      .admin-pane { display: none; }
+      .admin-pane.active { display: block; }
+      .admin-grid { display: grid; grid-template-columns: 1.2fr 0.9fr; gap: 16px; }
+      .admin-card {
+        background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px;
+      }
+      .admin-card h3 { margin: 0 0 10px; font-size: 15px; }
+      .admin-expert {
+        display: block; width: 100%; text-align: left; margin-bottom: 8px;
+        background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px 12px; color: #0f172a;
+      }
+      .admin-expert.selected { border-color: #38bdf8; box-shadow: 0 0 0 2px rgba(56,189,248,.25); }
+      .admin-expert span { display: block; font-size: 11px; color: #64748b; margin-top: 4px; }
+      .admin-topic-row { display: block; font-size: 12px; margin: 6px 0; color: #334155; }
+      table.admin-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      table.admin-table th, table.admin-table td {
+        border-bottom: 1px solid #e2e8f0; padding: 8px 6px; text-align: left; vertical-align: top;
+      }
+      .admin-toast { margin-top: 10px; font-size: 12px; color: #0369a1; }
+      .admin-toast.bad { color: #b91c1c; }
+      .admin-opening {
+        background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 10px;
+        padding: 12px; font-size: 13px; line-height: 1.55; color: #065f46; white-space: pre-wrap;
+      }
+      #meetingControlBar {
+        position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+        z-index: 70; display: flex; gap: 8px; padding: 8px 10px;
+        background: rgba(255,255,255,.96); border: 1px solid #e2e8f0; border-radius: 14px;
+        box-shadow: 0 10px 30px rgba(15,23,42,.18);
+      }
+      #meetingControlBar button {
+        min-width: 88px; border-radius: 10px; border: 1px solid #e2e8f0; background: #f8fafc; color: #0f172a;
+      }
+      #ctrlRemind { border-color: #86efac; background: #f0fdf4; color: #166534; }
+      #ctrlWake { border-color: #7dd3fc; background: #f0f9ff; color: #075985; }
+      #ctrlInterrupt { border-color: #fcd34d; background: #fffbeb; color: #92400e; }
+      #ctrlEnd { background: #ef4444; color: #fff; border-color: #ef4444; }
+      .meeting-live-status { font-size: 11px; color: var(--muted); margin-left: 8px; }
+      .meeting-live-status.speaking { color: var(--accent-emerald); font-weight: 700; }
+      #meetingAgendaBanner {
+        position: fixed; left: 16px; right: 16px; bottom: 78px; z-index: 69;
+        background: #fef3c7; color: #92400e; border: 1px solid #fcd34d;
+        border-radius: 10px; padding: 8px 12px; font-size: 12px; font-weight: 650;
+      }
     </style>
   </head>
   <body>
@@ -474,9 +538,11 @@
             <label title="Wave L 接入原生防录屏"><input id="winStealthProtect" type="checkbox" checked /> 防录屏</label>
             <label>透明度 <input id="winOpacity" type="range" min="55" max="100" value="100" /></label>
           </div>
+          <button type="button" id="btnOpenAdmin" class="accent">会议管理</button>
           <button type="button" id="togglePreflightBtn" class="ghost">
             设备与核对 <span id="preflightSummaryBadge">待核对</span><span class="chev">▴</span>
           </button>
+          <span id="meetingLiveStatus" class="meeting-live-status">未开始</span>
         </div>
       </header>
 
@@ -533,6 +599,57 @@
           <button id="btnSessions" class="ghost" type="button">打开本场记录</button>
         </div>
       </section>
+
+          <section class="preflight-card">
+            <h2>RTC AI 成员（火山 VoiceChat）</h2>
+            <p class="help" style="font-size:11px;color:var(--muted);margin:0 0 8px">
+              需先 <code>npm run dev</code> 起业务后端。AI 入会身份提示与打断/离会走服务端；密钥不进桌面。
+            </p>
+            <label class="check">房间号
+              <input id="rtcRoomId" type="text" placeholder="roomId" style="width:100%;margin-top:4px" />
+            </label>
+            <label class="check">真人 UserId
+              <input id="rtcTargetUserId" type="text" placeholder="与加房 Token 的 userId 一致" style="width:100%;margin-top:4px" />
+            </label>
+            <div class="row" style="margin-top:8px;flex-wrap:wrap;gap:6px">
+              <button id="rtcStatus" class="ghost" type="button">查状态</button>
+              <button id="rtcJoin" class="accent" type="button">AI 入会</button>
+              <button id="rtcInterrupt" class="ghost" type="button">打断</button>
+              <button id="rtcKick" class="danger" type="button">请离会</button>
+            </div>
+            <p id="rtcStatusLine" class="status warn" style="margin-top:8px;font-size:11px">未查询</p>
+          </section>
+
+          <section class="preflight-card">
+            <h2>外部会议 Bot（转写）</h2>
+            <p class="help" style="font-size:11px;color:var(--muted);margin:0 0 8px">
+              Bot <strong>不能</strong>默认在原会议发言；仅拉转写供屏幕建议。无密钥时服务端 dry-run。
+            </p>
+            <label class="check">平台
+              <select id="botPlatform" style="width:100%;margin-top:4px">
+                <option value="google_meet">Google Meet</option>
+                <option value="teams">Microsoft Teams</option>
+                <option value="zoom">Zoom</option>
+              </select>
+            </label>
+            <label class="check">会议 ID
+              <input id="botNativeId" type="text" placeholder="native_meeting_id" style="width:100%;margin-top:4px" />
+            </label>
+            <div class="row" style="margin-top:8px;flex-wrap:wrap;gap:6px">
+              <button id="botStatus" class="ghost" type="button">查状态</button>
+              <button id="botCreate" class="accent" type="button">派 Bot</button>
+              <button id="botPull" class="ghost" type="button">拉转写</button>
+              <button id="botStop" class="danger" type="button">停 Bot</button>
+            </div>
+            <p id="botStatusLine" class="status warn" style="margin-top:8px;font-size:11px">未查询 · speakInMeeting=false</p>
+            <div class="row" style="margin-top:6px;flex-wrap:wrap;gap:6px">
+              <button id="opsHealth" class="ghost" type="button">运维健康</button>
+              <button id="opsAudit" class="ghost" type="button">审计摘要</button>
+              <button id="opsCost" class="ghost" type="button">费用计数</button>
+              <button id="opsDelete" class="danger" type="button">按会删除</button>
+            </div>
+            <p id="opsHealthLine" class="status warn" style="margin-top:6px;font-size:11px">未查询 meeting-ops</p>
+          </section>
 
           <section class="preflight-card">
             <h2>环路拓扑 · 说明</h2>
@@ -634,6 +751,136 @@
       </section>
     </main>
     </div>
+
+    <div id="meetingAgendaBanner" class="hidden">本次议题</div>
+    <div id="meetingControlBar" class="hidden" role="toolbar" aria-label="会中控条">
+      <button type="button" id="ctrlRemind">会前提醒</button>
+      <button type="button" id="ctrlWake">唤起小智</button>
+      <button type="button" id="ctrlInterrupt">打断</button>
+      <button type="button" id="ctrlMute">静音</button>
+      <button type="button" id="ctrlEnd">结束</button>
+    </div>
+
+    <div id="adminConsole" class="hidden">
+      <aside class="admin-side">
+        <div class="brand">大智 AI 领航会议</div>
+        <button type="button" data-admin-nav="meeting" class="active">会议</button>
+        <button type="button" data-admin-nav="experts">专家</button>
+        <button type="button" data-admin-nav="topics">议题</button>
+        <button type="button" data-admin-nav="records">记录</button>
+        <button type="button" data-admin-nav="live">会中预览</button>
+        <button type="button" data-admin-nav="system">系统</button>
+        <div style="flex:1"></div>
+        <button type="button" id="btnCloseAdmin" class="ghost">返回驾驶舱</button>
+        <p style="font-size:11px;color:#64748b;margin:8px 4px 0">系统管理员</p>
+      </aside>
+      <div class="admin-main">
+        <div class="admin-pane active" data-admin-pane="meeting">
+          <div class="admin-grid">
+            <div class="admin-card">
+              <h3>选择专家</h3>
+              <div id="adminExpertList"></div>
+            </div>
+            <div class="admin-card">
+              <h3>准备这场会议</h3>
+              <label>会议名称</label>
+              <input id="adminMeetingName" type="text" value="经营" />
+              <label>会议类型</label>
+              <select id="adminMeetingType">
+                <option>讨论会议</option>
+                <option>教研会议</option>
+                <option>经营会议</option>
+              </select>
+              <label>参会对象</label>
+              <select id="adminAudience">
+                <option value="园长">园长</option>
+                <option value="执行校董">执行校董</option>
+                <option value="教学主任">教学主任</option>
+              </select>
+              <label>议题</label>
+              <div id="adminMeetingTopics">加载中…</div>
+              <div class="row" style="margin-top:12px">
+                <button type="button" id="adminEnterMeeting" class="primary">进入会议</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="admin-pane" data-admin-pane="experts">
+          <div class="admin-card">
+            <h3>专家库</h3>
+            <div class="row">
+              <input id="adminNewExpertName" type="text" placeholder="名称" style="flex:1" />
+              <input id="adminNewExpertCat" type="text" placeholder="分类" style="width:100px" />
+              <input id="adminNewExpertVoice" type="text" placeholder="声音" style="width:120px" />
+              <button type="button" id="adminAddExpert" class="accent">新建专家</button>
+            </div>
+            <input id="adminNewExpertIntro" type="text" placeholder="简介" style="margin-top:8px" />
+            <input id="adminNewExpertKb" type="text" placeholder="知识库" style="margin-top:8px" />
+            <table class="admin-table" style="margin-top:12px">
+              <thead><tr><th>名称</th><th>分类</th><th>简介</th><th>知识库</th><th>声音</th><th>启用</th></tr></thead>
+              <tbody id="adminExpertTable"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="admin-pane" data-admin-pane="topics">
+          <div class="admin-card">
+            <h3>议题</h3>
+            <div class="row">
+              <input id="adminTopicProject" type="text" value="AI传记-星火记" style="width:180px" />
+              <input id="adminNewTopicTitle" type="text" placeholder="标题" style="flex:1" />
+              <button type="button" id="adminAddTopic" class="accent">新增议题</button>
+            </div>
+            <input id="adminNewTopicDisc" type="text" placeholder="讨论说明" style="margin-top:8px" />
+            <table class="admin-table" style="margin-top:12px">
+              <thead><tr><th>标题</th><th>讨论说明</th><th>参会对象</th><th></th></tr></thead>
+              <tbody id="adminTopicTable"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="admin-pane" data-admin-pane="records">
+          <div class="admin-card">
+            <h3>会场记录</h3>
+            <div id="adminSessionList"></div>
+          </div>
+        </div>
+        <div class="admin-pane" data-admin-pane="live">
+          <div class="admin-card">
+            <div class="row" style="justify-content:space-between;margin:0 0 8px">
+              <h3 style="margin:0">会前 / 会中预览</h3>
+              <span id="adminLiveBadge" style="font-size:11px;border:1px solid #93c5fd;color:#1d4ed8;border-radius:8px;padding:4px 8px">未开始</span>
+            </div>
+            <div class="row" style="justify-content:space-between">
+              <p id="adminSessionIdLine" style="font-size:12px;color:#64748b;margin:0"></p>
+              <button type="button" id="adminTraffic" class="ghost" style="color:#166534;border-color:#86efac">流量查看</button>
+            </div>
+            <p id="adminCurrentAgenda" style="margin:8px 0;padding:8px 10px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:12px;color:#92400e;font-weight:650">本次议题 · 待进入</p>
+            <p style="font-size:12px;font-weight:650;color:#92400e">开场提示</p>
+            <div id="adminOpeningPrompt" class="admin-opening">进入会议后生成开场提示</div>
+            <div class="row" style="margin-top:12px;gap:16px;align-items:center">
+              <div style="font-size:12px;color:#64748b">
+                <div>参会对象 · <span id="adminPartStatus">轮候中</span></div>
+                <div style="margin-top:4px">小智 · <span id="adminAiStatus">轮候中</span></div>
+              </div>
+              <button type="button" id="adminStartLive" class="primary">开始</button>
+              <button type="button" id="adminNextAgenda" class="ghost">下一议程</button>
+            </div>
+          </div>
+        </div>
+        <div class="admin-pane" data-admin-pane="system">
+          <div class="admin-card">
+            <h3>系统</h3>
+            <p style="font-size:12px;color:#64748b">管理数据 product=dazhi；运维复用 meeting-ops。</p>
+            <div class="row">
+              <button type="button" id="adminOpsHealth" class="ghost">运维健康</button>
+              <button type="button" id="adminOpsAudit" class="ghost">审计摘要</button>
+            </div>
+            <p id="adminSystemLine" style="font-size:12px;margin-top:8px;color:#0369a1">未查询</p>
+          </div>
+        </div>
+        <p id="adminToast" class="admin-toast"></p>
+      </div>
+    </div>
+
     <script type="module" src="app.js"></script>
   </body>
 </html>

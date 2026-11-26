@@ -13,6 +13,41 @@ contextBridge.exposeInMainWorld("bridge", {
   setDualTrackMe: (enable) => ipcRenderer.invoke("listen:setDualTrackMe", enable),
   strategyEvaluate: (payload) => ipcRenderer.invoke("strategy:evaluate", payload),
   hostSpeak: (text) => ipcRenderer.invoke("host:speak", text),
+  /** 火山 RTC AI 成员（经业务后端，不持 AK/SK） */
+  rtcVoiceChatStatus: () => ipcRenderer.invoke("rtc:voicechat:status"),
+  rtcVoiceChatJoin: (payload) => ipcRenderer.invoke("rtc:voicechat:join", payload || {}),
+  rtcVoiceChatKick: (payload) => ipcRenderer.invoke("rtc:voicechat:kick", payload || {}),
+  rtcVoiceChatInterrupt: (payload) =>
+    ipcRenderer.invoke("rtc:voicechat:interrupt", payload || {}),
+  rtcVoiceChatEvents: (payload) => ipcRenderer.invoke("rtc:voicechat:events", payload || {}),
+  /** 外部会议 Bot（转写 only；speakInMeeting=false） */
+  meetingBotStatus: () => ipcRenderer.invoke("meeting-bot:status"),
+  meetingBotCreate: (payload) => ipcRenderer.invoke("meeting-bot:create", payload || {}),
+  meetingBotStop: (payload) => ipcRenderer.invoke("meeting-bot:stop", payload || {}),
+  meetingBotTranscripts: (payload) =>
+    ipcRenderer.invoke("meeting-bot:transcripts", payload || {}),
+  meetingOpsHealth: () => ipcRenderer.invoke("meeting-ops:health"),
+  meetingOpsAudit: (payload) => ipcRenderer.invoke("meeting-ops:audit", payload || {}),
+  meetingOpsCost: () => ipcRenderer.invoke("meeting-ops:cost"),
+  meetingOpsDelete: (payload) => ipcRenderer.invoke("meeting-ops:delete", payload || {}),
+  meetingAdminHealth: () => ipcRenderer.invoke("meeting-admin:health"),
+  meetingAdminExperts: () => ipcRenderer.invoke("meeting-admin:experts"),
+  meetingAdminUpsertExpert: (payload) =>
+    ipcRenderer.invoke("meeting-admin:upsertExpert", payload || {}),
+  meetingAdminSetExpertEnabled: (payload) =>
+    ipcRenderer.invoke("meeting-admin:setExpertEnabled", payload || {}),
+  meetingAdminTopics: (payload) => ipcRenderer.invoke("meeting-admin:topics", payload || {}),
+  meetingAdminUpsertTopic: (payload) =>
+    ipcRenderer.invoke("meeting-admin:upsertTopic", payload || {}),
+  meetingAdminDeleteTopic: (payload) =>
+    ipcRenderer.invoke("meeting-admin:deleteTopic", payload || {}),
+  meetingAdminSessions: () => ipcRenderer.invoke("meeting-admin:sessions"),
+  meetingAdminCreateSession: (payload) =>
+    ipcRenderer.invoke("meeting-admin:createSession", payload || {}),
+  meetingAdminGetSession: (payload) =>
+    ipcRenderer.invoke("meeting-admin:getSession", payload || {}),
+  meetingAdminPatchSession: (payload) =>
+    ipcRenderer.invoke("meeting-admin:patchSession", payload || {}),
   sessionAppend: (payload) => ipcRenderer.invoke("session:append", payload),
   sessionOpenDir: () => ipcRenderer.invoke("session:open-dir"),
   interactionMode: () => ipcRenderer.invoke("session:mode"),

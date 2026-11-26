@@ -36,7 +36,7 @@ function runConsult(query, meta = {}) {
 
 /**
  * 处理会中一句转写（主路径：Me 唤醒/口令/提问；Others 只记转写）
- * @param {{ track: 'me'|'others', text: string, forceAsk?: boolean }} input
+ * @param {{ track: 'me'|'others', text: string, forceAsk?: boolean, speaker?: string, provider?: string, confirmed?: boolean }} input
  */
 function handleMeetingUtterance(input = {}) {
   const track = input.track === "others" ? "others" : "me";
@@ -49,7 +49,17 @@ function handleMeetingUtterance(input = {}) {
     mtg = session.getMeeting();
   }
 
-  session.appendLine({ type: "transcript", track, text });
+  const speaker = input.speaker ? String(input.speaker).trim() : track === "me" ? "me" : "others";
+  session.appendLine({
+    type: "transcript",
+    track,
+    text,
+    speaker,
+    provider: input.provider || "xiaoxing_local",
+    // 模型/自动转写默认草稿；用户确认后可传 confirmed:true
+    draft: input.confirmed === true ? false : true,
+    confirmed: input.confirmed === true
+  });
 
   if (track === "others") {
     const suggest =
@@ -105,6 +115,47 @@ function handleMeetingUtterance(input = {}) {
   if (cls.kind === "meeting_stop") {
     const stopped = session.stopMeeting();
     return { ok: true, action: "meeting_stop", meeting: stopped.meeting };
+  }
+  if (cls.kind === "interrupt") {
+    session.setSpeaking(false);
+    const reply =
+      (cfg.hostReplies && cfg.hostReplies.interrupt) ||
+      "好的，我先停下。需要时再叫小星。";
+    session.appendLine({ type: "host_interrupt", text, reply });
+    return {
+      ok: true,
+      action: "interrupt",
+      reply,
+      meeting: session.getMeeting(),
+      focus: focus.getFocus(),
+      meetingEventHint: "ai.interrupted"
+    };
+  }
+  if (cls.kind === "next_agenda") {
+    const reply =
+      (cfg.hostReplies && cfg.hostReplies.nextAgenda) ||
+      "请进入下一项议程；需要我答知识请直接叫小星。";
+    session.appendLine({ type: "host_next_agenda", text, reply });
+    return {
+      ok: true,
+      action: "next_agenda",
+      reply,
+      meeting: session.getMeeting(),
+      focus: focus.getFocus()
+    };
+  }
+  if (cls.kind === "host_wrap") {
+    const reply =
+      (cfg.hostReplies && cfg.hostReplies.wrap) ||
+      "当前以听会与口令控场为主；详细摘要可会后生成。";
+    session.appendLine({ type: "host_wrap", text, reply });
+    return {
+      ok: true,
+      action: "host_wrap",
+      reply,
+      meeting: session.getMeeting(),
+      focus: focus.getFocus()
+    };
   }
   if (cls.kind === "sleep") {
     session.setArmed(false);

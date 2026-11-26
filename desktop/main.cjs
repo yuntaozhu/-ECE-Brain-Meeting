@@ -687,6 +687,99 @@ app.whenReady().then(() => {
   };
   ipcMain.handle("strategy:evaluate", createStrategyEvaluate(rt));
 
+  const voiceChatClient = require("./lib/rtc/voiceChatClient.cjs");
+  ipcMain.handle("rtc:voicechat:status", async () => {
+    const r = await voiceChatClient.status();
+    return { ...r, server: voiceChatClient.serverBase() };
+  });
+  ipcMain.handle("rtc:voicechat:join", async (_e, payload) => {
+    const roomId = String(payload?.roomId || "").trim();
+    const targetUserId = String(payload?.targetUserId || "").trim();
+    debugLog.info("RTC", "voicechat join", { roomId, targetUserId });
+    return voiceChatClient.join({ roomId, targetUserId });
+  });
+  ipcMain.handle("rtc:voicechat:kick", async (_e, payload) => {
+    const roomId = String(payload?.roomId || "").trim();
+    const taskId = payload?.taskId ? String(payload.taskId) : undefined;
+    debugLog.info("RTC", "voicechat kick", { roomId, taskId });
+    return voiceChatClient.kick({ roomId, taskId });
+  });
+  ipcMain.handle("rtc:voicechat:interrupt", async (_e, payload) => {
+    const roomId = String(payload?.roomId || "").trim();
+    const taskId = payload?.taskId ? String(payload.taskId) : undefined;
+    debugLog.info("RTC", "voicechat interrupt", { roomId, taskId });
+    return voiceChatClient.interrupt({ roomId, taskId });
+  });
+  ipcMain.handle("rtc:voicechat:events", async (_e, payload) => {
+    return voiceChatClient.events({
+      meeting_id: payload?.meeting_id || payload?.roomId,
+      limit: payload?.limit
+    });
+  });
+
+  const meetingBotClient = require("./lib/rtc/meetingBotClient.cjs");
+  ipcMain.handle("meeting-bot:status", async () => {
+    const r = await meetingBotClient.status();
+    return { ...r, server: meetingBotClient.serverBase() };
+  });
+  ipcMain.handle("meeting-bot:create", async (_e, payload) => {
+    debugLog.info("MeetingBot", "create", {
+      platform: payload?.platform,
+      nativeMeetingId: payload?.nativeMeetingId
+    });
+    return meetingBotClient.create(payload || {});
+  });
+  ipcMain.handle("meeting-bot:stop", async (_e, payload) => {
+    debugLog.info("MeetingBot", "stop", payload || {});
+    return meetingBotClient.stop(payload || {});
+  });
+  ipcMain.handle("meeting-bot:transcripts", async (_e, payload) => {
+    return meetingBotClient.transcripts(payload || {});
+  });
+  ipcMain.handle("meeting-ops:health", async () => {
+    const r = await meetingBotClient.opsHealth();
+    return { ...r, server: meetingBotClient.serverBase() };
+  });
+  ipcMain.handle("meeting-ops:audit", async (_e, payload) => {
+    return meetingBotClient.opsAudit(payload || {});
+  });
+  ipcMain.handle("meeting-ops:cost", async () => {
+    return meetingBotClient.opsCost();
+  });
+  ipcMain.handle("meeting-ops:delete", async (_e, payload) => {
+    debugLog.info("MeetingOps", "delete", payload || {});
+    return meetingBotClient.opsDelete(payload || {});
+  });
+
+  const meetingAdminClient = require("./lib/rtc/meetingAdminClient.cjs");
+  ipcMain.handle("meeting-admin:health", async () => meetingAdminClient.health());
+  ipcMain.handle("meeting-admin:experts", async () => meetingAdminClient.experts());
+  ipcMain.handle("meeting-admin:upsertExpert", async (_e, payload) =>
+    meetingAdminClient.upsertExpert(payload || {})
+  );
+  ipcMain.handle("meeting-admin:setExpertEnabled", async (_e, payload) =>
+    meetingAdminClient.setExpertEnabled(payload?.id, payload?.enabled !== false)
+  );
+  ipcMain.handle("meeting-admin:topics", async (_e, payload) =>
+    meetingAdminClient.topics(payload || {})
+  );
+  ipcMain.handle("meeting-admin:upsertTopic", async (_e, payload) =>
+    meetingAdminClient.upsertTopic(payload || {})
+  );
+  ipcMain.handle("meeting-admin:deleteTopic", async (_e, payload) =>
+    meetingAdminClient.deleteTopic(payload?.id)
+  );
+  ipcMain.handle("meeting-admin:sessions", async () => meetingAdminClient.sessions());
+  ipcMain.handle("meeting-admin:createSession", async (_e, payload) =>
+    meetingAdminClient.createSession(payload || {})
+  );
+  ipcMain.handle("meeting-admin:getSession", async (_e, payload) =>
+    meetingAdminClient.getSession(payload?.id)
+  );
+  ipcMain.handle("meeting-admin:patchSession", async (_e, payload) =>
+    meetingAdminClient.patchSession(payload?.id, payload || {})
+  );
+
   ipcMain.handle("host:speak", async (_e, text) => {
     let clean = String(text || "");
     try {

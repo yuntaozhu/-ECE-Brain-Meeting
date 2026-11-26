@@ -1269,6 +1269,263 @@
     await refreshFollowup().catch(() => {});
     await refreshMarket().catch(() => {});
     await refreshBriefing(false).catch(() => {});
+    bindAdminConsole();
     setStatus("待命");
   })();
+
+  function bindAdminConsole() {
+    const root = document.getElementById("xxAdmin");
+    if (!root) return;
+    const st = {
+      tab: "meeting",
+      experts: [],
+      topics: [],
+      sessions: [],
+      selectedExpertId: null,
+      audiences: ["站长"],
+      sessionId: null,
+      opening: "",
+      status: "prep"
+    };
+    const toast = (m, ok = true) => {
+      const t = document.getElementById("xxAdminToast");
+      if (t) {
+        t.textContent = m;
+        t.style.color = ok ? "#2e7d32" : "#c62828";
+      }
+    };
+    const esc = (s) =>
+      String(s || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    const setTab = (tab) => {
+      st.tab = tab;
+      document.querySelectorAll("[data-xx-nav]").forEach((b) =>
+        b.classList.toggle("active", b.getAttribute("data-xx-nav") === tab)
+      );
+      document.querySelectorAll("[data-xx-pane]").forEach((p) =>
+        p.classList.toggle("active", p.getAttribute("data-xx-pane") === tab)
+      );
+      if (tab === "experts" || tab === "meeting") void loadExperts();
+      if (tab === "topics" || tab === "meeting") void loadTopics();
+      if (tab === "records") void loadSessions();
+    };
+    const syncBar = () => {
+      const show = st.status === "waiting" || st.status === "live";
+      document.getElementById("xxControlBar")?.classList.toggle("hidden", !show);
+      document.getElementById("xxAgendaBanner")?.classList.toggle("hidden", !show);
+      const title =
+        st.currentTopicTitle || document.getElementById("xxMeetingName")?.value || "本次会议";
+      const banner = document.getElementById("xxAgendaBanner");
+      if (banner) banner.textContent = `本次议题 · ${title}`;
+      const cur = document.getElementById("xxCurrentAgenda");
+      if (cur) cur.textContent = `本次议题 · ${title}`;
+      const badge = document.getElementById("xxLiveBadge");
+      if (badge) {
+        badge.textContent =
+          st.status === "live" ? "会议进行中" : st.status === "waiting" ? "会前等待" : "未开始";
+      }
+    };
+    async function loadExperts() {
+      const res = await api.adminExperts();
+      if (!res?.ok) return toast(res?.error || "顾问列表失败（需 npm run dev）", false);
+      st.experts = res.data?.experts || [];
+      if (!st.selectedExpertId && st.experts[0]) st.selectedExpertId = st.experts[0].id;
+      const box = document.getElementById("xxExpertList");
+      if (box) {
+        box.innerHTML = st.experts
+          .filter((e) => e.enabled)
+          .map(
+            (e) =>
+              `<button type="button" class="xx-expert ${e.id === st.selectedExpertId ? "selected" : ""}" data-id="${e.id}"><strong>${esc(e.name)}</strong><span>${esc(e.intro)}</span></button>`
+          )
+          .join("");
+        box.querySelectorAll("[data-id]").forEach((b) =>
+          b.addEventListener("click", () => {
+            st.selectedExpertId = b.getAttribute("data-id");
+            void loadExperts();
+          })
+        );
+      }
+      const table = document.getElementById("xxExpertTable");
+      if (table) {
+        table.innerHTML = st.experts
+          .map(
+            (e) =>
+              `<div class="board-item"><strong>${esc(e.name)}</strong> · ${esc(e.category)} · ${esc(e.knowledgeBase)}
+              <label><input type="checkbox" data-en="${e.id}" ${e.enabled ? "checked" : ""}/> 启用</label></div>`
+          )
+          .join("");
+        table.querySelectorAll("[data-en]").forEach((inp) =>
+          inp.addEventListener("change", async () => {
+            await api.adminSetExpertEnabled({ id: inp.getAttribute("data-en"), enabled: inp.checked });
+            await loadExperts();
+          })
+        );
+      }
+    }
+    async function loadTopics() {
+      const res = await api.adminTopics({ audience: st.audiences[0] || "" });
+      if (!res?.ok) return toast(res?.error || "议题失败", false);
+      st.topics = res.data?.topics || [];
+      const meet = document.getElementById("xxMeetingTopics");
+      if (meet) {
+        meet.innerHTML = st.topics.length
+          ? st.topics
+              .map(
+                (t) =>
+                  `<label class="chk"><input type="checkbox" data-tid="${t.id}" checked /> ${esc(t.title)}</label>`
+              )
+              .join("")
+          : "没有符合当前参会对象的议题";
+      }
+      const table = document.getElementById("xxTopicTable");
+      if (table) {
+        table.innerHTML = st.topics
+          .map(
+            (t) =>
+              `<div class="board-item"><strong>${esc(t.title)}</strong><div class="hint">${esc(t.discussion || "—")}</div>
+              <button type="button" class="ghost" data-del="${t.id}">删除</button></div>`
+          )
+          .join("");
+        table.querySelectorAll("[data-del]").forEach((b) =>
+          b.addEventListener("click", async () => {
+            await api.adminDeleteTopic({ id: b.getAttribute("data-del") });
+            await loadTopics();
+          })
+        );
+      }
+    }
+    async function loadSessions() {
+      const res = await api.adminSessions();
+      if (!res?.ok) return toast(res?.error || "记录失败", false);
+      st.sessions = res.data?.sessions || [];
+      const elList = document.getElementById("xxSessionList");
+      if (elList) {
+        elList.innerHTML =
+          st.sessions
+            .map((s) => `<div class="board-item"><strong>${esc(s.title)}</strong> · ${esc(s.status)} · ${esc(s.id)}</div>`)
+            .join("") || "<p class='hint'>暂无记录</p>";
+      }
+    }
+
+    document.getElementById("btnAdmin")?.addEventListener("click", () => {
+      root.classList.remove("hidden");
+      setTab("meeting");
+    });
+    document.getElementById("xxCloseAdmin")?.addEventListener("click", () => root.classList.add("hidden"));
+    document.querySelectorAll("[data-xx-nav]").forEach((b) =>
+      b.addEventListener("click", () => setTab(b.getAttribute("data-xx-nav")))
+    );
+    document.getElementById("xxAudience")?.addEventListener("change", (e) => {
+      st.audiences = e.target.value ? [e.target.value] : [];
+      void loadTopics();
+    });
+    document.getElementById("xxEnter")?.addEventListener("click", async () => {
+      const topicIds = [...document.querySelectorAll("[data-tid]:checked")].map((x) =>
+        x.getAttribute("data-tid")
+      );
+      const res = await api.adminCreateSession({
+        title: document.getElementById("xxMeetingName")?.value || "农服周会",
+        meetingType: document.getElementById("xxMeetingType")?.value || "讨论会议",
+        audiences: st.audiences,
+        expertId: st.selectedExpertId,
+        topicIds
+      });
+      if (!res?.ok) return toast(res?.error || "创建失败", false);
+      st.sessionId = res.data?.session?.id;
+      st.opening = res.data?.view?.session?.openingPrompt || res.data?.session?.openingPrompt || "";
+      st.currentTopicTitle = res.data?.view?.currentTopic?.title || "";
+      st.agendaIndex = res.data?.session?.agendaIndex || 0;
+      st.status = "waiting";
+      const open = document.getElementById("xxOpening");
+      if (open) open.textContent = st.opening;
+      const sid = document.getElementById("xxSessionId");
+      if (sid) sid.textContent = `${res.data?.session?.title || ""} · ${st.sessionId || ""}`;
+      setTab("live");
+      syncBar();
+      toast("已进入会前等待");
+    });
+    document.getElementById("xxStartLive")?.addEventListener("click", async () => {
+      if (!st.sessionId) return toast("请先进入会议", false);
+      await api.adminPatchSession({ id: st.sessionId, status: "live" });
+      st.status = "live";
+      syncBar();
+      await api.meetingStart({});
+      toast("会议进行中");
+    });
+    document.getElementById("xxNextAgenda")?.addEventListener("click", async () => {
+      if (!st.sessionId) return toast("请先进入会议", false);
+      const next = (st.agendaIndex || 0) + 1;
+      const res = await api.adminPatchSession({ id: st.sessionId, agendaIndex: next });
+      if (!res?.ok) return toast(res?.error || "切换失败", false);
+      st.agendaIndex = res.data?.session?.agendaIndex ?? next;
+      st.currentTopicTitle = res.data?.view?.currentTopic?.title || st.currentTopicTitle;
+      syncBar();
+      await api.meetingIngest({ text: "下一议程", track: "me" });
+      toast("已切下一议程");
+    });
+    document.getElementById("xxRemind")?.addEventListener("click", async () => {
+      if (!st.opening) return toast("无开场提示", false);
+      await api.voiceTurn({
+        query: "会前提醒",
+        speak: true,
+        preAnswer: { reply: st.opening },
+        writeGap: false,
+        session: false
+      });
+      toast("已口播会前提醒");
+    });
+    document.getElementById("xxWake")?.addEventListener("click", () => {
+      const chk = document.getElementById("chkWake");
+      if (chk) chk.checked = true;
+      toast("已唤起小星（需唤醒已开）");
+    });
+    document.getElementById("xxInterrupt")?.addEventListener("click", async () => {
+      await api.meetingSpeaking({ on: false });
+      await api.meetingIngest({ text: "小星停一下", track: "me" });
+      toast("已打断");
+    });
+    document.getElementById("xxMute")?.addEventListener("click", () => {
+      const chk = document.getElementById("chkWake");
+      if (chk) chk.checked = false;
+      toast("静音旁听（关闭需唤醒抢答）");
+    });
+    document.getElementById("xxEnd")?.addEventListener("click", async () => {
+      if (st.sessionId) await api.adminPatchSession({ id: st.sessionId, status: "ended" });
+      await api.meetingStop();
+      st.status = "ended";
+      syncBar();
+      toast("会议已结束");
+      setTab("records");
+      await loadSessions();
+    });
+    document.getElementById("xxAddExpert")?.addEventListener("click", async () => {
+      const name = document.getElementById("xxNewExpertName")?.value?.trim();
+      if (!name) return toast("请填名称", false);
+      await api.adminUpsertExpert({
+        name,
+        category: document.getElementById("xxNewExpertCat")?.value || "其他",
+        intro: document.getElementById("xxNewExpertIntro")?.value || "",
+        knowledgeBase: document.getElementById("xxNewExpertKb")?.value || "",
+        voice: "默认 TTS",
+        enabled: true
+      });
+      await loadExperts();
+      toast("顾问已保存");
+    });
+    document.getElementById("xxAddTopic")?.addEventListener("click", async () => {
+      const title = document.getElementById("xxNewTopicTitle")?.value?.trim();
+      if (!title) return toast("请填标题", false);
+      await api.adminUpsertTopic({
+        title,
+        discussion: document.getElementById("xxNewTopicDisc")?.value || "",
+        audiences: st.audiences,
+        projectTag: "农服周会"
+      });
+      await loadTopics();
+      toast("议题已保存");
+    });
+  }
 })();

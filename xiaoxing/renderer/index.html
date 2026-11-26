@@ -16,10 +16,99 @@
       <span class="pill" id="statusPill">待命</span>
       <label class="chk"><input type="checkbox" id="chkTop" /> 置顶</label>
       <button type="button" id="btnCapsule" class="ghost">胶囊</button>
+      <button type="button" id="btnAdmin" class="accent">会议管理</button>
       <button type="button" id="btnSessions" class="ghost">本场目录</button>
       <button type="button" id="btnLogDir" class="ghost">系统日志</button>
     </div>
   </header>
+
+  <div id="xxAgendaBanner" class="xx-agenda hidden">本次议题</div>
+  <div id="xxControlBar" class="xx-control hidden" role="toolbar">
+    <button type="button" id="xxRemind" class="go">会前提醒</button>
+    <button type="button" id="xxWake" class="accent">唤起小星</button>
+    <button type="button" id="xxInterrupt" class="ghost">打断</button>
+    <button type="button" id="xxMute" class="ghost">静音旁听</button>
+    <button type="button" id="xxEnd" class="stop">结束</button>
+  </div>
+
+  <div id="xxAdmin" class="xx-admin hidden">
+    <aside class="xx-side">
+      <div class="brand">小星 · 会议管理</div>
+      <button type="button" data-xx-nav="meeting" class="active">会议</button>
+      <button type="button" data-xx-nav="experts">领域顾问</button>
+      <button type="button" data-xx-nav="topics">议题</button>
+      <button type="button" data-xx-nav="records">记录</button>
+      <button type="button" data-xx-nav="live">会中预览</button>
+      <div style="flex:1"></div>
+      <button type="button" id="xxCloseAdmin" class="ghost">返回驾驶舱</button>
+      <p class="hint">领域顾问≠专家人设包</p>
+    </aside>
+    <div class="xx-main">
+      <div class="xx-pane active" data-xx-pane="meeting">
+        <div class="xx-grid">
+          <div class="xx-card">
+            <h3>选择领域顾问</h3>
+            <div id="xxExpertList"></div>
+          </div>
+          <div class="xx-card">
+            <h3>准备这场会议</h3>
+            <label>会议名称</label>
+            <input id="xxMeetingName" value="农服周会" />
+            <label>会议类型</label>
+            <select id="xxMeetingType"><option>讨论会议</option><option>农服周会</option></select>
+            <label>参会对象</label>
+            <select id="xxAudience"><option>站长</option><option>技术员</option></select>
+            <label>议题</label>
+            <div id="xxMeetingTopics">加载中…</div>
+            <button type="button" id="xxEnter" class="go" style="margin-top:10px">进入会议</button>
+          </div>
+        </div>
+      </div>
+      <div class="xx-pane" data-xx-pane="experts">
+        <div class="xx-card">
+          <h3>领域顾问（知识库绑定）</h3>
+          <div class="row gap">
+            <input id="xxNewExpertName" placeholder="名称" />
+            <input id="xxNewExpertCat" placeholder="分类" />
+            <button type="button" id="xxAddExpert" class="accent">新建</button>
+          </div>
+          <input id="xxNewExpertIntro" placeholder="简介" style="margin-top:8px;width:100%" />
+          <input id="xxNewExpertKb" placeholder="知识库" style="margin-top:8px;width:100%" />
+          <div id="xxExpertTable" class="board-list" style="margin-top:10px"></div>
+        </div>
+      </div>
+      <div class="xx-pane" data-xx-pane="topics">
+        <div class="xx-card">
+          <h3>议题</h3>
+          <div class="row gap">
+            <input id="xxNewTopicTitle" placeholder="标题" style="flex:1" />
+            <button type="button" id="xxAddTopic" class="accent">新增</button>
+          </div>
+          <input id="xxNewTopicDisc" placeholder="讨论说明" style="margin-top:8px;width:100%" />
+          <div id="xxTopicTable" class="board-list" style="margin-top:10px"></div>
+        </div>
+      </div>
+      <div class="xx-pane" data-xx-pane="records">
+        <div class="xx-card"><h3>会场记录</h3><div id="xxSessionList"></div></div>
+      </div>
+      <div class="xx-pane" data-xx-pane="live">
+        <div class="xx-card">
+          <div class="row gap" style="justify-content:space-between">
+            <h3 style="margin:0">会前 / 会中预览</h3>
+            <span id="xxLiveBadge" class="pill">未开始</span>
+          </div>
+          <p id="xxSessionId" class="hint"></p>
+          <p id="xxCurrentAgenda" class="xx-agenda-inline">本次议题 · 待进入</p>
+          <div id="xxOpening" class="xx-opening">进入会议后生成开场提示</div>
+          <div class="row gap" style="margin-top:10px">
+            <button type="button" id="xxStartLive" class="go">开始</button>
+            <button type="button" id="xxNextAgenda" class="ghost">下一议程</button>
+          </div>
+        </div>
+      </div>
+      <p id="xxAdminToast" class="hint"></p>
+    </div>
+  </div>
 
   <div class="toolbar">
     <button type="button" id="btnMeeting" class="go">开始听会</button>

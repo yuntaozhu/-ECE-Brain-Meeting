@@ -38,6 +38,17 @@ contextBridge.exposeInMainWorld("xiaoxing", {
     ipcRenderer.invoke("xiaoxing:capsuleSetCollapsed", collapsed),
   showMain: () => ipcRenderer.invoke("xiaoxing:showMain"),
   broadcastStatus: (payload) => ipcRenderer.invoke("xiaoxing:broadcastStatus", payload || {}),
+  adminHealth: () => ipcRenderer.invoke("xiaoxing:adminHealth"),
+  adminExperts: () => ipcRenderer.invoke("xiaoxing:adminExperts"),
+  adminUpsertExpert: (payload) => ipcRenderer.invoke("xiaoxing:adminUpsertExpert", payload || {}),
+  adminSetExpertEnabled: (payload) =>
+    ipcRenderer.invoke("xiaoxing:adminSetExpertEnabled", payload || {}),
+  adminTopics: (payload) => ipcRenderer.invoke("xiaoxing:adminTopics", payload || {}),
+  adminUpsertTopic: (payload) => ipcRenderer.invoke("xiaoxing:adminUpsertTopic", payload || {}),
+  adminDeleteTopic: (payload) => ipcRenderer.invoke("xiaoxing:adminDeleteTopic", payload || {}),
+  adminSessions: () => ipcRenderer.invoke("xiaoxing:adminSessions"),
+  adminCreateSession: (payload) => ipcRenderer.invoke("xiaoxing:adminCreateSession", payload || {}),
+  adminPatchSession: (payload) => ipcRenderer.invoke("xiaoxing:adminPatchSession", payload || {}),
   onEvent: (handler) => {
     const wrapped = (_e, msg) => handler(msg);
     ipcRenderer.on("xiaoxing:event", wrapped);

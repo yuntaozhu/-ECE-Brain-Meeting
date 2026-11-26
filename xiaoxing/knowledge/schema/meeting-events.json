@@ -1,0 +1,20 @@
+{
+  "description": "MeetingEvent 契约镜像（与 shared/patterns/meeting-event-contract.md 一致）",
+  "providers": ["volc_rtc", "vexa", "desktop_local", "xiaoxing_local"],
+  "phases": ["idle", "joining", "listening", "armed", "speaking", "interrupting", "ending"],
+  "types": [
+    "meeting.started",
+    "meeting.ended",
+    "participant.joined",
+    "participant.left",
+    "transcript.partial",
+    "transcript.final",
+    "ai.speaking.started",
+    "ai.speaking.completed",
+    "ai.interrupted",
+    "bot.joined",
+    "bot.failed",
+    "provider.disconnected"
+  ],
+  "required": ["meeting_id", "provider", "event_id", "seq", "ts", "type"]
+}

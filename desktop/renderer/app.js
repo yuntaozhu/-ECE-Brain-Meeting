@@ -37,6 +37,7 @@ import { handleBridgeEvent } from "./bridge/events.js";
 import { bindCopilotControls } from "./ui/smartReplies.js";
 import { bindMeetingAidControls } from "./ui/meetingAid.js";
 import { bindCockpitShell, setPreflightOpen, setListeningUi } from "./ui/cockpit.js";
+import { bindAdminConsole } from "./ui/adminConsole.js";
 
 setHoldChangeHandler(({ why, prev, until }) => {
   if (until - prev > 800) {
@@ -389,6 +390,227 @@ $("btnSessions")?.addEventListener("click", async () => {
   }
 });
 
+function rtcPayload() {
+  return {
+    roomId: String($("rtcRoomId")?.value || "").trim(),
+    targetUserId: String($("rtcTargetUserId")?.value || "").trim()
+  };
+}
+
+function setRtcLine(msg, ok) {
+  const el = $("rtcStatusLine");
+  if (!el) return;
+  el.textContent = msg;
+  el.className = "status " + (ok ? "ok" : "warn");
+}
+
+$("rtcStatus")?.addEventListener("click", async () => {
+  const res = await window.bridge.rtcVoiceChatStatus();
+  const d = res?.data || {};
+  const ready = Boolean(res?.ok && d.ready);
+  setRtcLine(
+    ready
+      ? `后端就绪 · ${res.server || ""} · rooms=${d.activeRooms ?? "?"} · bot=${d.botUserId || "?"}`
+      : `不可用：${res?.error || d.appIdWarning || (d.missing || []).join(",") || "请先 npm run dev"}`,
+    ready
+  );
+  slog("INFO", "RTC", "voicechat status", res);
+});
+
+$("rtcJoin")?.addEventListener("click", async () => {
+  const p = rtcPayload();
+  if (!p.roomId || !p.targetUserId) {
+    setRtcLine("请填写 roomId 与真人 UserId", false);
+    return;
+  }
+  const res = await window.bridge.rtcVoiceChatJoin(p);
+  setRtcLine(
+    res?.ok
+      ? `已入会 task=${res.data?.taskId || "?"} idempotent=${Boolean(res.data?.idempotent)}`
+      : `入会失败：${res?.error || "unknown"}`,
+    Boolean(res?.ok)
+  );
+  slog(res?.ok ? "INFO" : "ERROR", "RTC", "voicechat join", res);
+});
+
+$("rtcInterrupt")?.addEventListener("click", async () => {
+  const p = rtcPayload();
+  if (!p.roomId) {
+    setRtcLine("请填写 roomId", false);
+    return;
+  }
+  const res = await window.bridge.rtcVoiceChatInterrupt({ roomId: p.roomId });
+  setRtcLine(res?.ok ? "已发送打断" : `打断失败：${res?.error || "unknown"}`, Boolean(res?.ok));
+  slog(res?.ok ? "INFO" : "ERROR", "RTC", "voicechat interrupt", res);
+});
+
+$("rtcKick")?.addEventListener("click", async () => {
+  const p = rtcPayload();
+  if (!p.roomId) {
+    setRtcLine("请填写 roomId", false);
+    return;
+  }
+  const res = await window.bridge.rtcVoiceChatKick({ roomId: p.roomId });
+  setRtcLine(res?.ok ? "已请离会" : `离会失败：${res?.error || "unknown"}`, Boolean(res?.ok));
+  slog(res?.ok ? "INFO" : "ERROR", "RTC", "voicechat kick", res);
+});
+
+function botPayload() {
+  return {
+    platform: String($("botPlatform")?.value || "google_meet").trim(),
+    nativeMeetingId: String($("botNativeId")?.value || "").trim()
+  };
+}
+
+function setBotLine(msg, ok) {
+  const el = $("botStatusLine");
+  if (!el) return;
+  el.textContent = msg;
+  el.className = "status " + (ok ? "ok" : "warn");
+}
+
+$("botStatus")?.addEventListener("click", async () => {
+  const res = await window.bridge.meetingBotStatus();
+  const d = res?.data || {};
+  setBotLine(
+    res?.ok
+      ? `Bot后端 · dryRun=${Boolean(d.dryRun)} · speakInMeeting=false · ${res.server || ""}`
+      : `不可用：${res?.error || "请先 npm run dev"}`,
+    Boolean(res?.ok)
+  );
+  slog("INFO", "MeetingBot", "status", res);
+});
+
+$("botCreate")?.addEventListener("click", async () => {
+  const p = botPayload();
+  if (!p.nativeMeetingId) {
+    setBotLine("请填写会议 ID", false);
+    return;
+  }
+  const res = await window.bridge.meetingBotCreate(p);
+  const h = res?.data?.handle;
+  setBotLine(
+    res?.ok
+      ? `已派 Bot（转写） status=${h?.status || "?"} · 不可会议内发言`
+      : `派 Bot 失败：${res?.error || "unknown"}`,
+    Boolean(res?.ok)
+  );
+  slog(res?.ok ? "INFO" : "ERROR", "MeetingBot", "create", res);
+});
+
+$("botPull")?.addEventListener("click", async () => {
+  const p = botPayload();
+  if (!p.nativeMeetingId) {
+    setBotLine("请填写会议 ID", false);
+    return;
+  }
+  const res = await window.bridge.meetingBotTranscripts(p);
+  const n = res?.data?.events?.length ?? res?.data?.rawCount ?? 0;
+  const texts = (res?.data?.events || [])
+    .map((e) => e.text)
+    .filter(Boolean)
+    .slice(0, 3);
+  for (const t of texts) {
+    S.transcriptLines.push({
+      speaker: "Bot转写",
+      text: t,
+      role: "others"
+    });
+  }
+  if (texts.length) renderTranscript();
+  setBotLine(
+    res?.ok ? `已拉转写 ${n} 条（屏幕建议，非会议发言）` : `拉转写失败：${res?.error || "unknown"}`,
+    Boolean(res?.ok)
+  );
+  slog(res?.ok ? "INFO" : "ERROR", "MeetingBot", "transcripts", res);
+});
+
+$("botStop")?.addEventListener("click", async () => {
+  const p = botPayload();
+  if (!p.nativeMeetingId) {
+    setBotLine("请填写会议 ID", false);
+    return;
+  }
+  const res = await window.bridge.meetingBotStop(p);
+  setBotLine(res?.ok ? "Bot 已停止" : `停止失败：${res?.error || "unknown"}`, Boolean(res?.ok));
+  slog(res?.ok ? "INFO" : "ERROR", "MeetingBot", "stop", res);
+});
+
+$("opsHealth")?.addEventListener("click", async () => {
+  const el = $("opsHealthLine");
+  const res = await window.bridge.meetingOpsHealth();
+  const d = res?.data || {};
+  const gray = d.gray || {};
+  const mc = d.meetingControl || {};
+  const ok = Boolean(res?.ok);
+  if (el) {
+    el.textContent = ok
+      ? `ops ok · gray=${gray.percent ?? "?"}% · rtcFeat=${gray.featureRtc ? "on" : "off"} · botFeat=${gray.featureBot ? "on" : "off"} · rtc=${d.rtc?.ready ? "ready" : "no"} · botDry=${d.bot?.dryRun ? "1" : "0"} · 审计不落全文 · 留存${mc.retentionHours ?? "?"}h`
+      : `ops 不可用：${res?.error || "请先 npm run dev"}`;
+    el.className = "status " + (ok ? "ok" : "warn");
+  }
+  slog(ok ? "INFO" : "ERROR", "MeetingOps", "health", res);
+});
+
+$("opsAudit")?.addEventListener("click", async () => {
+  const el = $("opsHealthLine");
+  const mid = ($("rtcRoomId")?.value || $("botNativeId")?.value || "").trim();
+  const res = await window.bridge.meetingOpsAudit({ meeting_id: mid || undefined, limit: 8 });
+  const entries = res?.data?.entries || [];
+  const ok = Boolean(res?.ok);
+  const redacted = res?.data?.textRedacted !== false;
+  if (el) {
+    if (!ok) {
+      el.textContent = `审计失败：${res?.error || "unknown"}`;
+      el.className = "status warn";
+    } else {
+      const tail = entries
+        .slice(-5)
+        .map((e) => `${e.action}${e.ok ? "" : "!"}`)
+        .join(" · ");
+      el.textContent = `审计 ${entries.length} 条${mid ? ` · mid=${mid}` : ""} · 脱敏=${redacted ? "是" : "否"} · ${tail || "(空)"}`;
+      el.className = "status " + (redacted ? "ok" : "warn");
+    }
+  }
+  slog(ok ? "INFO" : "ERROR", "MeetingOps", "audit", res);
+});
+
+$("opsCost")?.addEventListener("click", async () => {
+  const el = $("opsHealthLine");
+  const res = await window.bridge.meetingOpsCost();
+  const c = res?.data?.cost || {};
+  const ok = Boolean(res?.ok);
+  if (el) {
+    el.textContent = ok
+      ? `费用计数 · join=${c.rtcJoin ?? 0} kick=${c.rtcKick ?? 0} interrupt=${c.rtcInterrupt ?? 0} bot=${c.botCreate ?? 0} pull=${c.botTranscriptPull ?? 0} events=${c.eventsAccepted ?? 0} warn=${c.warnHits ?? 0}`
+      : `费用查询失败：${res?.error || "unknown"}`;
+    el.className = "status " + (ok ? "ok" : "warn");
+  }
+  slog(ok ? "INFO" : "ERROR", "MeetingOps", "cost", res);
+});
+
+$("opsDelete")?.addEventListener("click", async () => {
+  const el = $("opsHealthLine");
+  const mid = ($("rtcRoomId")?.value || $("botNativeId")?.value || "").trim();
+  if (!mid) {
+    if (el) {
+      el.textContent = "按会删除需填写 RTC 房间号或 Bot 会议 ID";
+      el.className = "status warn";
+    }
+    return;
+  }
+  const res = await window.bridge.meetingOpsDelete({ meeting_id: mid });
+  const ok = Boolean(res?.ok || res?.data?.success);
+  const deleted = res?.data?.deleted ?? res?.deleted;
+  if (el) {
+    el.textContent = ok
+      ? `已删除 meeting_id=${mid} · events=${deleted ?? "?"}`
+      : `删除失败：${res?.error || res?.data?.error || "unknown"}`;
+    el.className = "status " + (ok ? "ok" : "warn");
+  }
+  slog(ok ? "INFO" : "ERROR", "MeetingOps", "delete", res);
+});
+
 $("forceSpeak").onclick = async () => {
   const text = $("manualText").value.trim() || "请各位围绕当前教研议程发言。";
   if (!$("localMonitor").checked) {
@@ -448,6 +670,7 @@ async function bootApp() {
     }
     renderArch();
     bindCockpitShell();
+    bindAdminConsole();
     bindCopilotControls();
     bindMeetingAidControls();
     S.unsubMainLog = window.bridge.onLog((entry) => {

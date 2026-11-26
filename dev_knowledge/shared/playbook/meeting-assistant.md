@@ -15,6 +15,9 @@
 | 会话沉淀 / inbox | 各产品 `knowledge/sessions` · `inbox` | 会后升格 |
 | 胶囊 / 防录屏（可选） | `shared/adr/011` | HUD |
 | Focus / 副驾驶（进阶） | `projects/desktop/adr/017`～`023` | 按里程碑裁剪引入 |
+| RTC AI 成员 / 会议事件 | `docs/meeting-control-mvp.md` · `shared/patterns/meeting-event-contract.md` | 火山 VoiceChat；统一 MeetingEvent；Bot 转写阶段 2 |
+| 外部会议 Bot（Vexa） | `server/lib/meetingBot/` · `/api/meeting-bot/*` | 转写优先；`speakInMeeting=false`；dry-run 可无密钥 |
+| AI 主持口令（小星） | `xiaoxing` meeting-commands interrupt/next_agenda | host 模式节奏优先，非专家人设包 |
 
 ## 落地铁律
 

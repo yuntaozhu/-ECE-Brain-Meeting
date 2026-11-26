@@ -11,6 +11,9 @@ dotenv.config();
 import { runMeetingAnalysisServer } from "./src/lib/kaibanMeetingEngine.server";
 import tencentMeetingRouter from "./server/routes/tencentMeeting";
 import dazhiVoiceChatRouter from "./server/routes/dazhiVoiceChat";
+import meetingBotRouter from "./server/routes/meetingBot";
+import meetingOpsRouter from "./server/routes/meetingOps";
+import meetingAdminRouter from "./server/routes/meetingAdmin";
 import { setupMeetingWebSocket } from "./server/websocketMeeting";
 import { setupSocketIOServer } from "./server/index";
 import {
@@ -342,6 +345,9 @@ app.get("/api/health", async (_req, res) => {
 // Tencent Meeting API Routes (optional external bridge — not Phase-1 media path)
 app.use("/api/tencent", tencentMeetingRouter);
 app.use(dazhiVoiceChatRouter);
+app.use(meetingBotRouter);
+app.use(meetingOpsRouter);
+app.use(meetingAdminRouter);
 
 // Re-export store helpers for legacy WS modules
 export { mergeTranscripts, saveChatMessageToServerState } from "./server/lib/meetingStore";

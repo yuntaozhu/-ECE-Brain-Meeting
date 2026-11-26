@@ -243,3 +243,52 @@ h2.subh { margin-top: 16px; font-size: 0.9rem; }
 }
 .suggest-card .tag { color: #64b5f6; font-size: 0.7rem; margin-bottom: 4px; }
 .suggest-card .q { color: var(--muted); font-size: 0.72rem; margin-bottom: 4px; }
+
+.hidden { display: none !important; }
+.xx-admin {
+  position: fixed; inset: 0; z-index: 50;
+  display: grid; grid-template-columns: 190px 1fr;
+  background: #f3faf4; color: #14301c;
+}
+.xx-admin.hidden { display: none !important; }
+.xx-side {
+  background: #fff; border-right: 1px solid #c8e6c9;
+  padding: 14px 10px; display: flex; flex-direction: column; gap: 4px;
+}
+.xx-side .brand { color: #2e7d32; font-weight: 700; margin-bottom: 12px; }
+.xx-side button[data-xx-nav] {
+  text-align: left; border: 0; background: transparent; color: #1b5e20;
+  padding: 9px 10px; border-radius: 8px; cursor: pointer;
+}
+.xx-side button[data-xx-nav].active { background: #e8f5e9; font-weight: 700; }
+.xx-main { padding: 16px; overflow: auto; }
+.xx-pane { display: none; }
+.xx-pane.active { display: block; }
+.xx-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 12px; }
+.xx-card {
+  background: #fff; border: 1px solid #c8e6c9; border-radius: 12px; padding: 12px;
+}
+.xx-card h3 { margin: 0 0 8px; }
+.xx-expert {
+  display: block; width: 100%; text-align: left; margin-bottom: 8px;
+  border: 1px solid #c8e6c9; border-radius: 10px; padding: 8px 10px;
+  background: #fff; color: #14301c; cursor: pointer;
+}
+.xx-expert.selected { border-color: #43a047; box-shadow: 0 0 0 2px rgba(67,160,71,.2); }
+.xx-expert span { display: block; font-size: 11px; color: #689f38; margin-top: 4px; }
+.xx-opening {
+  background: #e8f5e9; border: 1px solid #a5d6a7; border-radius: 10px;
+  padding: 10px; white-space: pre-wrap; font-size: 13px; line-height: 1.5;
+}
+.xx-control {
+  position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
+  z-index: 40; display: flex; gap: 8px; padding: 8px;
+  background: rgba(255,255,255,.95); border: 1px solid #c8e6c9; border-radius: 12px;
+}
+.xx-agenda {
+  position: fixed; left: 16px; right: 16px; bottom: 72px; z-index: 39;
+  background: #fff8e1; color: #ef6c00; border: 1px solid #ffe082;
+  border-radius: 10px; padding: 8px 12px; font-size: 12px; font-weight: 650;
+}
+
+.xx-agenda-inline{margin:8px 0;padding:8px 10px;background:#fff8e1;border:1px solid #ffe082;border-radius:8px;font-size:12px;color:#ef6c00;font-weight:650;}

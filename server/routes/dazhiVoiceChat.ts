@@ -12,6 +12,13 @@ import {
   kickDazhiFromRoom,
   voiceChatConfigStatus
 } from "../lib/dazhiVoiceChat";
+import {
+  createMeetingEvent,
+  listMeetingEvents,
+  mapVolcVoiceChatCallback,
+  pushMeetingEvent
+} from "../lib/meetingEvents";
+import { auditRtc } from "./meetingOps";
 
 const router = Router();
 
@@ -42,11 +49,31 @@ router.get("/api/dazhi/voicechat/status", (_req, res) => {
   res.json({ success: true, ...voiceChatConfigStatus() });
 });
 
+router.get("/api/dazhi/voicechat/events", (req, res) => {
+  const meeting_id = String(req.query.meeting_id || req.query.roomId || "").trim() || undefined;
+  const limit = req.query.limit ? Number(req.query.limit) : 50;
+  res.json({
+    success: true,
+    events: listMeetingEvents({ meeting_id, limit })
+  });
+});
+
 router.post("/api/dazhi/voicechat/join", async (req, res) => {
   try {
     const roomId = String(req.body?.roomId || "").trim();
     const targetUserId = String(req.body?.targetUserId || "").trim();
     const result = await joinDazhiToRoom({ roomId, targetUserId });
+    pushMeetingEvent(
+      createMeetingEvent({
+        meeting_id: roomId,
+        provider: "volc_rtc",
+        type: "meeting.started",
+        speaker: { id: result.botUserId || "dazhi-ai-bot", role: "ai" },
+        connection: { state: "connected" },
+        ext: { taskId: result.taskId, idempotent: result.idempotent }
+      })
+    );
+    auditRtc("rtc.join", roomId, true);
     res.json({ success: true, ...result });
   } catch (err) {
     sendError(res, err);
@@ -55,10 +82,21 @@ router.post("/api/dazhi/voicechat/join", async (req, res) => {
 
 router.post("/api/dazhi/voicechat/kick", async (req, res) => {
   try {
+    const roomId = String(req.body?.roomId || "").trim();
     const result = await kickDazhiFromRoom({
-      roomId: String(req.body?.roomId || "").trim(),
+      roomId,
       taskId: req.body?.taskId ? String(req.body.taskId) : undefined
     });
+    pushMeetingEvent(
+      createMeetingEvent({
+        meeting_id: roomId,
+        provider: "volc_rtc",
+        type: "meeting.ended",
+        speaker: { id: "dazhi-ai-bot", role: "ai" },
+        ext: { taskId: result.taskId, stopped: true }
+      })
+    );
+    auditRtc("rtc.kick", roomId, true);
     res.json({ success: true, ...result });
   } catch (err) {
     sendError(res, err);
@@ -67,10 +105,21 @@ router.post("/api/dazhi/voicechat/kick", async (req, res) => {
 
 router.post("/api/dazhi/voicechat/interrupt", async (req, res) => {
   try {
+    const roomId = String(req.body?.roomId || "").trim();
     const result = await interruptDazhi({
-      roomId: String(req.body?.roomId || "").trim(),
+      roomId,
       taskId: req.body?.taskId ? String(req.body.taskId) : undefined
     });
+    pushMeetingEvent(
+      createMeetingEvent({
+        meeting_id: roomId,
+        provider: "volc_rtc",
+        type: "ai.interrupted",
+        speaker: { id: "dazhi-ai-bot", role: "ai" },
+        ext: { taskId: result.taskId }
+      })
+    );
+    auditRtc("rtc.interrupt", roomId, true);
     res.json({ success: true, ...result });
   } catch (err) {
     sendError(res, err);
@@ -83,6 +132,8 @@ router.post("/rtc/voicechat/callback", (req, res) => {
   }
   const body = req.body || {};
   const data = body.EventData || body.eventData || body;
+  const mapped = mapVolcVoiceChatCallback(body);
+  if (mapped) pushMeetingEvent(mapped);
   console.log(
     `[dazhi-rtc] ${JSON.stringify({
       event: "callback",
@@ -91,10 +142,11 @@ router.post("/rtc/voicechat/callback", (req, res) => {
       TaskId: data.TaskId || data.taskId || null,
       ErrorInfo: data.ErrorInfo || data.errorInfo || body.ErrorInfo || null,
       EventDetail: data.EventDetail || data.eventDetail || body.EventDetail || null,
+      meetingEventType: mapped?.type || null,
       at: new Date().toISOString()
     })}`
   );
-  res.json({ success: true });
+  res.json({ success: true, meetingEvent: mapped || null });
 });
 
 /**

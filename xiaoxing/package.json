@@ -33,6 +33,8 @@
     "smoke:meeting:summary": "node scripts/smoke-meeting-summary.cjs",
     "smoke:memory": "node scripts/smoke-project-memory.cjs",
     "smoke:briefing": "node scripts/smoke-briefing.cjs",
+    "smoke:meeting-host": "node scripts/smoke-meeting-host.cjs",
+    "smoke:meeting-summary-speaker": "node scripts/smoke-meeting-summary-speaker.cjs",
     "smoke:suggest": "node scripts/smoke-suggest.cjs",
     "smoke:focus": "node scripts/smoke-focus.cjs",
     "smoke:wiki2": "node scripts/smoke-wiki2.cjs",

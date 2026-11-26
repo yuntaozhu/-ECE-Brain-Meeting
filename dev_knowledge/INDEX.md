@@ -33,6 +33,9 @@
 |------|------|
 | 新建同级产品 | `shared/playbook/product-scaffold.md` · `projects/_template/` |
 | AI 会议能力（大智/小星） | `shared/playbook/meeting-assistant.md` · `shared/adr/001`～`003` |
+| 会议控制 / RTC AI / Bot | `docs/meeting-control-mvp.md` · `docs/tasklist-meeting-control-2026-11-26.md` · `docs/meeting-control-acceptance.md` · `shared/patterns/meeting-event-contract.md` |
+| 会议管理台（专家/议题/会控） | `shared/patterns/meeting-admin-console.md` · `/api/meeting-admin/*` · `npm run smoke:meeting-admin` |
+| LiveKit 评估（暂缓） | `shared/adr/013-livekit-agents-evaluation.md` |
 | 业务知识分层 | `shared/playbook/knowledge-layers.md` · 各产品 `knowledge/` |
 | 经验怎么入库 | `shared/playbook/experience-ingest.md` |
 | 改大智引擎 | `projects/desktop/` + `desktop/.cursorrules` |

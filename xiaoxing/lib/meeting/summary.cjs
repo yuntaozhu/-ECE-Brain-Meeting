@@ -33,13 +33,30 @@ function summarizeMeeting(meeting, opts = {}) {
 
   const others = [];
   const me = [];
+  const attributed = [];
+  const drafts = [];
+  const confirmed = [];
   const consults = [];
   const gaps = [];
   const focuses = [];
 
   for (const r of rows) {
-    if (r.type === "transcript" && r.track === "others" && r.text) others.push(r.text);
-    if (r.type === "transcript" && r.track === "me" && r.text) me.push(r.text);
+    if (r.type === "transcript" && r.text) {
+      const speaker = r.speaker || (r.track === "me" ? "me" : "others");
+      const line = {
+        speaker,
+        track: r.track || "unknown",
+        text: r.text,
+        provider: r.provider || "xiaoxing_local",
+        draft: r.draft !== false && r.confirmed !== true,
+        ts: r.ts || r.at || null
+      };
+      attributed.push(line);
+      if (line.draft) drafts.push(line);
+      else confirmed.push(line);
+      if (r.track === "others") others.push(r.text);
+      if (r.track === "me") me.push(r.text);
+    }
     if (r.type === "consult_mark" || r.action === "consult") {
       consults.push({ query: r.query || r.text, layer: r.layer });
     }
@@ -97,13 +114,23 @@ function summarizeMeeting(meeting, opts = {}) {
           return `- [${t.gap_kind}] ${t.query || ""} → ${srcs}`;
         })
       : ["- （本场无结构化补库任务）"];
+  const fmtLine = (l) => {
+    const tag = l.draft ? "草稿" : "已确认";
+    const who = l.speaker || l.track || "?";
+    return `- [${tag}][${who}] ${l.text}`;
+  };
   const md = [
     `# 小星会议摘要 · ${meeting.id}`,
     ``,
     `- 开始：${meeting.startedAt || ""}`,
     `- 结束：${new Date().toISOString()}`,
     `- 日志行：${meeting.lines ?? rows.length}`,
-    `- 会场句：${others.length} · 我：${me.length} · Focus：${focuses.length} · 缺口卡：${gaps.length} · 跟进 ${followup.created?.length || 0} · 补库任务 ${ingest.created?.length || 0}`,
+    `- 会场句：${others.length} · 我：${me.length} · 带说话人：${attributed.length}（草稿 ${drafts.length} / 已确认 ${confirmed.length}）`,
+    `- Focus：${focuses.length} · 缺口卡：${gaps.length} · 跟进 ${followup.created?.length || 0} · 补库任务 ${ingest.created?.length || 0}`,
+    `- 说明：自动转写默认标「草稿」；用户确认后标「已确认」。模型生成不等于用户确认。`,
+    ``,
+    `## 转写（按说话人）`,
+    ...(attributed.length ? attributed.map(fmtLine) : ["- （无）"]),
     ``,
     `## 会场（Others）`,
     ...(others.length ? others.map((t) => `- ${t}`) : ["- （无）"]),
@@ -161,6 +188,9 @@ function summarizeMeeting(meeting, opts = {}) {
     summaryPath,
     others: others.length,
     me: me.length,
+    attributed: attributed.length,
+    drafts: drafts.length,
+    confirmed: confirmed.length,
     focuses: focuses.length,
     gaps: gaps.length,
     inboxFiles,
